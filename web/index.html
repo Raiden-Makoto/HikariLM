@@ -2656,9 +2656,18 @@
       showFolderDialog();
     }
 
-    function setSection(name) {
+    // Each section has its own address, so a reload or a bookmark comes back
+    // to the same section: /chat and /editor. Returns false if the user chose
+    // to stay because of unsaved edits.
+    const SECTION_PATHS = { chat: "/chat", files: "/editor" };
+    const sectionFromPath = () => (/^\/editor\/?$/.test(location.pathname) ? "files" : "chat");
+
+    function setSection(name, how = "push") {
       const files = name === "files";
-      if (!files && !discardOk()) return;
+      if (!files && !discardOk()) return false;
+      if (how !== "url" && location.pathname !== SECTION_PATHS[name]) {
+        history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS[name]);
+      }
       document.body.classList.toggle("view-files", files);
       fileInput.accept = files ? [...TEXT_EXTENSIONS].map((ext) => "." + ext).join(",") : "";
       attachButton.title = files ? "Attach text or code files" : "Attach text, code, PDF, Word, Excel or picture files";
@@ -2675,7 +2684,16 @@
       } else {
         messageBox.focus();
       }
+      return true;
     }
+
+    window.addEventListener("popstate", () => {
+      const want = sectionFromPath();
+      const now = document.body.classList.contains("view-files") ? "files" : "chat";
+      if (want === now) return;
+      // Back or forward with unsaved edits: asked first, and refusing stays put.
+      if (!setSection(want, "url")) history.pushState(null, "", SECTION_PATHS[now]);
+    });
 
     function closeFile() {
       openToken += 1;
@@ -3089,6 +3107,7 @@
     setSidebar(narrow.matches ? false : localStorage.getItem("lightusagi-sidebar") !== "closed");
     showEmpty();
     messageBox.focus();
+    setSection(sectionFromPath(), "replace");
     (async () => {
       await loadModels();
       await refreshChats();

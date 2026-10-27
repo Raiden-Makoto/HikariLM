@@ -20,6 +20,8 @@ MAX_TRANSCRIPT = 20_000_000
 CHATS = "/api/chats"
 DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
+# One page, three addresses: the page shows the section the address names.
+PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs")
 
 router = ModelRouter(unload)
@@ -59,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as error:
                 self._send_json({"error": str(error)}, status=400)
             return
-        if self.path in ("/", "/index.html"):
+        if urlparse(self.path).path in PAGES:
             self._send_file(WEB_ROOT / "index.html", "text/html; charset=utf-8")
             return
         if self.path in VENDOR:
