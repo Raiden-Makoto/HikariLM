@@ -266,7 +266,7 @@
       padding: 1.5rem max(1.25rem, calc(50% - 31rem)) 1rem;
     }
     .empty {
-      max-width: 28rem;
+      max-width: 34rem;
       margin: 18vh auto 0;
       color: var(--muted);
       text-align: center;
@@ -279,7 +279,9 @@
       font-weight: 600;
       line-height: 1.25;
     }
-    .empty .hint { display: block; margin-bottom: 0.5rem; }
+    .empty strong span { display: block; text-wrap: balance; }
+    .empty strong span:first-child { font-size: 1rem; font-weight: 500; color: var(--muted); margin-bottom: 0.15rem; }
+    .empty .hint { display: block; margin-bottom: 0.5rem; text-wrap: balance; }
     .empty .keys { display: block; font-size: 0.82rem; opacity: 0.75; }
     .turn {
       margin: 0 0 0.85rem;
@@ -616,7 +618,12 @@
       empty.className = "empty";
       empty.id = "empty";
       const title = document.createElement("strong");
-      title.textContent = greeting() + " What are we working on?";
+      // Two lines on purpose, so a wrap never leaves one word alone.
+      const hello = document.createElement("span");
+      hello.textContent = greeting();
+      const question = document.createElement("span");
+      question.textContent = "What are we working on?";
+      title.append(hello, question);
       const hint = document.createElement("span");
       hint.className = "hint";
       hint.textContent = "Ask a question, paste some code, or drop in a file, PDF, or picture.";
