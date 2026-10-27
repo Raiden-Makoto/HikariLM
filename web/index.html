@@ -448,10 +448,43 @@
     .tab[aria-selected="true"] { background: var(--hover); color: var(--ink); }
 
     .work { flex: 1; min-height: 0; display: flex; }
-    #chat-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    #pane-resize { display: none; }
+    body.view-files #pane-resize {
+      display: block;
+      position: absolute;
+      z-index: 4;
+      top: 0;
+      bottom: 0;
+      left: -4px;
+      width: 9px;
+      cursor: col-resize;
+      touch-action: none;
+    }
+    #pane-resize::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 4px;
+      width: 2px;
+      background: transparent;
+      transition: background 0.12s;
+    }
+    #pane-resize:hover::after, #pane-resize:focus-visible::after, body.resizing #pane-resize::after { background: var(--you); }
+    #pane-resize:focus-visible { outline: none; }
+    body.resizing { cursor: col-resize; user-select: none; }
+    body.resizing iframe, body.resizing textarea { pointer-events: none; }
+    body.files-hidden .file-side { display: none; }
     #files { display: none; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1.1rem 1.1rem; }
     body.view-files #files { display: flex; }
-    body.view-files #chat-pane { flex: none; width: min(30rem, 40%); border-left: 1px solid var(--line); }
+    body.view-files #chat-pane {
+      flex: none;
+      width: var(--pane-w, min(30rem, 40%));
+      min-width: 20rem;
+      max-width: 75%;
+      border-left: 1px solid var(--line);
+    }
     body.view-files #sidebar { display: none; }
     body.view-files #toggle-sidebar { visibility: hidden; }
     body.view-files .empty { margin-top: 6vh; }
@@ -555,7 +588,8 @@
     @media (max-width: 900px) {
       body.view-files .work { flex-direction: column; overflow: auto; }
       body.view-files #files { flex: none; min-height: 30rem; }
-      body.view-files #chat-pane { flex: none; width: auto; height: 34rem; border-left: 0; border-top: 1px solid var(--line); }
+      body.view-files #chat-pane { flex: none; width: auto; min-width: 0; max-width: none; height: 34rem; border-left: 0; border-top: 1px solid var(--line); }
+      body.view-files #pane-resize { display: none; }
       .files-body { flex-direction: column; }
       .file-side { width: auto; max-height: 9rem; }
     }
@@ -690,12 +724,18 @@
     <div class="work">
     <section id="files" aria-label="Code editor">
       <div class="folder-bar">
+        <button class="icon-button" id="toggle-files" type="button" aria-label="Hide files" aria-expanded="true" aria-controls="file-side">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M9 4v16"/>
+          </svg>
+        </button>
         <button class="choice" id="choose-folder" type="button">Choose folder…</button>
         <span id="folder-label">No folder open</span>
       </div>
       <p class="note" id="folder-note" role="status">Choose a folder to start.</p>
       <div class="files-body">
-        <div class="file-side">
+        <div class="file-side" id="file-side">
           <input id="file-filter" type="search" spellcheck="false" autocomplete="off" placeholder="Search files" aria-label="Search files" disabled>
           <ul id="file-list" aria-label="Files in the folder"></ul>
         </div>
@@ -718,6 +758,7 @@
     </section>
 
     <div id="chat-pane">
+    <div id="pane-resize" role="separator" aria-orientation="vertical" aria-label="Resize the chat" tabindex="0" title="Drag to resize. Double-click to reset."></div>
     <main id="log"></main>
 
     <form class="composer" id="composer">
@@ -972,6 +1013,10 @@
         attached.push({ name, text });
       };
       for (const file of list) {
+        if (inCodeView() && (IMAGE_TYPES.includes(file.type) || /\.(pdf|docx|xlsx)$/i.test(file.name) || file.type === "application/pdf")) {
+          problems.push(file.name + " was not attached: the code editor takes text and code files only. Pictures and PDFs go in the Chat tab");
+          continue;
+        }
         if (IMAGE_TYPES.includes(file.type)) {
           await addImage(file.name, file.size, () => readBase64(file));
           continue;
@@ -1417,17 +1462,46 @@
       } catch (error) {
         problem = "The helper is not responding.";
       }
+      allModels = models;
+      fillModels(problem);
+    }
+
+    // The picker shows every chat model in Chat. In the code editor it shows
+    // only text-only models, with coder models first, because the editor has
+    // no pictures or PDFs to read.
+    let allModels = [];
+    let modelProblem = "";
+    const CODE_MODEL_KEY = "lightusagi-model-code";
+    const inCodeView = () => document.body.classList.contains("view-files");
+    const looksVision = (name) =>
+      /gemma3|llava|vision|minicpm-v|moondream|pixtral|mllama|qwen[\d.]*-?vl|[-_.:]vl\b/i.test(name);
+    const codeRank = (name) => (/qwen.*coder|coder.*qwen/i.test(name) ? 0 : /code|devstral/i.test(name) ? 1 : 2);
+
+    function modelsForView() {
+      if (!inCodeView()) return allModels;
+      return allModels
+        .filter((name) => !looksVision(name))
+        .map((name, index) => ({ name, index }))
+        .sort((a, b) => codeRank(a.name) - codeRank(b.name) || a.index - b.index)
+        .map((item) => item.name);
+    }
+
+    function fillModels(problem = modelProblem) {
+      modelProblem = problem;
+      const models = modelsForView();
       modelSelect.replaceChildren();
       if (models.length === 0) {
         const option = document.createElement("option");
         option.value = "";
-        option.textContent = "No model selected";
+        option.textContent = allModels.length ? "No text-only model" : "No model selected";
         modelSelect.append(option);
         modelSelect.disabled = true;
-        status.textContent = problem;
+        status.textContent = problem || (allModels.length
+          ? "The code editor needs a text-only model, and the installed ones also read pictures."
+          : "");
         return;
       }
-      const saved = localStorage.getItem("lightusagi-model");
+      const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model");
       for (const name of models) {
         const option = document.createElement("option");
         option.value = name;
@@ -1968,7 +2042,7 @@
       loadDraft(id);
       if ([...modelSelect.options].some((option) => option.value === chat.model)) {
         modelSelect.value = chat.model;
-        localStorage.setItem("lightusagi-model", chat.model);
+        localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", chat.model);
       }
       renderLog();
       renderChats();
@@ -1999,6 +2073,10 @@
       const model = modelSelect.value;
       if (!model) {
         loadModels();
+        return;
+      }
+      if (inCodeView() && attached.some((file) => file.image)) {
+        notify("The code editor cannot send pictures. Remove the picture, or use the Chat tab.");
         return;
       }
       if (attached.some((file) => file.image) && !isVision(model)) {
@@ -2176,7 +2254,7 @@
       messageBox.focus();
     });
     modelSelect.addEventListener("change", () => {
-      localStorage.setItem("lightusagi-model", modelSelect.value);
+      localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", modelSelect.value);
     });
     window.addEventListener("focus", () => {
       if (!activeRequest && !modelSelect.value) loadModels();
@@ -2582,6 +2660,9 @@
       const files = name === "files";
       if (!files && !discardOk()) return;
       document.body.classList.toggle("view-files", files);
+      fileInput.accept = files ? [...TEXT_EXTENSIONS].map((ext) => "." + ext).join(",") : "";
+      attachButton.title = files ? "Attach text or code files" : "Attach text, code, PDF, Word, Excel or picture files";
+      if (!activeRequest) fillModels();
       document.querySelector("#tab-chat").setAttribute("aria-selected", String(!files));
       document.querySelector("#tab-files").setAttribute("aria-selected", String(files));
       if (files) {
@@ -2757,8 +2838,8 @@
 
     async function showLocalOptions() {
       localNote.textContent = canPickLocal
-        ? "Opens your computer's own folder window. LightUsagi can then read and save the files in the folder you pick, and nothing else."
-        : "This browser cannot open a folder from this computer. Chrome and Edge can. The list below still works.";
+        ? "Your browser won't let a page open your home folder, Documents, Desktop, Downloads, a whole drive, or system folders. Pick a folder inside one of them, such as a project folder."
+        : "This browser has no folder picker for web pages. Use the list below.";
       pickLocal.disabled = !canPickLocal;
       reopenLocal.hidden = true;
       if (!canPickLocal) return;
@@ -2886,13 +2967,13 @@
         return;
       }
       const coder = [...modelSelect.options].map((option) => option.value)
-        .find((value) => /qwen.*coder|coder.*qwen/i.test(value));
+        .find((value) => value && codeRank(value) < 2);
       let note = "";
       if (coder) {
         modelSelect.value = coder;
         note = " Model: " + coder + ".";
       } else if (modelSelect.value) {
-        note = " Qwen coder is not installed, so " + modelSelect.value + " will answer.";
+        note = " No coder model is installed, so " + modelSelect.value + " will answer.";
       }
       const same = attached.findIndex((file) => file.name === name);
       if (same >= 0) attached.splice(same, 1);
@@ -2905,7 +2986,81 @@
 
     document.querySelector("#tab-chat").addEventListener("click", () => setSection("chat"));
     document.querySelector("#tab-files").addEventListener("click", () => setSection("files"));
-    document.addEventListener("busychange", refreshFileButtons);
+    document.addEventListener("busychange", () => {
+      refreshFileButtons();
+      // A tab switched mid-reply left the picker on the other view's list.
+      const shown = [...modelSelect.options].map((option) => option.value).filter(Boolean);
+      if (!activeRequest && shown.join("\n") !== modelsForView().join("\n")) fillModels();
+    });
+
+    // Ctrl+B (Cmd+B on a Mac) hides and shows the file list, as in Cursor.
+    const FILES_HIDDEN_KEY = "lightusagi-files-hidden";
+    const toggleFiles = document.querySelector("#toggle-files");
+    const isMac = /mac|iphone|ipad/i.test(navigator.platform || "");
+
+    function setFilesHidden(hidden) {
+      document.body.classList.toggle("files-hidden", hidden);
+      toggleFiles.setAttribute("aria-expanded", String(!hidden));
+      const keys = isMac ? "⌘B" : "Ctrl+B";
+      toggleFiles.setAttribute("aria-label", hidden ? "Show files" : "Hide files");
+      toggleFiles.title = (hidden ? "Show files (" : "Hide files (") + keys + ")";
+      localStorage.setItem(FILES_HIDDEN_KEY, hidden ? "1" : "0");
+    }
+    toggleFiles.addEventListener("click", () => setFilesHidden(!document.body.classList.contains("files-hidden")));
+    document.addEventListener("keydown", (event) => {
+      if (!inCodeView() || event.altKey || event.shiftKey || event.key.toLowerCase() !== "b") return;
+      if (!(isMac ? event.metaKey : event.ctrlKey)) return;
+      event.preventDefault();
+      setFilesHidden(!document.body.classList.contains("files-hidden"));
+    });
+    setFilesHidden(localStorage.getItem(FILES_HIDDEN_KEY) === "1");
+
+    // The chat pane's left edge can be dragged (or moved with the arrow keys
+    // while it has focus). Double-click puts it back. The width is remembered.
+    const PANE_KEY = "lightusagi-pane";
+    const paneResize = document.querySelector("#pane-resize");
+    const chatPane = document.querySelector("#chat-pane");
+    const clampPane = (width) => Math.max(320, Math.min(width, window.innerWidth * 0.75, window.innerWidth - 360));
+
+    function setPane(width, keep = true) {
+      if (width === null) {
+        document.documentElement.style.removeProperty("--pane-w");
+        localStorage.removeItem(PANE_KEY);
+        return;
+      }
+      const value = Math.round(clampPane(width));
+      document.documentElement.style.setProperty("--pane-w", value + "px");
+      if (keep) localStorage.setItem(PANE_KEY, String(value));
+    }
+    paneResize.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      paneResize.setPointerCapture(event.pointerId);
+      document.body.classList.add("resizing");
+    });
+    paneResize.addEventListener("pointermove", (event) => {
+      if (!paneResize.hasPointerCapture(event.pointerId)) return;
+      setPane(chatPane.parentElement.getBoundingClientRect().right - event.clientX, false);
+    });
+    const endResize = (event) => {
+      if (!paneResize.hasPointerCapture(event.pointerId)) return;
+      paneResize.releasePointerCapture(event.pointerId);
+      document.body.classList.remove("resizing");
+      setPane(chatPane.getBoundingClientRect().width);
+    };
+    paneResize.addEventListener("pointerup", endResize);
+    paneResize.addEventListener("pointercancel", endResize);
+    paneResize.addEventListener("dblclick", () => setPane(null));
+    paneResize.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 80 : 24;
+      const now = chatPane.getBoundingClientRect().width;
+      if (event.key === "ArrowLeft") setPane(now + step);
+      else if (event.key === "ArrowRight") setPane(now - step);
+      else if (event.key === "Home" || event.key === "Escape") setPane(null);
+      else return;
+      event.preventDefault();
+    });
+    const savedPane = Number(localStorage.getItem(PANE_KEY));
+    if (savedPane > 0) setPane(savedPane, false);
     fileText.addEventListener("input", () => {
       fileNote.textContent = "";
       refreshFileButtons();
