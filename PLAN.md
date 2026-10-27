@@ -1,6 +1,6 @@
 # Plan
 
-LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab: a chat, and a view of a small folder you already have.
+LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab with separate sections: a chat, a view of a small folder you already have, and a place to generate images.
 
 No Docker. The memory Docker would reserve stays available for the loaded model and its KV cache.
 
@@ -8,8 +8,8 @@ No Docker. The memory Docker would reserve stays available for the loaded model 
 
 Three pieces, and only two of them are ours.
 
-- **Page.** Chat, a list of about six files, and the one file you have open.
-- **Helper.** Picks the model, reads the files and images that belong to this message, streams the reply, and saves the chat to disk. Follow-ups reuse the model Ollama still has loaded. The helper forces a large model out only when the next request needs a different large model. `nomic-embed-text` is small enough to load beside it.
+- **Page.** Chat, a list of about six files and the one file you have open, and a separate Generate images section.
+- **Helper.** Picks the model, reads the files and images that belong to this message, streams the reply, and saves the chat to disk. For an image request it asks the image model and saves the picture it makes. Follow-ups reuse the model Ollama still has loaded. The helper forces a large model out only when the next request needs a different large model. `nomic-embed-text` is small enough to load beside it.
 - **Ollama.** Already installed. It holds the weights and the KV cache.
 
 The page talks to the helper. The helper talks to Ollama. The workspace folder stays where it already is. The helper reads from it and does not keep a second copy.
@@ -23,8 +23,13 @@ The page talks to the helper. The helper talks to Ollama. The workspace folder s
 | That same kind of question, if you switch it | `deepseekr1:8b` |
 | A message that includes an image | `gemma3` |
 | Indexing saved text for later search | `nomic-embed-text` |
+| Generating an image, in its own section | `flux.2` (the name as `ollama list` shows it) |
 
 The screen shows which model will answer before you send.
+
+**Image generation models are not chat models.** `flux.2` and any model like it make pictures from a prompt and cannot answer a question. They never appear in the chat's model picker, in the same way `nomic-embed-text` does not. They appear only in the Generate images section, whose own picker lists only them. The helper enforces this as well as the page: a chat request that names an image model, or a generate request that names a text model, is refused with a plain message.
+
+The helper tells the kinds apart by what Ollama reports a model can do, when it reports that, and otherwise by a short list of image model names kept in one place in the helper. A model it cannot place is treated as a chat model.
 
 `nomic-embed-text` is not a chat model, and it is small enough to stay loaded next to whichever large model is already in memory. Indexing and search run without forcing Gemma, R1, or Qwen out. A six-file workspace does not go through the index. That file is small enough to send whole.
 
@@ -44,7 +49,8 @@ R1's reasoning is stored in the chat file. Later turns send R1 its earlier answe
 - **Welcome.** An empty chat greets on one line by the clock on the user's computer: "Good morning, what are we working on?" from 5:00 to 11:59, "Good afternoon" from 12:00 to 16:59, "Good evening" from 17:00 to 23:59, and "Late one" from 0:00 to 4:59. A page left open re-checks every minute and when the user returns to it, so it never keeps an old greeting. Under it, a line says what can be dropped in and a reminder that Enter sends. Lines are balanced so a wrap never leaves a single word alone.
 - **Notifications.** When a reply finishes (or stops with an error) while the user is in another tab or window, the tab title changes to "● Reply ready" until they come back, and the browser shows a notification with the chat's name and the start of the answer if it was allowed. Clicking it opens that chat. A reply the user stopped does not notify. The browser asks for permission the first time a message is sent, and if it is refused the title change still works. Nothing is sent anywhere: it is the browser's own notification.
 - **Settings.** A gear in the header opens a small popup with two compact switches and the background picker: **Dark mode** (off by default, so the page starts light) and **Notify when a reply finishes** (on by default). Both are remembered in the browser and applied before the page paints, so a reload never flashes the wrong theme. The background image is chosen and removed from the same popup.
-- **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text`.
+- **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text` and without image generation models.
+- **Sections.** The header switches between Chat, the file view, and Generate images. The chat sidebar belongs to Chat only. Each section keeps its own draft.
 
 ## Attaching files
 
@@ -74,9 +80,25 @@ Qwen cannot see images. Gemma writes the image down as text, and Qwen reads that
 
 If that description is already in the app folder and the image has not changed, Gemma is skipped. Qwen reads the saved text. nomic indexes the words Gemma wrote, not the pixels. A later question can find that description by search while Gemma stays unloaded.
 
+## Generating images
+
+A section of its own, like the file view, because making a picture is a different job from answering a message. It is not in the chat sidebar, and a generated image is not a chat turn.
+
+- **What is in it.** A prompt box, a picker that lists only image generation models, a small Options area (a few size presets and a seed, with sensible defaults hidden until opened), and a Generate button that becomes a Stop square while it works, the same way Send does. A status line says what is happening: "Loading `flux.2`…", then "Generating…". The finished picture appears under the box.
+- **Trying again.** The picture has Regenerate (same prompt, same seed, so the same result) and Vary (same prompt, new seed). Prompt and seed are kept so a result can be repeated.
+- **Gallery.** Earlier pictures sit under the current one, newest first, each with its prompt. Each can be downloaded, reopened with its prompt and seed back in the boxes, or deleted (asks twice). The gallery is read from `images/`, so it survives a reload and a restart.
+- **Memory.** `flux.2` is a large model, so it follows the one-large-model rule: loading it forces the chat model out, and the next chat message forces it out again. Several generations in a row keep it loaded for the keepalive, so tweaking a prompt does not reload it each time. `nomic-embed-text` is not affected. Under the Generate button a quiet line says which chat model will be unloaded, so a reload of the chat model afterwards is not a surprise.
+- **One at a time.** A second generation cannot start while one runs. Stop cancels it, and nothing half-made is saved.
+- **Where pictures go.** Each result is written to `images/<id>.png` with `images/<id>.json` beside it holding the prompt, model, seed, size, and time, using a temp file and a rename so a crash never leaves half a picture. Deleting a picture removes both files. A picture whose notes file is missing or damaged still shows, without its prompt.
+- **Prompt draft.** The prompt box is kept in `drafts/generate.json` the same way a chat draft is, and removed when it is emptied or a generation starts.
+- **Notifications.** A finished or failed generation notifies when the user is in another tab, by the same rules and the same switch as a chat reply.
+- **Not in this step.** Sending a generated picture into a chat for Gemma to look at, editing an existing picture, and any model that is not `flux.2`-style prompt-to-image.
+
+**Open question: how the helper asks for the image.** Everything else here talks to Ollama over HTTP. Whether the Ollama on the machine can run `flux.2` itself depends on its version, and that has to be checked, not assumed. Step 6 begins by checking it. If Ollama can, the helper uses its HTTP API like everything else and nothing new is added. If it cannot, the plan needs a decision before any code (for example a small local runner that the helper starts and stops, kept to the same memory rule), and this section is updated first.
+
 ## What is in memory
 
-One large model at a time: Gemma, R1, or Qwen. Each request sets a keepalive, so a follow-up to the same model skips the load and Ollama resets the timer. Ollama unloads that model on its own when the timer runs out. The helper forces it out only to switch to a different large model. `nomic-embed-text` loads beside the large model and does not take its place.
+One large model at a time: Gemma, R1, Qwen, or the image model. Each request sets a keepalive, so a follow-up to the same model skips the load and Ollama resets the timer. Ollama unloads that model on its own when the timer runs out. The helper forces it out only to switch to a different large model. `nomic-embed-text` loads beside the large model and does not take its place.
 
 The open chat and the open file are the only project text held in memory. Other chats, images, and descriptions stay on the SSD until a message needs them.
 
@@ -90,6 +112,7 @@ LightUsagi keeps its own files in one folder in the home directory, `~/.lightusa
   drafts/          what is typed and attached but not sent yet, one file per chat
   descriptions/    the text Gemma wrote for an image
   index/           the search index nomic wrote
+  images/          the pictures the image model made, each with a small notes file
 ```
 
 A description remembers which image it came from, and whether that image has changed, so Gemma can be skipped the next time.
@@ -99,6 +122,7 @@ Files attached through the page (see "Attaching files") add nothing new to this 
 - The text taken from an attached text file, PDF, `.docx`, or `.xlsx` is saved inside the transcript of the chat it was attached to, in `transcripts/`. That is the only copy, and it goes when the chat is deleted.
 - The original file and any attached picture are never saved in a transcript. The transcript keeps the file name.
 - The one exception is a draft. While a message is typed but not sent, the page keeps the text, the extracted file text, and any attached pictures in `drafts/<chat id>.json` (`new.json` before a chat has started), so a reload does not lose them. The file is deleted when the message is sent, when the draft is emptied, and when its chat is deleted. Nothing in `drafts/` outlives the message it was for.
+- `images/` holds pictures LightUsagi made itself, with the prompt, seed, and model beside each. They are its own output, not copies of anything of yours. A picture leaves `images/` only when the user deletes it, or downloads a copy to wherever they choose. The prompt draft for the Generate section is `drafts/generate.json`.
 - Nothing else in this folder is a copy of the workspace.
 
 ## Frameworks
@@ -121,7 +145,7 @@ web/             the HTML, CSS, and script; vendor/ holds pdf.js
 
 The start scripts are the one way to run it, so nobody has to find `helper/` or know how it is launched. They add no dependency beyond Python.
 
-Models are routing rules inside the helper, not folders. The page is one tab, not an app per feature.
+Models are routing rules inside the helper, not folders. The page is one tab with sections, not an app per feature.
 
 ## Build order
 
@@ -132,3 +156,4 @@ Each step is usable before the next one starts.
 3. **Folder view.** Open a small workspace, show one file, ask Qwen what it does or where the bug is. Paste or apply a small fix back to that file.
 4. **Image handoff.** Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
 5. **Search index.** nomic indexes saved text while the chat model stays loaded. A later question can include a few matching notes.
+6. **Generate images.** First check whether the installed Ollama can run `flux.2`, and settle the open question above if it cannot. Then: keep image models out of the chat picker and refuse them in `/api/chat`, add the Generate section with its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
