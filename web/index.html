@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LightUsagi</title>
+  <style>
+    :root, [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #000;
+      --panel: #0e0e0e;
+      --ink: #f2f2f2;
+      --muted: #8b8b8b;
+      --line: #2a2a2a;
+      --you: #0b63e5;
+      --field: #141414;
+      --hover: #1f1f1f;
+      --send: #fff;
+      --send-ink: #111;
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #fff;
+      --panel: #f6f6f6;
+      --ink: #111;
+      --muted: #5c5c5c;
+      --line: #e3e3e3;
+      --you: #0b63e5;
+      --field: #fff;
+      --hover: #ececec;
+      --send: #111;
+      --send-ink: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      font-family: Aptos, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      background-color: var(--bg);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, select, textarea { font: inherit; color: inherit; }
+    button:focus-visible, select:focus-visible {
+      outline: 2px solid var(--you);
+      outline-offset: 2px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 {
+      margin: 0;
+      font-family: Aptos Display, Aptos, "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    #status {
+      margin: 0.1rem 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 2.2rem;
+      height: 2.2rem;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .icon-button:hover { background: var(--hover); color: var(--ink); }
+    .icon-button svg { width: 1.25rem; height: 1.25rem; }
+
+    #log {
+      flex: 1;
+      overflow: auto;
+      padding: 1.5rem max(1.25rem, calc(50% - 21rem)) 1rem;
+    }
+    .empty {
+      max-width: 28rem;
+      margin: 18vh auto 0;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty strong {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .turn {
+      margin: 0 0 0.85rem;
+      padding: 0.8rem 1rem;
+      border-radius: 16px;
+      white-space: pre-wrap;
+    }
+    .turn.user {
+      width: fit-content;
+      max-width: 85%;
+      margin-left: auto;
+      background: var(--you);
+      color: #fff;
+    }
+    .turn.user .who { color: rgba(255, 255, 255, 0.75); }
+    .turn.assistant {
+      padding-left: 0.15rem;
+      padding-right: 0.15rem;
+    }
+    .who {
+      display: block;
+      margin-bottom: 0.2rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .composer {
+      padding: 0.5rem max(1.25rem, calc(50% - 21rem)) 1.1rem;
+    }
+    .box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.7rem 0.7rem 0.6rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--field);
+    }
+    .box:focus-within { border-color: var(--you); }
+    textarea {
+      width: 100%;
+      min-height: 2.9rem;
+      max-height: 10rem;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      resize: none;
+      background: transparent;
+      line-height: 1.45;
+    }
+    textarea::placeholder { color: var(--muted); }
+    .box-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    #model {
+      max-width: 60%;
+      padding: 0.3rem 0.5rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    #model:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+    #model:disabled { cursor: default; opacity: 0.6; }
+    #send {
+      display: grid;
+      place-items: center;
+      width: 2.1rem;
+      height: 2.1rem;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: var(--send);
+      color: var(--send-ink);
+      cursor: pointer;
+    }
+    #send svg { width: 1.05rem; height: 1.05rem; }
+    #send .stop-icon { display: none; }
+    #send.stop .send-icon { display: none; }
+    #send.stop .stop-icon { display: block; }
+
+    body.has-bg header { background: color-mix(in srgb, var(--panel) 88%, transparent); }
+    body.has-bg .turn.assistant {
+      padding: 0.8rem 1rem;
+      background: color-mix(in srgb, var(--panel) 82%, transparent);
+    }
+
+    dialog {
+      width: min(24rem, calc(100% - 2rem));
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      color: var(--ink);
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+    .dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 1rem 0.4rem 1.25rem;
+    }
+    .dialog-head h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+    .dialog-body { padding: 0.25rem 1.25rem 1.25rem; }
+    .setting { margin-top: 1rem; }
+    .setting-label {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .choices { display: flex; gap: 0.5rem; }
+    .choice {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .choice[aria-pressed="true"] { border-color: var(--you); background: var(--hover); }
+    .choice:disabled { opacity: 0.4; cursor: default; }
+    .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>LightUsagi</h1>
+      <p id="status" role="status">Checking Ollama…</p>
+    </div>
+    <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <main id="log">
+    <p class="empty" id="empty"><strong>Ask something.</strong> Enter sends. Shift+Enter starts a new line.</p>
+  </main>
+
+  <form class="composer" id="composer">
+    <div class="box">
+      <textarea id="message" rows="1" placeholder="Message" aria-label="Message"></textarea>
+      <div class="box-row">
+        <select id="model" aria-label="Model"></select>
+        <button id="send" type="submit" aria-label="Send">
+          <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5"/>
+            <path d="M6 11l6-6 6 6"/>
+          </svg>
+          <svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <dialog id="settings" aria-labelledby="settings-title">
+    <div class="dialog-head">
+      <h2 id="settings-title">Settings</h2>
+      <button class="icon-button" id="close-settings" type="button" aria-label="Close settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <div class="setting">
+        <span class="setting-label" id="theme-label">Theme</span>
+        <div class="choices" role="group" aria-labelledby="theme-label">
+          <button class="choice" type="button" data-theme-choice="dark" aria-pressed="true">Dark</button>
+          <button class="choice" type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        </div>
+      </div>
+      <div class="setting">
+        <span class="setting-label" id="bg-label">Background image</span>
+        <div class="choices" role="group" aria-labelledby="bg-label">
+          <button class="choice" type="button" id="pick-bg">Choose image</button>
+          <button class="choice" type="button" id="clear-bg" disabled>Remove</button>
+        </div>
+        <p class="note" id="bg-note" role="status"></p>
+        <input id="bg-file" type="file" accept="image/*" hidden>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    const modelSelect = document.querySelector("#model");
+    const messageBox = document.querySelector("#message");
+    const sendButton = document.querySelector("#send");
+    const status = document.querySelector("#status");
+    const log = document.querySelector("#log");
+    const settings = document.querySelector("#settings");
+    const bgNote = document.querySelector("#bg-note");
+    const history = [];
+    let activeRequest = null;
+
+    function plainError(message) {
+      if (message.includes("not reachable")) return "Ollama is not running.";
+      return message;
+    }
+
+    function scrollLog() {
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function addTurn(role, text) {
+      document.querySelector("#empty")?.remove();
+      const block = document.createElement("article");
+      block.className = "turn " + role;
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = role === "user" ? "You" : "Model";
+      const body = document.createElement("div");
+      body.textContent = text;
+      block.append(who, body);
+      log.append(block);
+      scrollLog();
+      return body;
+    }
+
+    function setBusy(busy) {
+      sendButton.classList.toggle("stop", busy);
+      sendButton.setAttribute("aria-label", busy ? "Stop" : "Send");
+      messageBox.disabled = busy;
+      modelSelect.disabled = busy || !modelSelect.value;
+    }
+
+    async function refreshState() {
+      const response = await fetch("/api/state");
+      const body = await response.json();
+      status.textContent = body.large_model
+        ? "Kept loaded: " + body.large_model
+        : "No large model loaded yet.";
+    }
+
+    async function loadModels() {
+      let models = [];
+      let problem = "";
+      try {
+        const response = await fetch("/api/tags");
+        const body = await response.json();
+        models = body.models || [];
+        if (!response.ok) problem = plainError(body.error || "Could not list models.");
+        else if (models.length === 0) problem = "No chat models installed in Ollama.";
+      } catch (error) {
+        problem = "The helper is not responding.";
+      }
+      modelSelect.replaceChildren();
+      if (models.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No models";
+        modelSelect.append(option);
+        modelSelect.disabled = true;
+        status.textContent = problem;
+        return;
+      }
+      const saved = localStorage.getItem("lightusagi-model");
+      for (const name of models) {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        modelSelect.append(option);
+      }
+      modelSelect.value = models.includes(saved) ? saved : models[0];
+      modelSelect.disabled = Boolean(activeRequest);
+      refreshState();
+    }
+
+    async function send() {
+      const content = messageBox.value.trim();
+      if (!content || activeRequest) return;
+      const model = modelSelect.value;
+      if (!model) {
+        loadModels();
+        return;
+      }
+      history.push({ role: "user", content });
+      addTurn("user", content);
+      messageBox.value = "";
+      const reply = addTurn("assistant", "");
+      setBusy(true);
+      status.textContent = "Streaming from " + model + "…";
+      activeRequest = new AbortController();
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, messages: history }),
+          signal: activeRequest.signal,
+        });
+        if (!response.ok) {
+          const failure = await response.json();
+          throw new Error(failure.error || "chat failed");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let answer = "";
+        let thought = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event = JSON.parse(line);
+            if (event.error) throw new Error(event.error);
+            thought += event.message?.thinking || "";
+            answer += event.message?.content || "";
+            reply.textContent = thought && answer ? thought + "\n\n" + answer : (answer || thought);
+            scrollLog();
+          }
+        }
+        if (answer) history.push({ role: "assistant", content: answer });
+        else history.pop();
+      } catch (error) {
+        history.pop();
+        if (error.name !== "AbortError") reply.textContent = plainError(error.message);
+      } finally {
+        activeRequest = null;
+        setBusy(false);
+        refreshState();
+        messageBox.focus();
+      }
+    }
+
+    document.querySelector("#composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (activeRequest) {
+        activeRequest.abort();
+        return;
+      }
+      send();
+    });
+    messageBox.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        send();
+      }
+    });
+    modelSelect.addEventListener("change", () => {
+      localStorage.setItem("lightusagi-model", modelSelect.value);
+    });
+    window.addEventListener("focus", () => {
+      if (!activeRequest && !modelSelect.value) loadModels();
+    });
+    messageBox.addEventListener("input", () => {
+      messageBox.style.height = "auto";
+      messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+    });
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem("lightusagi-theme", theme);
+      for (const button of document.querySelectorAll("[data-theme-choice]")) {
+        button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme));
+      }
+    }
+
+    function applyBackground(url) {
+      document.body.style.backgroundImage = url ? "url(\"" + url.replaceAll("\"", "%22") + "\")" : "";
+      document.body.classList.toggle("has-bg", Boolean(url));
+      document.querySelector("#clear-bg").disabled = !url;
+    }
+
+    for (const button of document.querySelectorAll("[data-theme-choice]")) {
+      button.addEventListener("click", () => applyTheme(button.dataset.themeChoice));
+    }
+    document.querySelector("#open-settings").addEventListener("click", () => settings.showModal());
+    document.querySelector("#close-settings").addEventListener("click", () => settings.close());
+    settings.addEventListener("click", (event) => {
+      if (event.target === settings) settings.close();
+    });
+    settings.addEventListener("close", () => messageBox.focus());
+    document.querySelector("#pick-bg").addEventListener("click", () => {
+      document.querySelector("#bg-file").click();
+    });
+    document.querySelector("#bg-file").addEventListener("change", () => {
+      const file = document.querySelector("#bg-file").files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = String(reader.result);
+        bgNote.textContent = "";
+        try {
+          localStorage.setItem("lightusagi-bg", url);
+        } catch (error) {
+          bgNote.textContent = "That image is too large to keep after a refresh.";
+        }
+        applyBackground(url);
+      };
+      reader.readAsDataURL(file);
+    });
+    document.querySelector("#clear-bg").addEventListener("click", () => {
+      localStorage.removeItem("lightusagi-bg");
+      document.querySelector("#bg-file").value = "";
+      bgNote.textContent = "";
+      applyBackground("");
+    });
+
+    applyTheme(localStorage.getItem("lightusagi-theme") || "dark");
+    applyBackground(localStorage.getItem("lightusagi-bg") || "");
+    loadModels();
+    messageBox.focus();
+  </script>
+</body>
+</html>
