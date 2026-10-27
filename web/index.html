@@ -273,10 +273,14 @@
     }
     .empty strong {
       display: block;
-      margin-bottom: 0.35rem;
+      margin-bottom: 0.6rem;
       color: var(--ink);
+      font-size: 1.5rem;
       font-weight: 600;
+      line-height: 1.25;
     }
+    .empty .hint { display: block; margin-bottom: 0.5rem; }
+    .empty .keys { display: block; font-size: 0.82rem; opacity: 0.75; }
     .turn {
       margin: 0 0 0.85rem;
       padding: 0.8rem 1rem;
@@ -562,6 +566,14 @@
         </div>
       </div>
       <div class="setting">
+        <span class="setting-label" id="notify-label">Notify when a reply finishes</span>
+        <div class="choices" role="group" aria-labelledby="notify-label">
+          <button class="choice" type="button" data-notify-choice="on" aria-pressed="true">On</button>
+          <button class="choice" type="button" data-notify-choice="off" aria-pressed="false">Off</button>
+        </div>
+        <p class="note" id="notify-note" role="status"></p>
+      </div>
+      <div class="setting">
         <span class="setting-label" id="bg-label">Background image</span>
         <div class="choices" role="group" aria-labelledby="bg-label">
           <button class="choice" type="button" id="pick-bg">Choose image</button>
@@ -604,9 +616,23 @@
       empty.className = "empty";
       empty.id = "empty";
       const title = document.createElement("strong");
-      title.textContent = "Ask something.";
-      empty.append(title, "Enter sends. Shift+Enter starts a new line.");
+      title.textContent = greeting() + " What are we working on?";
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = "Ask a question, paste some code, or drop in a file, PDF, or picture.";
+      const keys = document.createElement("span");
+      keys.className = "keys";
+      keys.textContent = "Enter sends. Shift+Enter starts a new line.";
+      empty.append(title, hint, keys);
       log.replaceChildren(empty);
+    }
+
+    function greeting() {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return "Good morning.";
+      if (hour >= 12 && hour < 17) return "Good afternoon.";
+      if (hour >= 17 && hour < 22) return "Good evening.";
+      return "Late one.";
     }
 
     const MAX_FILE = 500_000;
@@ -1739,7 +1765,11 @@
         return;
       }
       const draftOwner = draftKey();
+      askNotifyPermission();
       if (!chatId) chatId = crypto.randomUUID();
+      const thisChat = chatId;
+      let outcome = "";
+      let failure = "";
       const files = attached;
       attached = [];
       renderChips();
@@ -1796,7 +1826,13 @@
             scrollLog();
           }
         }
-        if (!answer && !thought) messages.pop();
+        if (!answer && !thought) {
+          messages.pop();
+          outcome = "failed";
+          failure = "The model sent no reply.";
+        } else {
+          outcome = "done";
+        }
       } catch (error) {
         if (error.name === "AbortError" && !answer && !thought) {
           sent.block.remove();
@@ -1808,6 +1844,8 @@
           if (messages.length <= 1) showEmpty();
         }
         if (error.name !== "AbortError") {
+          outcome = "failed";
+          failure = plainError(error.message);
           if (answer || thought) {
             const note = document.createElement("div");
             note.className = "thinking";
@@ -1831,6 +1869,9 @@
         messageBox.focus();
       }
       if (saved) await saveChat();
+      const name = chats.find((chat) => chat.id === thisChat)?.title || "";
+      if (outcome === "done") announce("Reply ready", name, answer || thought, thisChat);
+      else if (outcome === "failed") announce("Reply stopped", name, failure, thisChat);
     }
 
     document.querySelector("#composer").addEventListener("submit", (event) => {
@@ -1909,6 +1950,67 @@
       if (event.target.closest("#toggle-sidebar")) return;
       if (narrow.matches && !document.body.classList.contains("sidebar-closed")) setSidebar(false);
     });
+
+    // Notifications. Only when you are away from the page (another tab or
+    // window): the tab title changes, and the browser shows a notification if
+    // it was allowed. Clicking the notification brings you back to that chat.
+    const NOTIFY_KEY = "lightusagi-notify";
+    const BASE_TITLE = "LightUsagi";
+    const notifyNote = document.querySelector("#notify-note");
+    const canNotify = "Notification" in window;
+    const notifyOn = () => localStorage.getItem(NOTIFY_KEY) !== "off";
+    const userIsAway = () => document.hidden || !document.hasFocus();
+
+    function updateNotifySettings() {
+      for (const button of document.querySelectorAll("[data-notify-choice]")) {
+        button.setAttribute("aria-pressed", String((button.dataset.notifyChoice === "on") === notifyOn()));
+      }
+      if (!notifyOn()) notifyNote.textContent = "";
+      else if (!canNotify) notifyNote.textContent = "This browser cannot show notifications here. The tab title will change instead.";
+      else if (Notification.permission === "denied") notifyNote.textContent = "Notifications are blocked for this site in the browser settings. The tab title will still change.";
+      else if (Notification.permission === "default") notifyNote.textContent = "The browser will ask for permission the first time.";
+      else notifyNote.textContent = "You will be told when a reply finishes while you are in another tab or window.";
+    }
+
+    function askNotifyPermission() {
+      if (!notifyOn() || !canNotify || Notification.permission !== "default") return;
+      Promise.resolve(Notification.requestPermission()).then(updateNotifySettings, () => {});
+    }
+
+    function announce(heading, chatName, detail, id) {
+      if (!notifyOn() || !userIsAway()) return;
+      document.title = "\u25cf " + heading + " \u00b7 " + BASE_TITLE;
+      if (!canNotify || Notification.permission !== "granted") return;
+      try {
+        const note = new Notification(heading, {
+          body: (chatName ? chatName + "\n" : "") + detail.replace(/\s+/g, " ").trim().slice(0, 120),
+          tag: "lightusagi-reply",
+        });
+        note.onclick = () => {
+          window.focus();
+          note.close();
+          if (id && id !== chatId) openChat(id);
+        };
+        setTimeout(() => note.close(), 10000);
+      } catch (error) {
+        // Some browsers only allow notifications from a service worker; the title still changed.
+      }
+    }
+
+    function clearAnnouncement() {
+      if (!userIsAway()) document.title = BASE_TITLE;
+    }
+
+    for (const button of document.querySelectorAll("[data-notify-choice]")) {
+      button.addEventListener("click", () => {
+        localStorage.setItem(NOTIFY_KEY, button.dataset.notifyChoice);
+        updateNotifySettings();
+        askNotifyPermission();
+      });
+    }
+    window.addEventListener("focus", clearAnnouncement);
+    document.addEventListener("visibilitychange", clearAnnouncement);
+    updateNotifySettings();
 
     function applyTheme(theme) {
       document.documentElement.dataset.theme = theme;
