@@ -2647,11 +2647,17 @@
       if (localStorage.getItem(KIND_KEY) === "local") {
         const handle = await recallHandle();
         if (handle && (await handle.queryPermission({ mode: "readwrite" }).catch(() => "")) === "granted") {
-          if (await openLocalFolder(handle, true)) return;
+          if (await openLocalFolder(handle, true)) {
+            restoreFile();
+            return;
+          }
         }
       } else {
         const last = localStorage.getItem(FOLDER_KEY) || "";
-        if (last && (await openFolder(last, true))) return;
+        if (last && (await openFolder(last, true))) {
+          restoreFile();
+          return;
+        }
       }
       showFolderDialog();
     }
@@ -2660,7 +2666,25 @@
     // to the same section: /chat and /editor. Returns false if the user chose
     // to stay because of unsaved edits.
     const SECTION_PATHS = { chat: "/chat", files: "/editor" };
+    const SECTION_KEY = "lightusagi-section";
+    const FILE_KEY = "lightusagi-file";
     const sectionFromPath = () => (/^\/editor\/?$/.test(location.pathname) ? "files" : "chat");
+    // A plain "/" has no section in it, so it opens the one used last.
+    const sectionToOpen = () =>
+      (/^\/(chat|editor)\/?$/.test(location.pathname) ? sectionFromPath() : localStorage.getItem(SECTION_KEY) || "chat");
+
+    // After a reload, put the file that was open back in the editor.
+    function restoreFile() {
+      let saved;
+      try {
+        saved = JSON.parse(localStorage.getItem(FILE_KEY) || "null");
+      } catch (error) {
+        return;
+      }
+      if (!saved || !source || saved.kind !== source.kind || openPath) return;
+      const folder = source.kind === "helper" ? source.root : source.root.name;
+      if (saved.folder === folder && allFiles.includes(saved.path)) openFileAt(saved.path, true);
+    }
 
     function setSection(name, how = "push") {
       const files = name === "files";
@@ -2669,6 +2693,7 @@
         history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS[name]);
       }
       document.body.classList.toggle("view-files", files);
+      localStorage.setItem(SECTION_KEY, name);
       fileInput.accept = files ? [...TEXT_EXTENSIONS].map((ext) => "." + ext).join(",") : "";
       attachButton.title = files ? "Attach text or code files" : "Attach text, code, PDF, Word, Excel or picture files";
       if (!activeRequest) fillModels();
@@ -2910,6 +2935,11 @@
         fileText.disabled = false;
         fileText.scrollTop = 0;
         fileNote.textContent = "";
+        localStorage.setItem(FILE_KEY, JSON.stringify({
+          kind: source.kind,
+          folder: source.kind === "helper" ? source.root : source.root.name,
+          path: openPath,
+        }));
         fileList.querySelectorAll("button").forEach((button) => {
           if (button.title !== openPath) button.removeAttribute("aria-current");
           else button.setAttribute("aria-current", "true");
@@ -3107,7 +3137,7 @@
     setSidebar(narrow.matches ? false : localStorage.getItem("lightusagi-sidebar") !== "closed");
     showEmpty();
     messageBox.focus();
-    setSection(sectionFromPath(), "replace");
+    setSection(sectionToOpen(), "replace");
     (async () => {
       await loadModels();
       await refreshChats();
