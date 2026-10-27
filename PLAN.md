@@ -104,10 +104,15 @@ The page is HTML, CSS, and a short script. The helper serves those files. The ch
 
 ```
 PLAN.md          this file
-README.md        what the project is
-helper/          the Python program, added when we build it
-web/             the HTML, CSS, and script, added when we build it
+README.md        what the project is and how to run it
+start.py         checks Ollama, starts the helper, opens the page
+start.sh         runs start.py on macOS and Linux
+start.bat        runs start.py on Windows, by double-click
+helper/          the Python program
+web/             the HTML, CSS, and script; vendor/ holds pdf.js
 ```
+
+The start scripts are the one way to run it, so nobody has to find `helper/` or know how it is launched. They add no dependency beyond Python.
 
 Models are routing rules inside the helper, not folders. The page is one tab, not an app per feature.
 
