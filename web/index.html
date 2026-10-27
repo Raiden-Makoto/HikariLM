@@ -435,6 +435,91 @@
       background: color-mix(in srgb, var(--panel) 82%, transparent);
     }
 
+    .tabs { display: flex; gap: 0.15rem; padding: 0.15rem; border: 1px solid var(--line); border-radius: 11px; }
+    .tab {
+      padding: 0.2rem 0.85rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .tab:hover { color: var(--ink); }
+    .tab[aria-selected="true"] { background: var(--hover); color: var(--ink); }
+
+    #files { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1.25rem 1.1rem; }
+    body.view-files #files { display: flex; }
+    body.view-files #log,
+    body.view-files .composer,
+    body.view-files #sidebar { display: none; }
+    body.view-files #toggle-sidebar { visibility: hidden; }
+    .folder-bar { display: flex; gap: 0.5rem; }
+    .folder-bar input {
+      flex: 1;
+      min-width: 0;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+    }
+    .folder-bar .choice, .editor-bar .choice { flex: none; padding: 0.4rem 0.9rem; }
+    #files .note { margin: 0; min-height: 1.3rem; }
+    .files-body { flex: 1; min-height: 0; display: flex; gap: 0.75rem; }
+    #file-list {
+      flex: none;
+      width: 15rem;
+      margin: 0;
+      padding: 0.35rem;
+      overflow: auto;
+      list-style: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    #file-list button {
+      display: block;
+      width: 100%;
+      padding: 0.3rem 0.55rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      text-align: left;
+      font-size: 0.88rem;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    #file-list button:hover { background: var(--hover); }
+    #file-list button[aria-current="true"] { background: var(--hover); font-weight: 600; }
+    .editor { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .editor-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    #file-title { flex: 1; min-width: 8rem; font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }
+    #file-text {
+      flex: 1;
+      min-height: 8rem;
+      padding: 0.75rem 0.9rem;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--ink);
+      font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      tab-size: 4;
+      white-space: pre;
+      overflow: auto;
+    }
+    #file-text:disabled { opacity: 0.6; }
+    #conflict { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    #conflict[hidden] { display: none; }
+    #conflict .choice { flex: none; padding: 0.3rem 0.8rem; }
+    @media (max-width: 720px) {
+      .files-body { flex-direction: column; }
+      #file-list { width: auto; max-height: 9rem; }
+    }
+
     @media (max-width: 720px) {
       #sidebar {
         position: fixed;
@@ -550,6 +635,10 @@
           <p id="status" role="status">Checking Ollama…</p>
         </div>
       </div>
+      <div class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab" id="tab-chat" type="button" role="tab" aria-selected="true">Chat</button>
+        <button class="tab" id="tab-files" type="button" role="tab" aria-selected="false">Files</button>
+      </div>
       <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3"/>
@@ -559,6 +648,32 @@
     </header>
 
     <main id="log"></main>
+
+    <section id="files" aria-label="Files">
+      <form class="folder-bar" id="folder-form">
+        <input id="folder-path" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to open, for example ~/projects/hw3" aria-label="Folder to open">
+        <button class="choice" type="submit">Open</button>
+      </form>
+      <p class="note" id="folder-note" role="status"></p>
+      <div class="files-body">
+        <ul id="file-list" aria-label="Files in the folder"></ul>
+        <div class="editor">
+          <div class="editor-bar">
+            <span id="file-title">No file open</span>
+            <button class="choice" id="ask-file" type="button" disabled>Ask about this file</button>
+            <button class="choice" id="ask-selection" type="button" disabled>Ask about selection</button>
+            <button class="choice" id="save-file" type="button" disabled>Save</button>
+          </div>
+          <div id="conflict" hidden>
+            <span id="conflict-text"></span>
+            <button class="choice" id="conflict-reload" type="button">Reload the file</button>
+            <button class="choice" id="conflict-keep" type="button">Keep editing</button>
+          </div>
+          <p class="note" id="file-note" role="status"></p>
+          <textarea id="file-text" spellcheck="false" wrap="off" aria-label="File text" disabled></textarea>
+        </div>
+      </div>
+    </section>
 
     <form class="composer" id="composer">
       <div class="notice" id="notice" role="status" hidden></div>
@@ -2112,6 +2227,274 @@
       document.querySelector("#bg-file").value = "";
       bgNote.textContent = "";
       applyBackground("");
+    });
+
+    // Files section. The helper reads and writes the folder; the page only
+    // shows one file at a time. The file on disk is the only copy of the text.
+    const FOLDER_KEY = "lightusagi-folder";
+    const folderInput = document.querySelector("#folder-path");
+    const folderNote = document.querySelector("#folder-note");
+    const fileList = document.querySelector("#file-list");
+    const fileTitle = document.querySelector("#file-title");
+    const fileNote = document.querySelector("#file-note");
+    const fileText = document.querySelector("#file-text");
+    const askFile = document.querySelector("#ask-file");
+    const askSelection = document.querySelector("#ask-selection");
+    const saveFile = document.querySelector("#save-file");
+    const conflictBox = document.querySelector("#conflict");
+    let folderRoot = "";
+    let folderName = "";
+    let openPath = "";
+    let openVersion = "";
+    let savedText = "";
+    let openToken = 0;
+    let saving = false;
+    let filesStarted = false;
+
+    const hasEdits = () => Boolean(openPath) && fileText.value !== savedText;
+
+    async function filesApi(url, options) {
+      const response = await fetch(url, options);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(body.error || "The helper could not do that.");
+        error.conflict = Boolean(body.conflict);
+        throw error;
+      }
+      return body;
+    }
+
+    function discardOk() {
+      return !hasEdits() || confirm("This file has changes that are not saved. Leave them behind?");
+    }
+
+    function refreshFileButtons() {
+      const open = Boolean(openPath);
+      fileTitle.textContent = open ? openPath + (hasEdits() ? " ●" : "") : "No file open";
+      saveFile.disabled = !open || saving || !hasEdits();
+      askFile.disabled = !open || Boolean(activeRequest);
+      askSelection.disabled = !open || Boolean(activeRequest) || fileText.selectionStart === fileText.selectionEnd;
+    }
+
+    function setSection(name) {
+      const files = name === "files";
+      if (!files && !discardOk()) return;
+      document.body.classList.toggle("view-files", files);
+      document.querySelector("#tab-chat").setAttribute("aria-selected", String(!files));
+      document.querySelector("#tab-files").setAttribute("aria-selected", String(files));
+      if (files) {
+        closeMenu();
+        if (!filesStarted) {
+          filesStarted = true;
+          const last = localStorage.getItem(FOLDER_KEY) || "";
+          folderInput.value = last;
+          if (last) openFolder(last, true);
+        }
+        refreshFileButtons();
+        (folderRoot ? fileText : folderInput).focus();
+      } else {
+        messageBox.focus();
+      }
+    }
+
+    function closeFile() {
+      openToken += 1;
+      openPath = "";
+      openVersion = "";
+      savedText = "";
+      fileText.value = "";
+      fileText.disabled = true;
+      conflictBox.hidden = true;
+      fileNote.textContent = "";
+      refreshFileButtons();
+    }
+
+    function renderFiles(files, cut) {
+      fileList.replaceChildren();
+      for (const path of files) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = path;
+        button.title = path;
+        if (path === openPath) button.setAttribute("aria-current", "true");
+        button.addEventListener("click", () => openFileAt(path));
+        item.append(button);
+        fileList.append(item);
+      }
+      if (!files.length) folderNote.textContent = "No files of a kind this page opens in " + folderName + ".";
+      else if (cut) folderNote.textContent = "Showing the first " + files.length + " files. This is meant for a small folder.";
+      else folderNote.textContent = files.length + (files.length === 1 ? " file in " : " files in ") + folderName + ".";
+    }
+
+    async function openFolder(path, quiet = false) {
+      path = path.trim();
+      if (!path) {
+        folderNote.textContent = "Type the path of a folder to open.";
+        return;
+      }
+      if (!discardOk()) return;
+      folderNote.textContent = "Opening…";
+      try {
+        const body = await filesApi("/api/workspace?root=" + encodeURIComponent(path));
+        closeFile();
+        folderRoot = body.root;
+        folderName = body.name;
+        localStorage.setItem(FOLDER_KEY, path);
+        renderFiles(body.files, body.cut);
+      } catch (error) {
+        if (!quiet) closeFile();
+        folderRoot = "";
+        fileList.replaceChildren();
+        folderNote.textContent = plainError(error.message);
+      }
+    }
+
+    async function openFileAt(path, force = false) {
+      if (!force) {
+        if (path === openPath && !hasEdits()) return;
+        if (!discardOk()) return;
+      }
+      const token = ++openToken;
+      fileNote.textContent = "Opening…";
+      conflictBox.hidden = true;
+      try {
+        const body = await filesApi(
+          "/api/workspace/file?root=" + encodeURIComponent(folderRoot) + "&path=" + encodeURIComponent(path));
+        if (token !== openToken) return;
+        openPath = body.path;
+        openVersion = body.version;
+        savedText = body.text;
+        fileText.value = body.text;
+        fileText.disabled = false;
+        fileText.scrollTop = 0;
+        fileNote.textContent = "";
+        fileList.querySelectorAll("button").forEach((button) => {
+          if (button.title !== openPath) button.removeAttribute("aria-current");
+          else button.setAttribute("aria-current", "true");
+        });
+      } catch (error) {
+        if (token !== openToken) return;
+        fileNote.textContent = plainError(error.message);
+      }
+      refreshFileButtons();
+    }
+
+    async function saveOpenFile() {
+      if (!hasEdits() || saving) return;
+      saving = true;
+      refreshFileButtons();
+      const sent = fileText.value;
+      const path = openPath;
+      try {
+        const body = await filesApi("/api/workspace/file", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ root: folderRoot, path, text: sent, version: openVersion }),
+        });
+        if (path === openPath) {
+          openVersion = body.version;
+          savedText = sent;
+          fileNote.textContent = body.changed ? "Saved." : "Nothing to save.";
+        }
+      } catch (error) {
+        if (error.conflict) {
+          document.querySelector("#conflict-text").textContent = error.message;
+          conflictBox.hidden = false;
+          fileNote.textContent = "Not saved.";
+        } else {
+          fileNote.textContent = "Not saved: " + plainError(error.message);
+        }
+      }
+      saving = false;
+      refreshFileButtons();
+    }
+
+    async function askAbout(selectionOnly) {
+      if (!openPath || activeRequest) return;
+      if (hasEdits()) {
+        fileNote.textContent = "Save the file first, so the question is about what is really in it.";
+        return;
+      }
+      let body;
+      try {
+        body = await filesApi(
+          "/api/workspace/file?root=" + encodeURIComponent(folderRoot) + "&path=" + encodeURIComponent(openPath));
+      } catch (error) {
+        fileNote.textContent = plainError(error.message);
+        return;
+      }
+      let text = body.text;
+      let name = folderName + "/" + body.path;
+      if (selectionOnly) {
+        // Not dirty, so the highlight's offsets are offsets into the disk text.
+        const start = fileText.selectionStart;
+        const end = fileText.selectionEnd;
+        if (start === end || body.text !== fileText.value) {
+          fileNote.textContent = "Highlight some text first.";
+          return;
+        }
+        text = text.slice(start, end);
+        const first = body.text.slice(0, start).split("\n").length;
+        const last = first + text.replace(/\n+$/, "").split("\n").length - 1;
+        name += first === last ? " line " + first : " lines " + first + "–" + last;
+      }
+      const used = attached.reduce((sum, file) => sum + (file.text || "").length, 0);
+      if (used + text.length > MAX_FILES_TOTAL) {
+        fileNote.textContent = "That would make the attached files too big for one message.";
+        return;
+      }
+      if (!text.trim()) {
+        fileNote.textContent = "There is no text there to ask about.";
+        return;
+      }
+      if (!discardOk()) return;
+      setSection("chat");
+      const coder = [...modelSelect.options].map((option) => option.value)
+        .find((value) => /qwen.*coder|coder.*qwen/i.test(value));
+      let note = "";
+      if (coder) {
+        modelSelect.value = coder;
+        note = " Model: " + coder + ".";
+      } else if (modelSelect.value) {
+        note = " Qwen coder is not installed, so " + modelSelect.value + " will answer.";
+      }
+      const same = attached.findIndex((file) => file.name === name);
+      if (same >= 0) attached.splice(same, 1);
+      attached.push({ name, text });
+      renderChips();
+      saveDraft(draftKey(), true);
+      notify("Attached " + name + "." + note + " Type your question and press Enter.");
+      messageBox.focus();
+    }
+
+    document.querySelector("#tab-chat").addEventListener("click", () => setSection("chat"));
+    document.querySelector("#tab-files").addEventListener("click", () => setSection("files"));
+    document.querySelector("#folder-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      openFolder(folderInput.value);
+    });
+    fileText.addEventListener("input", () => {
+      fileNote.textContent = "";
+      refreshFileButtons();
+    });
+    for (const type of ["select", "keyup", "mouseup", "focus"]) fileText.addEventListener(type, refreshFileButtons);
+    fileText.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveOpenFile();
+      }
+    });
+    saveFile.addEventListener("click", saveOpenFile);
+    askFile.addEventListener("click", () => askAbout(false));
+    askSelection.addEventListener("click", () => askAbout(true));
+    document.querySelector("#conflict-keep").addEventListener("click", () => { conflictBox.hidden = true; });
+    document.querySelector("#conflict-reload").addEventListener("click", () => {
+      conflictBox.hidden = true;
+      openFileAt(openPath, true);
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (hasEdits()) event.preventDefault();
     });
 
     applyTheme(localStorage.getItem("lightusagi-theme") || "light");

@@ -6,8 +6,9 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
-from helper import store
+from helper import store, workspace
 from helper.ollama import KEEP_ALIVE, OllamaError, open_chat, tags, unload
 from helper.router import ModelRouter, chat_models
 
@@ -18,6 +19,7 @@ MAX_BODY = 48_000_000
 MAX_TRANSCRIPT = 20_000_000
 CHATS = "/api/chats"
 DRAFTS = "/api/drafts"
+WORKSPACE = "/api/workspace"
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs")
 
 router = ModelRouter(unload)
@@ -27,6 +29,8 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def do_GET(self) -> None:
+        if not self._same_origin() or self._workspace("GET"):
+            return
         if self.path == "/api/state":
             self._send_json({"large_model": router.large})
             return
@@ -64,6 +68,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"error": "not found"}, status=404)
 
     def do_PUT(self) -> None:
+        if not self._same_origin() or self._workspace("PUT"):
+            return
         if self.path.startswith(DRAFTS + "/"):
             try:
                 payload = self._body(MAX_BODY)
@@ -91,6 +97,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(summary)
 
     def do_PATCH(self) -> None:
+        if not self._same_origin():
+            return
         if self.path == "/api/folders":
             try:
                 payload = self._body(MAX_BODY)
@@ -114,6 +122,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"could not rename: {error.strerror or error}"}, status=500)
 
     def do_DELETE(self) -> None:
+        if not self._same_origin():
+            return
         if self.path.startswith(DRAFTS + "/"):
             store.delete_draft(self._chat_id())
             self._send_json({"deleted": True})
@@ -132,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"deleted": removed}, status=200 if removed else 404)
 
     def do_POST(self) -> None:
+        if not self._same_origin():
+            return
         if self.path != "/api/chat":
             self._send_json({"error": "not found"}, status=404)
             return
@@ -148,6 +160,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         router.commit(model)
         self._stream(response)
+
+    def _same_origin(self) -> bool:
+        # A page from another address must not be able to read or change files.
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
+            self._send_json({"error": "requests from other sites are refused"}, status=403)
+            return False
+        return True
+
+    def _workspace(self, method: str) -> bool:
+        parts = urlparse(self.path)
+        if parts.path not in (WORKSPACE, WORKSPACE + "/file"):
+            return False
+        query = parse_qs(parts.query)
+        try:
+            if method == "GET" and parts.path == WORKSPACE:
+                self._send_json(workspace.listing(query.get("root", [""])[0]))
+            elif method == "GET":
+                self._send_json(workspace.read(query.get("root", [""])[0], query.get("path", [""])[0]))
+            elif method == "PUT" and parts.path.endswith("/file"):
+                payload = self._body(MAX_BODY)
+                self._send_json(workspace.write(
+                    payload.get("root"), payload.get("path"), payload.get("text"), payload.get("version")))
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except workspace.Conflict as error:
+            self._send_json({"error": str(error), "conflict": True}, status=409)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+        return True
 
     def _chat_id(self) -> str:
         return self.path.split("?", 1)[0].rsplit("/", 1)[1]
