@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LightUsagi</title>
+  <script>
+    // Set the theme before the page paints so a reload does not flash the wrong one.
+    try { document.documentElement.dataset.theme = localStorage.getItem("lightusagi-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
+  </script>
   <style>
     :root, [data-theme="dark"] {
       color-scheme: dark;
@@ -469,6 +473,42 @@
       letter-spacing: 0.05em;
       text-transform: uppercase;
     }
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      cursor: pointer;
+    }
+    .switch-row .setting-label { margin: 0; cursor: inherit; }
+    .switch {
+      position: relative;
+      flex: none;
+      width: 2.4rem;
+      height: 1.4rem;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--field);
+      appearance: none;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0.17rem;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 50%;
+      background: var(--muted);
+      transform: translateY(-50%);
+      transition: left 0.12s, background 0.12s;
+    }
+    .switch:checked { border-color: var(--you); background: var(--you); }
+    .switch:checked::after { left: calc(100% - 1.17rem); background: #fff; }
+    .switch:focus-visible { outline: 2px solid var(--you); outline-offset: 2px; }
     .choices { display: flex; gap: 0.5rem; }
     .choice {
       flex: 1;
@@ -561,18 +601,16 @@
     </div>
     <div class="dialog-body">
       <div class="setting">
-        <span class="setting-label" id="theme-label">Theme</span>
-        <div class="choices" role="group" aria-labelledby="theme-label">
-          <button class="choice" type="button" data-theme-choice="dark" aria-pressed="true">Dark</button>
-          <button class="choice" type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-        </div>
+        <label class="switch-row">
+          <span class="setting-label">Dark mode</span>
+          <input class="switch" id="dark-toggle" type="checkbox" role="switch">
+        </label>
       </div>
       <div class="setting">
-        <span class="setting-label" id="notify-label">Notify when a reply finishes</span>
-        <div class="choices" role="group" aria-labelledby="notify-label">
-          <button class="choice" type="button" data-notify-choice="on" aria-pressed="true">On</button>
-          <button class="choice" type="button" data-notify-choice="off" aria-pressed="false">Off</button>
-        </div>
+        <label class="switch-row">
+          <span class="setting-label">Notify when a reply finishes</span>
+          <input class="switch" id="notify-toggle" type="checkbox" role="switch">
+        </label>
         <p class="note" id="notify-note" role="status"></p>
       </div>
       <div class="setting">
@@ -1969,9 +2007,7 @@
     const userIsAway = () => document.hidden || !document.hasFocus();
 
     function updateNotifySettings() {
-      for (const button of document.querySelectorAll("[data-notify-choice]")) {
-        button.setAttribute("aria-pressed", String((button.dataset.notifyChoice === "on") === notifyOn()));
-      }
+      document.querySelector("#notify-toggle").checked = notifyOn();
       if (!notifyOn()) notifyNote.textContent = "";
       else if (!canNotify) notifyNote.textContent = "This browser cannot show notifications here. The tab title will change instead.";
       else if (Notification.permission === "denied") notifyNote.textContent = "Notifications are blocked for this site in the browser settings. The tab title will still change.";
@@ -2008,13 +2044,11 @@
       if (!userIsAway()) document.title = BASE_TITLE;
     }
 
-    for (const button of document.querySelectorAll("[data-notify-choice]")) {
-      button.addEventListener("click", () => {
-        localStorage.setItem(NOTIFY_KEY, button.dataset.notifyChoice);
-        updateNotifySettings();
-        askNotifyPermission();
-      });
-    }
+    document.querySelector("#notify-toggle").addEventListener("change", (event) => {
+      localStorage.setItem(NOTIFY_KEY, event.target.checked ? "on" : "off");
+      updateNotifySettings();
+      askNotifyPermission();
+    });
     window.addEventListener("focus", clearAnnouncement);
     document.addEventListener("visibilitychange", clearAnnouncement);
     updateNotifySettings();
@@ -2022,9 +2056,7 @@
     function applyTheme(theme) {
       document.documentElement.dataset.theme = theme;
       localStorage.setItem("lightusagi-theme", theme);
-      for (const button of document.querySelectorAll("[data-theme-choice]")) {
-        button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme));
-      }
+      document.querySelector("#dark-toggle").checked = theme === "dark";
     }
 
     function applyBackground(url) {
@@ -2033,9 +2065,9 @@
       document.querySelector("#clear-bg").disabled = !url;
     }
 
-    for (const button of document.querySelectorAll("[data-theme-choice]")) {
-      button.addEventListener("click", () => applyTheme(button.dataset.themeChoice));
-    }
+    document.querySelector("#dark-toggle").addEventListener("change", (event) => {
+      applyTheme(event.target.checked ? "dark" : "light");
+    });
     document.querySelector("#open-settings").addEventListener("click", () => settings.showModal());
     document.querySelector("#close-settings").addEventListener("click", () => settings.close());
     settings.addEventListener("click", (event) => {
@@ -2068,7 +2100,7 @@
       applyBackground("");
     });
 
-    applyTheme(localStorage.getItem("lightusagi-theme") || "dark");
+    applyTheme(localStorage.getItem("lightusagi-theme") || "light");
     applyBackground(localStorage.getItem("lightusagi-bg") || "");
     setSidebar(narrow.matches ? false : localStorage.getItem("lightusagi-sidebar") !== "closed");
     showEmpty();
