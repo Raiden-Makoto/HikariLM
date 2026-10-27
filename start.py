@@ -39,13 +39,14 @@ def check_files() -> None:
         sys.exit("These files are missing, so this folder is not a full copy of LightUsagi: " + ", ".join(missing))
 
 
-def lightusagi_running(host: str, port: int) -> bool:
-    """True if something on this port answers like LightUsagi."""
+def running_state(host: str, port: int) -> dict | None:
+    """What a LightUsagi on this port says about itself, or None if it is not one."""
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/api/state", timeout=2) as response:
-            return "large_model" in json.loads(response.read().decode())
+            state = json.loads(response.read().decode())
     except (OSError, ValueError):
-        return False
+        return None
+    return state if isinstance(state, dict) and "large_model" in state else None
 
 
 def port_is_free(host: str, port: int) -> bool:
@@ -83,7 +84,17 @@ def main() -> None:
 
     url = f"http://{args.host}:{args.port}"
     if not port_is_free(args.host, args.port):
-        if lightusagi_running(args.host, args.port):
+        state = running_state(args.host, args.port)
+        if state is not None:
+            from helper.version import code_stamp
+
+            if state.get("code") != code_stamp():
+                # A copy started before the files changed keeps running its old
+                # code, so pages added since would show "not found".
+                sys.exit(
+                    f"An older copy of LightUsagi is still running at {url}, started before the files were updated.\n"
+                    "Stop it (Ctrl+C in the window where it runs, or close that window) and run this again."
+                )
             say(f"LightUsagi is already running at {url}")
             if not args.no_browser:
                 webbrowser.open(url)

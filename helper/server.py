@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from helper import store, workspace
 from helper.ollama import KEEP_ALIVE, OllamaError, open_chat, tags, unload
 from helper.router import ModelRouter, chat_models
+from helper.version import code_stamp
 
 HOST = os.environ.get("LIGHTUSAGI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("LIGHTUSAGI_PORT", "8787"))
@@ -25,6 +26,7 @@ PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs")
 
 router = ModelRouter(unload)
+STARTED_WITH = code_stamp()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -34,7 +36,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin() or self._workspace("GET"):
             return
         if self.path == "/api/state":
-            self._send_json({"large_model": router.large})
+            self._send_json({"large_model": router.large, "code": STARTED_WITH})
             return
         if self.path == "/api/tags":
             try:
