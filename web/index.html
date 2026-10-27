@@ -472,6 +472,11 @@
     }
     input[type="search"]:focus-visible, #browse-input:focus-visible { outline: 2px solid var(--you); outline-offset: 1px; }
     #folder-dialog { width: min(34rem, calc(100% - 2rem)); }
+    .local-pick { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .local-pick .choice { flex: 1 1 12rem; }
+    .local-pick .choice[hidden] { display: none; }
+    .rule { margin: 0.9rem 0 0.2rem; border: 0; border-top: 1px solid var(--line); }
+    #browse-lead { margin: 0.2rem 0 0.5rem; }
     .browse-path { margin: 0.6rem 0 0.3rem; color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
     #browse-list {
       height: 16rem;
@@ -756,6 +761,13 @@
       </button>
     </div>
     <div class="dialog-body">
+      <div class="local-pick">
+        <button class="choice" type="button" id="pick-local">Pick a folder on this computer…</button>
+        <button class="choice" type="button" id="reopen-local" hidden></button>
+      </div>
+      <p class="note" id="local-note"></p>
+      <hr class="rule">
+      <p class="note" id="browse-lead">Or look through the folders on the computer that runs the LightUsagi helper:</p>
       <input id="browse-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search folders, or type a path and press Enter" aria-label="Search folders or type a path">
       <p id="browse-path" class="browse-path"></p>
       <ul id="browse-list" aria-label="Folders"></ul>
@@ -2296,6 +2308,7 @@
     // Files section. The helper reads and writes the folder; the page only
     // shows one file at a time. The file on disk is the only copy of the text.
     const FOLDER_KEY = "lightusagi-folder";
+    const KIND_KEY = "lightusagi-folder-kind";
     const folderLabel = document.querySelector("#folder-label");
     const fileFilter = document.querySelector("#file-filter");
     let allFiles = [];
@@ -2309,7 +2322,10 @@
     const askSelection = document.querySelector("#ask-selection");
     const saveFile = document.querySelector("#save-file");
     const conflictBox = document.querySelector("#conflict");
-    let folderRoot = "";
+    // Where the open folder lives. Either the helper's machine (read and
+    // written by the helper) or this computer (a folder picked with the
+    // browser's own folder picker, read and written by the page itself).
+    let source = null;
     let folderName = "";
     let openPath = "";
     let openVersion = "";
@@ -2331,6 +2347,210 @@
       return body;
     }
 
+    function helperSource(root) {
+      const file = (path) => "/api/workspace/file?root=" + encodeURIComponent(root) + "&path=" + encodeURIComponent(path);
+      return {
+        kind: "helper",
+        root,
+        label: root,
+        list: () => filesApi("/api/workspace?root=" + encodeURIComponent(root)),
+        read: (path) => filesApi(file(path)),
+        write: (path, text, version) => filesApi("/api/workspace/file", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ root, path, text, version }),
+        }),
+      };
+    }
+
+    // A folder on this computer, picked with the browser's folder picker. The
+    // page does here what the helper does for the other kind of folder, with
+    // the same rules: everyday file kinds only, nothing outside the folder,
+    // 500 KB at most, the same encoding and line endings written back, and a
+    // refusal if the file changed since it was opened.
+    const LOCAL_EXTENSIONS = new Set(("txt md rst log csv tsv json yaml yml toml ini xml html css py r c h cpp hpp " +
+      "java kt go rs rb php swift cs scala lua pl js ts jsx tsx sh sql tex").split(" "));
+    const LOCAL_NAMES = new Set(["makefile", "dockerfile", "readme", "license"]);
+    const LOCAL_SKIP = new Set(["node_modules", "__pycache__", "venv"]);
+    const LOCAL_MAX_FILES = 200;
+    const LOCAL_MAX_DEPTH = 4;
+
+    function localAllowed(name) {
+      const lower = name.toLowerCase();
+      const dot = lower.lastIndexOf(".");
+      return (dot > 0 || (dot === 0 && lower.length > 1) ? LOCAL_EXTENSIONS.has(lower.slice(dot + 1)) : false) ||
+        LOCAL_NAMES.has(lower);
+    }
+
+    async function sha1(bytes) {
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", bytes));
+      return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function localDecode(bytes, name) {
+      const starts = (...head) => head.every((value, index) => bytes[index] === value);
+      try {
+        if (starts(0xef, 0xbb, 0xbf)) return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(3)), codec: "utf-8", bom: [0xef, 0xbb, 0xbf] };
+        if (starts(0xff, 0xfe)) return { text: new TextDecoder("utf-16le").decode(bytes.subarray(2)), codec: "utf-16le", bom: [0xff, 0xfe] };
+        if (starts(0xfe, 0xff)) return { text: new TextDecoder("utf-16be").decode(bytes.subarray(2)), codec: "utf-16be", bom: [0xfe, 0xff] };
+      } catch (error) {
+        throw new Error(name + " is not text this page can read.");
+      }
+      if (bytes.includes(0)) throw new Error(name + " has binary bytes, so it is not opened.");
+      try {
+        return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), codec: "utf-8", bom: [] };
+      } catch (error) {
+        return { text: new TextDecoder("windows-1252").decode(bytes), codec: "windows-1252", bom: [] };
+      }
+    }
+
+    let cp1252Bytes = null;
+    function localEncode(text, codec, name) {
+      if (codec === "utf-8") return new TextEncoder().encode(text);
+      if (codec === "utf-16le" || codec === "utf-16be") {
+        const out = new Uint8Array(text.length * 2);
+        for (let i = 0; i < text.length; i += 1) {
+          const unit = text.charCodeAt(i);
+          const [low, high] = codec === "utf-16le" ? [i * 2, i * 2 + 1] : [i * 2 + 1, i * 2];
+          out[low] = unit & 255;
+          out[high] = unit >> 8;
+        }
+        return out;
+      }
+      if (!cp1252Bytes) {
+        cp1252Bytes = new Map();
+        const decoder = new TextDecoder("windows-1252");
+        for (let value = 0; value < 256; value += 1) cp1252Bytes.set(decoder.decode(new Uint8Array([value])), value);
+      }
+      const out = [];
+      for (const character of text) {
+        const value = cp1252Bytes.get(character);
+        if (value === undefined) throw new Error(name + " is saved as windows-1252, which cannot hold a character you typed.");
+        out.push(value);
+      }
+      return Uint8Array.from(out);
+    }
+
+    function localFailure(error, name) {
+      if (error instanceof Error && !error.name.endsWith("Error")) return error;
+      if (error.name === "NotFoundError" || error.name === "TypeMismatchError") return new Error(name + " is not in the folder any more.");
+      if (error.name === "NotAllowedError" || error.name === "SecurityError") return new Error("The browser no longer lets this page use that folder. Choose it again.");
+      return error;
+    }
+
+    function localSource(root) {
+      const handleFor = async (path) => {
+        const parts = path.split("/");
+        if (!path || path.startsWith("/") || path.includes("\\") || parts.some((part) => !part || part === "." || part === "..")) {
+          throw new Error("That path leaves the opened folder.");
+        }
+        let directory = root;
+        for (const part of parts.slice(0, -1)) directory = await directory.getDirectoryHandle(part);
+        const name = parts[parts.length - 1];
+        if (!localAllowed(name)) throw new Error(name + " is not a kind of file this page opens.");
+        return directory.getFileHandle(name);
+      };
+      const readBytes = async (handle) => {
+        const file = await handle.getFile();
+        if (file.size > MAX_FILE) throw new Error(file.name + " is " + Math.round(file.size / 1000) + " KB. Files over 500 KB are not opened.");
+        return new Uint8Array(await file.arrayBuffer());
+      };
+      return {
+        kind: "local",
+        root,
+        label: root.name + "  (on this computer)",
+        async list() {
+          const found = [];
+          let cut = false;
+          const walk = async (directory, prefix, depth) => {
+            const entries = [];
+            for await (const [name, entry] of directory.entries()) entries.push([name, entry]);
+            entries.sort((a, b) => (a[0].toLowerCase() < b[0].toLowerCase() ? -1 : a[0].toLowerCase() > b[0].toLowerCase() ? 1 : 0));
+            for (const [name, entry] of entries) {
+              if (cut) return;
+              if (entry.kind === "directory") {
+                if (name.startsWith(".") || LOCAL_SKIP.has(name) || depth >= LOCAL_MAX_DEPTH) continue;
+                await walk(entry, prefix + name + "/", depth + 1);
+              } else if (localAllowed(name)) {
+                if (found.length >= LOCAL_MAX_FILES) {
+                  cut = true;
+                  return;
+                }
+                found.push(prefix + name);
+              }
+            }
+          };
+          try {
+            await walk(root, "", 0);
+          } catch (error) {
+            throw localFailure(error, root.name);
+          }
+          return { root: root.name, name: root.name, files: found, cut };
+        },
+        async read(path) {
+          try {
+            const bytes = await readBytes(await handleFor(path));
+            const { text } = localDecode(bytes, path);
+            return { path, text: text.replace(/\r\n/g, "\n"), version: await sha1(bytes) };
+          } catch (error) {
+            throw localFailure(error, path);
+          }
+        },
+        async write(path, text, version) {
+          try {
+            const handle = await handleFor(path);
+            const bytes = await readBytes(handle);
+            if ((await sha1(bytes)) !== version) {
+              const error = new Error(path + " was changed on disk after you opened it.");
+              error.conflict = true;
+              throw error;
+            }
+            const { text: before, codec, bom } = localDecode(bytes, path);
+            let body = text.replace(/\r\n/g, "\n");
+            if (before.includes("\r\n")) body = body.replace(/\n/g, "\r\n");
+            const encoded = localEncode(body, codec, path);
+            const data = new Uint8Array(bom.length + encoded.length);
+            data.set(bom);
+            data.set(encoded, bom.length);
+            if (data.length > MAX_FILE) throw new Error("The file would be over 500 KB, so it was not saved.");
+            if (data.length === bytes.length && data.every((value, index) => value === bytes[index])) {
+              return { version, changed: false };
+            }
+            const writer = await handle.createWritable();
+            try {
+              await writer.write(data);
+              await writer.close();
+            } catch (error) {
+              try { await writer.abort(); } catch (ignored) { /* already closed */ }
+              throw error;
+            }
+            return { version: await sha1(data), changed: true };
+          } catch (error) {
+            throw localFailure(error, path);
+          }
+        },
+      };
+    }
+
+    // The browser keeps a picked folder in its own storage, so it can be
+    // offered again after a reload. It still asks the user's permission first.
+    function handleStore(mode, run) {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("lightusagi", 1);
+        request.onupgradeneeded = () => request.result.createObjectStore("handles");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("handles", mode);
+          const result = run(tx.objectStore("handles"));
+          tx.oncomplete = () => { db.close(); resolve(result.result); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        };
+      });
+    }
+    const rememberHandle = (handle) => handleStore("readwrite", (store) => store.put(handle, "last")).catch(() => {});
+    const recallHandle = () => handleStore("readonly", (store) => store.get("last")).catch(() => undefined);
+
     function discardOk() {
       return !hasEdits() || confirm("This file has changes that are not saved. Leave them behind?");
     }
@@ -2343,6 +2563,21 @@
       askSelection.disabled = !open || Boolean(activeRequest) || fileText.selectionStart === fileText.selectionEnd;
     }
 
+    // Open the folder used last time. A folder from this computer needs the
+    // user's permission again after a reload, so it may only be offered.
+    async function reopenLast() {
+      if (localStorage.getItem(KIND_KEY) === "local") {
+        const handle = await recallHandle();
+        if (handle && (await handle.queryPermission({ mode: "readwrite" }).catch(() => "")) === "granted") {
+          if (await openLocalFolder(handle, true)) return;
+        }
+      } else {
+        const last = localStorage.getItem(FOLDER_KEY) || "";
+        if (last && (await openFolder(last, true))) return;
+      }
+      showFolderDialog();
+    }
+
     function setSection(name) {
       const files = name === "files";
       if (!files && !discardOk()) return;
@@ -2353,9 +2588,7 @@
         closeMenu();
         if (!filesStarted) {
           filesStarted = true;
-          const last = localStorage.getItem(FOLDER_KEY) || "";
-          if (last) openFolder(last, true).then((ok) => { if (!ok) showFolderDialog(); });
-          else showFolderDialog();
+          reopenLast();
         }
         refreshFileButtons();
       } else {
@@ -2402,25 +2635,36 @@
     async function openFolder(path, quiet = false) {
       path = path.trim();
       if (!path) return false;
+      return openSource(helperSource(path), quiet);
+    }
+
+    async function openLocalFolder(handle, quiet = false) {
+      return openSource(localSource(handle), quiet);
+    }
+
+    async function openSource(next, quiet = false) {
       if (!discardOk()) return false;
       folderNote.textContent = "Opening…";
       try {
-        const body = await filesApi("/api/workspace?root=" + encodeURIComponent(path));
+        const body = await next.list();
         closeFile();
-        folderRoot = body.root;
+        // The helper tidies the path it was given (for example ~), so keep its answer.
+        source = next.kind === "helper" ? helperSource(body.root) : next;
         folderName = body.name;
         allFiles = body.files;
         filesCut = body.cut;
         fileFilter.value = "";
         fileFilter.disabled = false;
-        folderLabel.textContent = body.root;
-        folderLabel.title = body.root;
-        localStorage.setItem(FOLDER_KEY, body.root);
+        folderLabel.textContent = source.label;
+        folderLabel.title = source.label;
+        localStorage.setItem(KIND_KEY, source.kind);
+        if (source.kind === "helper") localStorage.setItem(FOLDER_KEY, body.root);
+        else rememberHandle(source.root);
         renderFiles();
         return true;
       } catch (error) {
         if (!quiet) closeFile();
-        folderRoot = "";
+        source = null;
         allFiles = [];
         fileFilter.disabled = true;
         folderLabel.textContent = "No folder open";
@@ -2462,7 +2706,9 @@
       if (!browsing.folders.length) bits.push("No folders in here.");
       else if (needle) bits.push(shown.length + " of " + browsing.folders.length + " folders match.");
       if (browsing.cut) bits.push("Only the first 1000 folders are listed. Type a path to go further.");
-      bits.push(browsing.files + (browsing.files === 1 ? " file" : " files") + " of a kind this page opens are directly in this folder.");
+      bits.push(browsing.files === 1
+        ? "1 file of a kind this page opens is directly in this folder."
+        : browsing.files + " files of a kind this page opens are directly in this folder.");
       browseNote.textContent = bits.join(" ");
     }
 
@@ -2485,7 +2731,8 @@
       if (!discardOk()) return;
       if (!folderDialog.open) folderDialog.showModal();
       browseInput.value = "";
-      browseTo(folderRoot || "");
+      browseTo(source && source.kind === "helper" ? source.root : "");
+      showLocalOptions();
       browseInput.focus();
     }
 
@@ -2503,6 +2750,45 @@
       if (await openFolder(browsing.path)) folderDialog.close();
       else browseNote.textContent = folderNote.textContent;
     });
+    const pickLocal = document.querySelector("#pick-local");
+    const reopenLocal = document.querySelector("#reopen-local");
+    const localNote = document.querySelector("#local-note");
+    const canPickLocal = typeof window.showDirectoryPicker === "function";
+
+    async function showLocalOptions() {
+      localNote.textContent = canPickLocal
+        ? "Opens your computer's own folder window. LightUsagi can then read and save the files in the folder you pick, and nothing else."
+        : "This browser cannot open a folder from this computer. Chrome and Edge can. The list below still works.";
+      pickLocal.disabled = !canPickLocal;
+      reopenLocal.hidden = true;
+      if (!canPickLocal) return;
+      const handle = await recallHandle();
+      if (!handle || (source && source.kind === "local" && (await source.root.isSameEntry(handle).catch(() => false)))) return;
+      reopenLocal.textContent = "Reopen " + handle.name;
+      reopenLocal.hidden = false;
+    }
+
+    async function useLocalHandle(getHandle) {
+      let handle;
+      try {
+        handle = await getHandle();
+      } catch (error) {
+        if (error.name !== "AbortError") localNote.textContent = plainError(error.message);
+        return;
+      }
+      if (!handle) return;
+      if (await openLocalFolder(handle)) folderDialog.close();
+      else localNote.textContent = folderNote.textContent;
+    }
+
+    pickLocal.addEventListener("click", () => useLocalHandle(() => window.showDirectoryPicker({ id: "lightusagi", mode: "readwrite" })));
+    reopenLocal.addEventListener("click", () => useLocalHandle(async () => {
+      const handle = await recallHandle();
+      if (!handle) return null;
+      const permission = await handle.requestPermission({ mode: "readwrite" });
+      if (permission !== "granted") throw new Error("The browser did not give this page access to " + handle.name + ".");
+      return handle;
+    }));
     document.querySelector("#close-folder").addEventListener("click", () => folderDialog.close());
     document.querySelector("#choose-folder").addEventListener("click", showFolderDialog);
     fileFilter.addEventListener("input", renderFiles);
@@ -2516,8 +2802,7 @@
       fileNote.textContent = "Opening…";
       conflictBox.hidden = true;
       try {
-        const body = await filesApi(
-          "/api/workspace/file?root=" + encodeURIComponent(folderRoot) + "&path=" + encodeURIComponent(path));
+        const body = await source.read(path);
         if (token !== openToken) return;
         openPath = body.path;
         openVersion = body.version;
@@ -2544,11 +2829,7 @@
       const sent = fileText.value;
       const path = openPath;
       try {
-        const body = await filesApi("/api/workspace/file", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ root: folderRoot, path, text: sent, version: openVersion }),
-        });
+        const body = await source.write(path, sent, openVersion);
         if (path === openPath) {
           openVersion = body.version;
           savedText = sent;
@@ -2575,8 +2856,7 @@
       }
       let body;
       try {
-        body = await filesApi(
-          "/api/workspace/file?root=" + encodeURIComponent(folderRoot) + "&path=" + encodeURIComponent(openPath));
+        body = await source.read(openPath);
       } catch (error) {
         fileNote.textContent = plainError(error.message);
         return;
