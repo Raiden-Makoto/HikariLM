@@ -126,27 +126,90 @@
       color: inherit;
       font: inherit;
     }
-    .chat-rename { margin-right: 0; }
-    .chat-delete {
+    .chat-open .pin-mark {
+      display: inline-block;
+      width: 0.8rem;
+      height: 0.8rem;
+      margin-right: 0.4rem;
+      vertical-align: -0.1rem;
+      color: var(--muted);
+    }
+    .chat-open .in-folder { margin-left: 0.5rem; color: var(--muted); font-size: 0.75rem; font-weight: 400; }
+    .chat-more {
       flex: none;
       display: none;
       margin-right: 0.3rem;
-      padding: 0.25rem 0.4rem;
+      padding: 0.25rem 0.35rem;
       border: 0;
       border-radius: 8px;
       background: transparent;
       color: var(--muted);
-      font-size: 0.8rem;
       cursor: pointer;
     }
-    .chat-delete svg { display: block; width: 1rem; height: 1rem; }
-    .chat-row:hover .chat-delete,
-    .chat-row:focus-within .chat-delete,
-    .chat-row:hover .chat-rename,
-    .chat-row:focus-within .chat-rename,
-    .chat-delete.confirm { display: block; }
-    .chat-delete:hover { color: var(--ink); }
-    .chat-delete.confirm { color: var(--danger); }
+    .chat-more svg { display: block; width: 1.1rem; height: 1.1rem; }
+    .chat-row:hover .chat-more,
+    .chat-row:focus-within .chat-more,
+    .chat-more[aria-expanded="true"] { display: block; }
+    .chat-more:hover, .chat-more[aria-expanded="true"] { color: var(--ink); }
+    .side-group {
+      margin: 0.7rem 0.5rem 0.25rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .folder-head {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      width: 100%;
+      margin-top: 0.15rem;
+      padding: 0.45rem 0.6rem;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--ink);
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .folder-head:hover { background: var(--hover); }
+    .folder-head svg { flex: none; width: 1rem; height: 1rem; color: var(--muted); }
+    .folder-head .chevron { transition: transform 0.12s; }
+    .folder-head[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
+    .folder-head .folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .folder-head .count { color: var(--muted); font-size: 0.75rem; font-weight: 400; }
+    .folder-chats { margin: 0 0 0 0.9rem; padding: 0; list-style: none; border-left: 1px solid var(--line); }
+    #chat-menu {
+      position: fixed;
+      z-index: 20;
+      min-width: 12.5rem;
+      max-width: 16rem;
+      padding: 0.3rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+    }
+    #chat-menu[hidden] { display: none; }
+    #chat-menu button, #chat-menu input {
+      display: block;
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+    }
+    #chat-menu button { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #chat-menu button:hover, #chat-menu button:focus-visible { background: var(--hover); outline: 0; }
+    #chat-menu input { border: 1px solid var(--line); margin-top: 0.2rem; }
+    #chat-menu .danger { color: var(--danger); }
+    #chat-menu .menu-note { padding: 0.3rem 0.65rem; color: var(--muted); font-size: 0.75rem; }
+    #chat-menu hr { margin: 0.25rem 0; border: 0; border-top: 1px solid var(--line); }
     .side-empty { margin: 0.5rem 0.5rem; padding: 0 0.5rem; color: var(--muted); font-size: 0.88rem; }
 
     .main {
@@ -420,9 +483,9 @@
         New chat
       </button>
     </div>
-    <p class="side-label" id="chats-label">Chats</p>
-    <ul id="chats" aria-labelledby="chats-label"></ul>
+    <ul id="chats" aria-label="Chats"></ul>
   </aside>
+  <div id="chat-menu" role="menu" hidden></div>
 
   <div class="main">
     <header>
@@ -1052,6 +1115,7 @@
       sendButton.setAttribute("aria-label", busy ? "Stop" : "Send");
       messageBox.disabled = busy;
       attachButton.disabled = busy;
+      if (busy) closeMenu();
       modelSelect.disabled = busy || !modelSelect.value;
       sidebar.toggleAttribute("inert", busy);
     }
@@ -1107,43 +1171,240 @@
         chatList.append(none);
         return;
       }
-      for (const chat of chats) {
-        const row = document.createElement("li");
-        row.className = "chat-row" + (chat.id === chatId ? " active" : "");
-        const open = document.createElement("button");
-        open.className = "chat-open";
-        open.type = "button";
-        open.textContent = chat.title;
-        open.title = chat.title;
-        if (chat.id === chatId) open.setAttribute("aria-current", "true");
-        open.addEventListener("click", () => openChat(chat.id));
-        const rename = document.createElement("button");
-        rename.className = "chat-delete chat-rename";
-        rename.type = "button";
-        rename.setAttribute("aria-label", "Rename chat " + chat.title);
-        rename.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>';
-        rename.addEventListener("click", () => startRename(chat, row));
-        open.addEventListener("dblclick", () => startRename(chat, row));
-        const remove = document.createElement("button");
-        remove.className = "chat-delete";
-        remove.type = "button";
-        remove.setAttribute("aria-label", "Delete chat " + chat.title);
-        remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></svg>';
-        let timer = null;
-        remove.addEventListener("click", () => {
-          if (!remove.classList.contains("confirm")) {
-            remove.classList.add("confirm");
-            remove.textContent = "Delete?";
-            timer = setTimeout(renderChats, 3000);
-            return;
-          }
-          clearTimeout(timer);
-          deleteChat(chat.id);
+      // Every chat shows in one place. Pinned chats come first, then folders
+      // (the folder with the newest chat first), then the rest. Inside each
+      // group the most recently used chat is on top, which is the order the
+      // helper already returns.
+      const pinned = chats.filter((chat) => chat.pinned);
+      const unpinned = chats.filter((chat) => !chat.pinned);
+      const folders = new Map();
+      for (const chat of unpinned) {
+        if (!chat.folder) continue;
+        if (!folders.has(chat.folder)) folders.set(chat.folder, []);
+        folders.get(chat.folder).push(chat);
+      }
+      const loose = unpinned.filter((chat) => !chat.folder);
+      const label = (text) => {
+        const item = document.createElement("li");
+        item.className = "side-group";
+        item.textContent = text;
+        chatList.append(item);
+      };
+      if (pinned.length) {
+        label("Pinned");
+        for (const chat of pinned) chatList.append(chatRow(chat, true));
+      }
+      for (const [name, inside] of folders) {
+        const open = !foldersClosed.has(name) || inside.some((chat) => chat.id === chatId);
+        const item = document.createElement("li");
+        const head = document.createElement("button");
+        head.type = "button";
+        head.className = "folder-head";
+        head.setAttribute("aria-expanded", String(open));
+        head.innerHTML = '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+        const text = document.createElement("span");
+        text.className = "folder-name";
+        text.textContent = name;
+        text.title = name;
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = String(inside.length);
+        head.append(text, count);
+        head.addEventListener("click", () => {
+          if (foldersClosed.has(name)) foldersClosed.delete(name);
+          else foldersClosed.add(name);
+          localStorage.setItem(FOLDERS_CLOSED, JSON.stringify([...foldersClosed]));
+          renderChats();
         });
-        row.append(open, rename, remove);
-        chatList.append(row);
+        item.append(head);
+        if (open) {
+          const list = document.createElement("ul");
+          list.className = "folder-chats";
+          for (const chat of inside) list.append(chatRow(chat, false));
+          item.append(list);
+        }
+        chatList.append(item);
+      }
+      if (loose.length) {
+        if (pinned.length || folders.size) label("Chats");
+        for (const chat of loose) chatList.append(chatRow(chat, false));
       }
     }
+
+    const FOLDERS_CLOSED = "lightusagi-folders-closed";
+    const foldersClosed = new Set(JSON.parse(localStorage.getItem(FOLDERS_CLOSED) || "[]"));
+    const PIN_ICON = '<svg class="pin-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 3l7 7-2 1-3 3 .5 5-2 .5-3.5-3.5L6 21l-1-1 5.5-5.5L7 11l.5-2 5 .5 3-3z"/></svg>';
+
+    function chatRow(chat, showFolder) {
+      const row = document.createElement("li");
+      row.className = "chat-row" + (chat.id === chatId ? " active" : "");
+      const open = document.createElement("button");
+      open.className = "chat-open";
+      open.type = "button";
+      open.title = chat.title;
+      if (chat.pinned) open.insertAdjacentHTML("beforeend", PIN_ICON);
+      open.append(chat.title);
+      if (showFolder && chat.folder) {
+        const where = document.createElement("span");
+        where.className = "in-folder";
+        where.textContent = chat.folder;
+        open.append(where);
+      }
+      if (chat.id === chatId) open.setAttribute("aria-current", "true");
+      open.addEventListener("click", () => openChat(chat.id));
+      open.addEventListener("dblclick", () => startRename(chat, row));
+      const more = document.createElement("button");
+      more.className = "chat-more";
+      more.type = "button";
+      more.setAttribute("aria-label", "Options for " + chat.title);
+      more.setAttribute("aria-haspopup", "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+      more.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (menuFor === chat.id) closeMenu(true);
+        else openMenu(chat, row, more);
+      });
+      row.append(open, more);
+      return row;
+    }
+
+    // The options menu: pin, rename, move to a folder, delete.
+    const menu = document.querySelector("#chat-menu");
+    let menuFor = null;
+    let menuButton = null;
+
+    function closeMenu(returnFocus = false) {
+      menu.hidden = true;
+      menu.replaceChildren();
+      menuButton?.setAttribute("aria-expanded", "false");
+      if (returnFocus) menuButton?.focus();
+      menuFor = null;
+      menuButton = null;
+    }
+
+    function menuItem(text, onClick, className = "") {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.textContent = text;
+      if (className) item.className = className;
+      item.addEventListener("click", onClick);
+      return item;
+    }
+
+    function placeMenu(button) {
+      const box = button.getBoundingClientRect();
+      menu.hidden = false;
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      menu.style.left = Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)) + "px";
+      const below = box.bottom + 4;
+      menu.style.top = (below + height > window.innerHeight - 8 ? Math.max(8, box.top - height - 4) : below) + "px";
+    }
+
+    function openMenu(chat, row, button) {
+      if (activeRequest) return;
+      closeMenu();
+      menuFor = chat.id;
+      menuButton = button;
+      button.setAttribute("aria-expanded", "true");
+      showMainMenu(chat, row);
+      placeMenu(button);
+      menu.querySelector("button")?.focus();
+    }
+
+    function showMainMenu(chat, row) {
+      menu.replaceChildren(
+        menuItem(chat.pinned ? "Unpin" : "Pin to top", () => changeChat(chat.id, { pinned: !chat.pinned })),
+        menuItem("Rename", () => {
+          const target = row;
+          closeMenu();
+          startRename(chat, target);
+        }),
+        menuItem(chat.folder ? "Move to another folder…" : "Move to folder…", () => {
+          showFolderMenu(chat, row);
+          placeMenu(menuButton);
+        }),
+        document.createElement("hr"),
+      );
+      let armed = false;
+      let timer = null;
+      const remove = menuItem("Delete", () => {
+        if (!armed) {
+          armed = true;
+          remove.textContent = "Click again to delete";
+          timer = setTimeout(() => {
+            armed = false;
+            remove.textContent = "Delete";
+          }, 3000);
+          return;
+        }
+        clearTimeout(timer);
+        closeMenu();
+        deleteChat(chat.id);
+      }, "danger");
+      menu.append(remove);
+    }
+
+    function showFolderMenu(chat, row) {
+      const names = [...new Set(chats.map((item) => item.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const back = menuItem("‹ Back", () => {
+        showMainMenu(chat, row);
+        placeMenu(menuButton);
+      });
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 40;
+      input.placeholder = "New folder name";
+      input.setAttribute("aria-label", "New folder name");
+      input.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+        if (event.key === "Enter" && input.value.trim()) changeChat(chat.id, { folder: input.value.trim() });
+        else if (event.key === "Escape") closeMenu(true);
+      });
+      const items = [back, document.createElement("hr")];
+      if (chat.folder) items.push(menuItem("No folder", () => changeChat(chat.id, { folder: null })));
+      for (const name of names) {
+        if (name === chat.folder) continue;
+        items.push(menuItem(name, () => changeChat(chat.id, { folder: name })));
+      }
+      menu.replaceChildren(...items, input);
+    }
+
+    async function changeChat(id, fields) {
+      closeMenu();
+      try {
+        const response = await fetch("/api/chats/" + id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fields),
+        });
+        if (!response.ok) throw new Error((await response.json()).error || "change failed");
+      } catch (error) {
+        status.textContent = "Could not change that chat: " + error.message;
+      }
+      refreshChats();
+    }
+
+    document.addEventListener("click", (event) => {
+      // A menu item may replace itself while handling this click, so ask the
+      // event path rather than the (by now detached) target.
+      if (!menu.hidden && !event.composedPath().includes(menu)) closeMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (menu.hidden) return;
+      if (event.key === "Escape") closeMenu(true);
+      else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const items = [...menu.querySelectorAll("button")];
+        const at = items.indexOf(document.activeElement);
+        const next = event.key === "ArrowDown" ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
+        items[next]?.focus();
+        event.preventDefault();
+      }
+    });
+    window.addEventListener("resize", () => closeMenu());
+    chatList.addEventListener("scroll", () => closeMenu());
 
     function startRename(chat, row) {
       const input = document.createElement("input");

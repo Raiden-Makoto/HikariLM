@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._body(MAX_BODY)
-            self._send_json(store.rename(self._chat_id(), payload.get("title")))
+            self._send_json(store.patch(self._chat_id(), payload))
         except FileNotFoundError:
             self._send_json({"error": "chat not found"}, status=404)
         except ValueError as error:
@@ -225,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
         body = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        # Always ask again, so an updated page is picked up on the next reload.
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close")
         self.end_headers()

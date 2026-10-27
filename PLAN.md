@@ -32,10 +32,12 @@ R1's reasoning is stored in the chat file. Later turns send R1 its earlier answe
 
 ## The chat page
 
-- **Sidebar.** Past chats, newest first, from `transcripts/`. Click to open, pencil or double-click to rename, trash (asks twice) to delete. It is a drawer on narrow screens.
+- **Sidebar.** Past chats from `transcripts/`. Click one to open it. Double-click renames it. The `⋯` button on a chat opens a menu with Pin, Rename, Move to folder, and Delete (asks twice). It is a drawer on narrow screens.
+- **Order.** Pinned chats come first, then folders, then the chats that are in neither. A chat shows in exactly one place, and pinned wins: a pinned chat that is also in a folder sits in Pinned with the folder's name beside it. Inside every group, and among the folders (by their newest chat), the most recently used is on top. A folder opens and closes with a click, and the page remembers which are closed.
+- **Folders.** A folder is just a name on its chats, kept in each chat's file (`folder`), so there is no separate folder list to lose. Choosing "New folder name" in the Move menu creates one. A folder disappears when its last chat leaves, and renaming a folder is not offered yet. Pinning is the `pinned` flag in the same file. Saving a reply never changes either.
 - **Names.** A new chat is named from its first message: skip code blocks, drop greetings and filler ("hey, can you please…"), keep the first sentence, capitalise, cut at a word boundary. A name you typed is never overwritten by later saves.
 - **Stop.** The send arrow becomes a stop square while streaming. Stopping keeps whatever was already written. Stopping before the first word removes the turn and puts your text back.
-- **Transcript file.** `~/.lightusagi/transcripts/<id>.json` holds `id`, `title`, `created`, `updated`, `model`, and `messages`. Each message has `role`, `content`, and optionally `thinking`, `model` and `files`. It is written to a temp file and renamed, so a crash never leaves half a chat.
+- **Transcript file.** `~/.lightusagi/transcripts/<id>.json` holds `id`, `title`, `created`, `updated`, `model`, and `messages`, and optionally `pinned` and `folder`. Each message has `role`, `content`, and optionally `thinking`, `model` and `files`. It is written to a temp file and renamed, so a crash never leaves half a chat.
 - **Drafts and reload.** Typing and attachments are saved to `drafts/` a moment after each change, and when the tab is hidden or closed. After a reload the page reopens the chat that was open and puts the draft back in the message box. Switching chats keeps each chat's own draft. If a send is stopped before the first word, the text and files go back into the box and into the draft.
 - **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text`.
 

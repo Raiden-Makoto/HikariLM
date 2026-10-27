@@ -124,6 +124,29 @@ class StoreTest(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             store.load_draft("c2")
 
+    def test_pin_and_folder_survive_saves_and_show_in_listing(self) -> None:
+        store.save("p1", "gemma3", self.messages())
+        store.patch("p1", {"pinned": True, "folder": "  Trees   homework "})
+        store.save("p1", "gemma3", self.messages("another"))
+        item = store.listing()[0]
+        self.assertTrue(item["pinned"])
+        self.assertEqual(item["folder"], "Trees homework")
+        store.patch("p1", {"pinned": False, "folder": None})
+        item = store.listing()[0]
+        self.assertFalse(item["pinned"])
+        self.assertEqual(item["folder"], "")
+        self.assertNotIn("folder", store.load("p1"))
+
+    def test_patch_changes_only_what_is_given_and_checks_input(self) -> None:
+        store.save("p2", "gemma3", self.messages("hello"))
+        store.patch("p2", {"pinned": True})
+        self.assertEqual(store.load("p2")["title"], "Hello")
+        for bad in ({}, {"pinned": "yes"}, {"folder": 5}, {"title": " "}):
+            with self.assertRaises(ValueError):
+                store.patch("p2", bad)
+        with self.assertRaises(FileNotFoundError):
+            store.patch("nope", {"pinned": True})
+
     def test_delete(self) -> None:
         store.save("gone", "gemma3", self.messages())
         self.assertTrue(store.delete("gone"))

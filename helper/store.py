@@ -147,11 +147,17 @@ def save(chat_id: str, model, messages) -> dict:
     now = time.time()
     created = now
     title = make_title(cleaned)
+    kept = {}
     if path.exists():
         try:
             existing = _read(path)
             created = float(existing.get("created", now))
             title = str(existing.get("title") or title)
+            # Pin and folder belong to the sidebar, not to a reply being saved.
+            if existing.get("pinned") is True:
+                kept["pinned"] = True
+            if existing.get("folder"):
+                kept["folder"] = str(existing["folder"])
         except (OSError, ValueError, json.JSONDecodeError):
             pass
     data = {
@@ -161,6 +167,7 @@ def save(chat_id: str, model, messages) -> dict:
         "updated": now,
         "model": model.strip(),
         "messages": cleaned,
+        **kept,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
@@ -185,25 +192,51 @@ def load(chat_id: str) -> dict:
         raise ValueError("transcript is damaged") from error
 
 
-def rename(chat_id: str, title) -> dict:
+FOLDER_LENGTH = 40
+
+
+def clean_folder(name) -> str:
+    """A folder name, or "" for no folder."""
+    if name is None:
+        return ""
+    if not isinstance(name, str):
+        raise ValueError("folder must be text")
+    return " ".join(name.split())[:FOLDER_LENGTH]
+
+
+def patch(chat_id: str, fields: dict) -> dict:
+    """Change a chat's title, pinned flag, or folder without touching its messages.
+    Only the keys present in fields change. A folder of "" or null means no folder."""
     path = _path(chat_id)
-    if not isinstance(title, str) or not " ".join(title.split()):
-        raise ValueError("title is required")
-    title = " ".join(title.split())[:TITLE_LENGTH * 2]
     data = _read(path)
-    data["title"] = title
-    handle, temp_name = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as out:
-            json.dump(data, out, ensure_ascii=False)
-        os.replace(temp_name, path)
-    except BaseException:
-        try:
-            os.unlink(temp_name)
-        except OSError:
-            pass
-        raise
-    return {"id": chat_id, "title": title}
+    if "title" in fields:
+        title = fields["title"]
+        if not isinstance(title, str) or not " ".join(title.split()):
+            raise ValueError("title is required")
+        data["title"] = " ".join(title.split())[: TITLE_LENGTH * 2]
+    if "pinned" in fields:
+        if not isinstance(fields["pinned"], bool):
+            raise ValueError("pinned must be true or false")
+        data["pinned"] = fields["pinned"]
+    if "folder" in fields:
+        folder = clean_folder(fields["folder"])
+        if folder:
+            data["folder"] = folder
+        else:
+            data.pop("folder", None)
+    if not any(key in fields for key in ("title", "pinned", "folder")):
+        raise ValueError("nothing to change")
+    _write(path, data)
+    return {
+        "id": chat_id,
+        "title": data["title"],
+        "pinned": bool(data.get("pinned")),
+        "folder": data.get("folder", ""),
+    }
+
+
+def rename(chat_id: str, title) -> dict:
+    return patch(chat_id, {"title": title})
 
 
 def delete(chat_id: str) -> bool:
@@ -310,6 +343,8 @@ def listing() -> list[dict]:
                 "id": path.stem,
                 "title": str(data.get("title") or "New chat"),
                 "updated": float(data.get("updated", 0)),
+                "pinned": data.get("pinned") is True,
+                "folder": str(data.get("folder") or ""),
             }
         )
     chats.sort(key=lambda chat: chat["updated"], reverse=True)
