@@ -447,29 +447,60 @@
     .tab:hover { color: var(--ink); }
     .tab[aria-selected="true"] { background: var(--hover); color: var(--ink); }
 
-    #files { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1.25rem 1.1rem; }
+    .work { flex: 1; min-height: 0; display: flex; }
+    #chat-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    #files { display: none; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1.1rem 1.1rem; }
     body.view-files #files { display: flex; }
-    body.view-files #log,
-    body.view-files .composer,
+    body.view-files #chat-pane { flex: none; width: min(30rem, 40%); border-left: 1px solid var(--line); }
     body.view-files #sidebar { display: none; }
     body.view-files #toggle-sidebar { visibility: hidden; }
-    .folder-bar { display: flex; gap: 0.5rem; }
-    .folder-bar input {
-      flex: 1;
-      min-width: 0;
-      padding: 0.5rem 0.75rem;
+    body.view-files .empty { margin-top: 6vh; }
+    body.view-files .empty strong { font-size: 1.2rem; }
+    .folder-bar { display: flex; align-items: center; gap: 0.6rem; }
+    #folder-label { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .folder-bar .choice, .editor-bar .choice { flex: none; padding: 0.4rem 0.9rem; }
+    .file-side { flex: none; width: 13rem; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    input[type="search"], #browse-input {
+      width: 100%;
+      padding: 0.45rem 0.7rem;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--panel);
       color: var(--ink);
       font: inherit;
+      font-size: 0.9rem;
     }
-    .folder-bar .choice, .editor-bar .choice { flex: none; padding: 0.4rem 0.9rem; }
+    input[type="search"]:focus-visible, #browse-input:focus-visible { outline: 2px solid var(--you); outline-offset: 1px; }
+    #folder-dialog { width: min(34rem, calc(100% - 2rem)); }
+    .browse-path { margin: 0.6rem 0 0.3rem; color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+    #browse-list {
+      height: 16rem;
+      margin: 0 0 0.4rem;
+      padding: 0.3rem;
+      overflow: auto;
+      list-style: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    #browse-list button {
+      display: block;
+      width: 100%;
+      padding: 0.35rem 0.6rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      text-align: left;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    #browse-list button:hover, #browse-list button:focus-visible { background: var(--hover); }
+    #browse-list .up { color: var(--muted); }
+    #folder-dialog .choices { margin-top: 0.6rem; }
     #files .note { margin: 0; min-height: 1.3rem; }
     .files-body { flex: 1; min-height: 0; display: flex; gap: 0.75rem; }
     #file-list {
-      flex: none;
-      width: 15rem;
+      flex: 1;
+      min-height: 0;
       margin: 0;
       padding: 0.35rem;
       overflow: auto;
@@ -498,6 +529,7 @@
     #file-text {
       flex: 1;
       min-height: 8rem;
+      max-height: none;
       padding: 0.75rem 0.9rem;
       resize: none;
       border: 1px solid var(--line);
@@ -515,9 +547,12 @@
     #conflict { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     #conflict[hidden] { display: none; }
     #conflict .choice { flex: none; padding: 0.3rem 0.8rem; }
-    @media (max-width: 720px) {
+    @media (max-width: 900px) {
+      body.view-files .work { flex-direction: column; overflow: auto; }
+      body.view-files #files { flex: none; min-height: 30rem; }
+      body.view-files #chat-pane { flex: none; width: auto; height: 34rem; border-left: 0; border-top: 1px solid var(--line); }
       .files-body { flex-direction: column; }
-      #file-list { width: auto; max-height: 9rem; }
+      .file-side { width: auto; max-height: 9rem; }
     }
 
     @media (max-width: 720px) {
@@ -637,7 +672,7 @@
       </div>
       <div class="tabs" role="tablist" aria-label="Sections">
         <button class="tab" id="tab-chat" type="button" role="tab" aria-selected="true">Chat</button>
-        <button class="tab" id="tab-files" type="button" role="tab" aria-selected="false">Files</button>
+        <button class="tab" id="tab-files" type="button" role="tab" aria-selected="false">Code editor</button>
       </div>
       <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -647,16 +682,18 @@
       </button>
     </header>
 
-    <main id="log"></main>
-
-    <section id="files" aria-label="Files">
-      <form class="folder-bar" id="folder-form">
-        <input id="folder-path" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to open, for example ~/projects/hw3" aria-label="Folder to open">
-        <button class="choice" type="submit">Open</button>
-      </form>
-      <p class="note" id="folder-note" role="status"></p>
+    <div class="work">
+    <section id="files" aria-label="Code editor">
+      <div class="folder-bar">
+        <button class="choice" id="choose-folder" type="button">Choose folder…</button>
+        <span id="folder-label">No folder open</span>
+      </div>
+      <p class="note" id="folder-note" role="status">Choose a folder to start.</p>
       <div class="files-body">
-        <ul id="file-list" aria-label="Files in the folder"></ul>
+        <div class="file-side">
+          <input id="file-filter" type="search" spellcheck="false" autocomplete="off" placeholder="Search files" aria-label="Search files" disabled>
+          <ul id="file-list" aria-label="Files in the folder"></ul>
+        </div>
         <div class="editor">
           <div class="editor-bar">
             <span id="file-title">No file open</span>
@@ -674,6 +711,9 @@
         </div>
       </div>
     </section>
+
+    <div id="chat-pane">
+    <main id="log"></main>
 
     <form class="composer" id="composer">
       <div class="notice" id="notice" role="status" hidden></div>
@@ -702,7 +742,30 @@
         </div>
       </div>
     </form>
+    </div>
+    </div>
   </div>
+
+  <dialog id="folder-dialog" aria-labelledby="folder-title">
+    <div class="dialog-head">
+      <h2 id="folder-title">Choose a folder</h2>
+      <button class="icon-button" id="close-folder" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <input id="browse-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search folders, or type a path and press Enter" aria-label="Search folders or type a path">
+      <p id="browse-path" class="browse-path"></p>
+      <ul id="browse-list" aria-label="Folders"></ul>
+      <p class="note" id="browse-note" role="status"></p>
+      <div class="choices">
+        <button class="choice" type="button" id="browse-home">Home</button>
+        <button class="choice" type="button" id="browse-open">Open this folder</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="settings" aria-labelledby="settings-title">
     <div class="dialog-head">
@@ -1319,6 +1382,7 @@
       if (busy) closeMenu();
       modelSelect.disabled = busy || !modelSelect.value;
       sidebar.toggleAttribute("inert", busy);
+      document.dispatchEvent(new Event("busychange"));
     }
 
     async function refreshState() {
@@ -2232,7 +2296,10 @@
     // Files section. The helper reads and writes the folder; the page only
     // shows one file at a time. The file on disk is the only copy of the text.
     const FOLDER_KEY = "lightusagi-folder";
-    const folderInput = document.querySelector("#folder-path");
+    const folderLabel = document.querySelector("#folder-label");
+    const fileFilter = document.querySelector("#file-filter");
+    let allFiles = [];
+    let filesCut = false;
     const folderNote = document.querySelector("#folder-note");
     const fileList = document.querySelector("#file-list");
     const fileTitle = document.querySelector("#file-title");
@@ -2287,11 +2354,10 @@
         if (!filesStarted) {
           filesStarted = true;
           const last = localStorage.getItem(FOLDER_KEY) || "";
-          folderInput.value = last;
-          if (last) openFolder(last, true);
+          if (last) openFolder(last, true).then((ok) => { if (!ok) showFolderDialog(); });
+          else showFolderDialog();
         }
         refreshFileButtons();
-        (folderRoot ? fileText : folderInput).focus();
       } else {
         messageBox.focus();
       }
@@ -2309,9 +2375,13 @@
       refreshFileButtons();
     }
 
-    function renderFiles(files, cut) {
+    function renderFiles() {
+      const files = allFiles;
+      const cut = filesCut;
+      const needle = fileFilter.value.trim().toLowerCase();
+      const shown = needle ? files.filter((path) => path.toLowerCase().includes(needle)) : files;
       fileList.replaceChildren();
-      for (const path of files) {
+      for (const path of shown) {
         const item = document.createElement("li");
         const button = document.createElement("button");
         button.type = "button";
@@ -2323,32 +2393,119 @@
         fileList.append(item);
       }
       if (!files.length) folderNote.textContent = "No files of a kind this page opens in " + folderName + ".";
+      else if (needle) folderNote.textContent = shown.length + " of " + files.length + " files match.";
       else if (cut) folderNote.textContent = "Showing the first " + files.length + " files. This is meant for a small folder.";
       else folderNote.textContent = files.length + (files.length === 1 ? " file in " : " files in ") + folderName + ".";
     }
 
+    // Returns true when the folder was opened.
     async function openFolder(path, quiet = false) {
       path = path.trim();
-      if (!path) {
-        folderNote.textContent = "Type the path of a folder to open.";
-        return;
-      }
-      if (!discardOk()) return;
+      if (!path) return false;
+      if (!discardOk()) return false;
       folderNote.textContent = "Opening…";
       try {
         const body = await filesApi("/api/workspace?root=" + encodeURIComponent(path));
         closeFile();
         folderRoot = body.root;
         folderName = body.name;
-        localStorage.setItem(FOLDER_KEY, path);
-        renderFiles(body.files, body.cut);
+        allFiles = body.files;
+        filesCut = body.cut;
+        fileFilter.value = "";
+        fileFilter.disabled = false;
+        folderLabel.textContent = body.root;
+        folderLabel.title = body.root;
+        localStorage.setItem(FOLDER_KEY, body.root);
+        renderFiles();
+        return true;
       } catch (error) {
         if (!quiet) closeFile();
         folderRoot = "";
+        allFiles = [];
+        fileFilter.disabled = true;
+        folderLabel.textContent = "No folder open";
         fileList.replaceChildren();
         folderNote.textContent = plainError(error.message);
+        return false;
       }
     }
+
+    // The folder chooser: click through folders, filter them by typing, or
+    // type a whole path and press Enter. Only folder names are listed.
+    const folderDialog = document.querySelector("#folder-dialog");
+    const browseInput = document.querySelector("#browse-input");
+    const browseList = document.querySelector("#browse-list");
+    const browseNote = document.querySelector("#browse-note");
+    let browsing = null;
+    let browseToken = 0;
+    const looksLikePath = (text) => /^(\/|~|\.\.?\/)/.test(text.trim());
+
+    function renderBrowse() {
+      browseList.replaceChildren();
+      if (!browsing) return;
+      const needle = looksLikePath(browseInput.value) ? "" : browseInput.value.trim().toLowerCase();
+      const add = (label, path, className) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        if (className) button.className = className;
+        button.addEventListener("click", () => browseTo(path));
+        item.append(button);
+        browseList.append(item);
+      };
+      if (browsing.parent && !needle) add("↑  Up one folder", browsing.parent, "up");
+      const join = (name) => (browsing.path === "/" ? "" : browsing.path) + "/" + name;
+      const shown = browsing.folders.filter((name) => name.toLowerCase().includes(needle));
+      for (const name of shown) add("📁  " + name, join(name));
+      const bits = [];
+      if (!browsing.folders.length) bits.push("No folders in here.");
+      else if (needle) bits.push(shown.length + " of " + browsing.folders.length + " folders match.");
+      if (browsing.cut) bits.push("Only the first 1000 folders are listed. Type a path to go further.");
+      bits.push(browsing.files + (browsing.files === 1 ? " file" : " files") + " of a kind this page opens are directly in this folder.");
+      browseNote.textContent = bits.join(" ");
+    }
+
+    async function browseTo(path) {
+      const token = ++browseToken;
+      try {
+        const body = await filesApi("/api/workspace/browse?path=" + encodeURIComponent(path));
+        if (token !== browseToken) return;
+        browsing = body;
+        browseInput.value = "";
+        document.querySelector("#browse-path").textContent = body.path;
+        renderBrowse();
+      } catch (error) {
+        if (token !== browseToken) return;
+        browseNote.textContent = plainError(error.message);
+      }
+    }
+
+    function showFolderDialog() {
+      if (!discardOk()) return;
+      if (!folderDialog.open) folderDialog.showModal();
+      browseInput.value = "";
+      browseTo(folderRoot || "");
+      browseInput.focus();
+    }
+
+    browseInput.addEventListener("input", renderBrowse);
+    browseInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const typed = browseInput.value.trim();
+      if (looksLikePath(typed)) browseTo(typed);
+      else if (browseList.querySelectorAll("button:not(.up)").length === 1) browseList.querySelector("button:not(.up)").click();
+    });
+    document.querySelector("#browse-home").addEventListener("click", () => browseTo(""));
+    document.querySelector("#browse-open").addEventListener("click", async () => {
+      if (!browsing) return;
+      if (await openFolder(browsing.path)) folderDialog.close();
+      else browseNote.textContent = folderNote.textContent;
+    });
+    document.querySelector("#close-folder").addEventListener("click", () => folderDialog.close());
+    document.querySelector("#choose-folder").addEventListener("click", showFolderDialog);
+    fileFilter.addEventListener("input", renderFiles);
 
     async function openFileAt(path, force = false) {
       if (!force) {
@@ -2448,8 +2605,6 @@
         fileNote.textContent = "There is no text there to ask about.";
         return;
       }
-      if (!discardOk()) return;
-      setSection("chat");
       const coder = [...modelSelect.options].map((option) => option.value)
         .find((value) => /qwen.*coder|coder.*qwen/i.test(value));
       let note = "";
@@ -2470,10 +2625,7 @@
 
     document.querySelector("#tab-chat").addEventListener("click", () => setSection("chat"));
     document.querySelector("#tab-files").addEventListener("click", () => setSection("files"));
-    document.querySelector("#folder-form").addEventListener("submit", (event) => {
-      event.preventDefault();
-      openFolder(folderInput.value);
-    });
+    document.addEventListener("busychange", refreshFileButtons);
     fileText.addEventListener("input", () => {
       fileNote.textContent = "";
       refreshFileButtons();

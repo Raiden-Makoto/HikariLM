@@ -35,6 +35,26 @@ class WorkspaceTest(unittest.TestCase):
         self.assertEqual(len(found["files"]), workspace.MAX_FILES)
         self.assertTrue(found["cut"])
 
+    def test_browse_lists_folders_only(self):
+        (self.root / ".hidden").mkdir()
+        (self.root / "Zed").mkdir()
+        (self.root / "boot.asm").write_text("x")
+        got = workspace.browse(str(self.root))
+        self.assertEqual(got["folders"], ["sub", "Zed"])
+        self.assertEqual(got["files"], 1)
+        self.assertEqual(got["parent"], str(self.root.parent.resolve()))
+        inside = workspace.browse(str(self.root / "sub"))
+        self.assertEqual(inside["folders"], [])
+        self.assertEqual(inside["files"], 1)
+
+    def test_browse_defaults_to_home_and_has_a_top(self):
+        self.assertEqual(workspace.browse("")["path"], str(Path.home().resolve()))
+        self.assertIsNone(workspace.browse("/")["parent"])
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.browse(str(self.root / "a.py"))
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.browse(str(self.root / "missing"))
+
     def test_bad_roots(self):
         for bad in ("", None, str(self.root / "nope"), str(self.root / "a.py")):
             with self.assertRaises(workspace.WorkspaceError):

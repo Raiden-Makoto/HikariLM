@@ -52,6 +52,41 @@ def open_root(raw: object) -> Path:
     return root
 
 
+def browse(raw: object) -> dict:
+    """List the folders inside one folder, so the page can be clicked through.
+
+    Nothing is read from the files themselves, only their names.
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        raw = "~"
+    here = open_root(raw)
+    folders: list[str] = []
+    files = 0
+    try:
+        with os.scandir(here) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir():
+                        if not entry.name.startswith("."):
+                            folders.append(entry.name)
+                    elif entry.is_file() and allowed(entry.name):
+                        files += 1
+                except OSError:
+                    continue
+    except OSError as error:
+        raise WorkspaceError(f"Cannot list {here}: {error.strerror or error}.") from None
+    folders.sort(key=str.lower)
+    parent = None if here.parent == here else str(here.parent)
+    return {
+        "path": str(here),
+        "parent": parent,
+        "home": str(Path.home()),
+        "folders": folders[:1000],
+        "cut": len(folders) > 1000,
+        "files": files,
+    }
+
+
 def allowed(name: str) -> bool:
     lower = name.lower()
     return Path(lower).suffix in EXTENSIONS or lower in NAMES

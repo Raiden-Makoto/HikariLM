@@ -1,6 +1,6 @@
 # Plan
 
-LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab with separate sections: a chat, a view of a small folder you already have, and a place to generate images.
+LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab with separate sections: a chat, a code editor for a small folder you already have, and a place to generate images.
 
 No Docker. The memory Docker would reserve stays available for the loaded model and its KV cache.
 
@@ -8,7 +8,7 @@ No Docker. The memory Docker would reserve stays available for the loaded model 
 
 Three pieces, and only two of them are ours.
 
-- **Page.** Chat, a list of about six files and the one file you have open, and a separate Generate images section.
+- **Page.** Chat, a code editor (a list of the files in a folder you chose, the one file you have open, and the chat beside it), and a separate Generate images section.
 - **Helper.** Picks the model, reads the files and images that belong to this message, streams the reply, and saves the chat to disk. For an image request it asks the image model and saves the picture it makes. Follow-ups reuse the model Ollama still has loaded. The helper forces a large model out only when the next request needs a different large model. `nomic-embed-text` is small enough to load beside it.
 - **Ollama.** Already installed. It holds the weights and the KV cache.
 
@@ -50,7 +50,7 @@ R1's reasoning is stored in the chat file. Later turns send R1 its earlier answe
 - **Notifications.** When a reply finishes (or stops with an error) while the user is in another tab or window, the tab title changes to "● Reply ready" until they come back, and the browser shows a notification with the chat's name and the start of the answer if it was allowed. Clicking it opens that chat. A reply the user stopped does not notify. The browser asks for permission the first time a message is sent, and if it is refused the title change still works. Nothing is sent anywhere: it is the browser's own notification.
 - **Settings.** A gear in the header opens a small popup with two compact switches and the background picker: **Dark mode** (off by default, so the page starts light) and **Notify when a reply finishes** (on by default). Both are remembered in the browser and applied before the page paints, so a reload never flashes the wrong theme. The background image is chosen and removed from the same popup.
 - **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text` and without image generation models.
-- **Sections.** The header switches between Chat, the file view, and Generate images. The chat sidebar belongs to Chat only. Each section keeps its own draft.
+- **Sections.** The header switches between Chat, Code editor, and Generate images. The chat sidebar belongs to Chat only. Chat and Code editor show the same conversation and share its draft, and Generate images keeps its own.
 
 ## Attaching files
 
@@ -66,16 +66,19 @@ The browser cannot see a file's folder path, so this attaches a copy of the cont
 
 ## What you can ask about a file
 
-The file view is for questions about code you already have: what this file does, where the bug is. You open one file, or highlight a section. The helper reads that text from disk for this message only.
+The code editor is for questions about code you already have: what this file does, where the bug is. You open one file, or highlight a section. The helper reads that text from disk for this message only.
 
-The reply stays in the chat. The file changes only if you paste a small fix in, or apply it onto the selection. Applying a small fix writes that block back to the same path.
+The reply stays in the chat, next to the code. The file changes only if you paste a small fix in, or apply it onto the selection. Applying a small fix writes that block back to the same path.
 
-### The Files section
+### The code editor
 
-- **Opening a folder.** A path box at the top of the section ("Folder to open", for example `~/projects/hw3`) and an Open button. The browser cannot see folder paths, so the path is typed, and the helper reads it from the machine it runs on. The page remembers the last folder in the browser, and the helper keeps nothing, so nothing is added to `~/.lightusagi`. A path that is missing, is not a folder, or cannot be read gets a one-line reason.
-- **The list.** The files inside that folder, in subfolders too (up to four levels deep and 200 files), by name. Only the everyday kinds from "Attaching files" are listed, so `.asm`, model files, and the like never show. Folders that start with a dot, `node_modules`, `__pycache__`, `venv`, and `.git` are skipped. The list is meant for a small folder and says so when it was cut short. Click a file to open it.
+The section is called **Code editor** in the header. It has the file list and the editor on the left and the chat on the right, so a question is asked on the same page as the code.
+
+- **The chat is on the page.** The right side is the same chat as in the Chat section, with the same message box, model picker, attach button, stop button, and replies. It is one conversation, saved in `transcripts/` like any other, and it is still there when the user switches tabs. The chat sidebar stays with the Chat section. On a narrow screen the chat goes under the editor.
+- **Choosing a folder by clicking.** "Choose folder…" at the top opens a window that starts in the home folder (or the folder used last). It lists the folders inside the current one. Clicking a folder goes into it, "Up one folder" goes out, and Home jumps back. Typing in its box filters the folders on screen. Typing a path that starts with `/`, `~`, `./` or `../` and pressing Enter goes straight there. "Open this folder" chooses the current one. It also says how many files of an opened kind are directly inside, so the user can tell where the code is. Folders starting with a dot are not shown. Only names are read, and no file content. The helper reads them on the machine it runs on, because the browser cannot see folder paths. The page remembers the last folder in the browser, and the helper keeps nothing, so nothing is added to `~/.lightusagi`. A path that is missing, is not a folder, or cannot be read gets a one-line reason. The first visit with no remembered folder opens the window by itself.
+- **The list.** The files inside the chosen folder, in subfolders too (up to four levels deep and 200 files), by name. Only the everyday kinds from "Attaching files" are listed, so `.asm`, model files, and the like never show. Folders that start with a dot, `node_modules`, `__pycache__`, `venv`, and `.git` are skipped. A "Search files" box above the list narrows it as the user types. The list is meant for a small folder and says so when it was cut short. Click a file to open it.
 - **The open file.** A plain editable text area in a monospace font, with the file's path above it. Files larger than 500 KB, files with binary bytes, and files that are not in the list are refused with the reason. UTF-8 and UTF-16 text open as they are, and Windows-1252 text is read and written back in the same encoding.
-- **Asking about it.** Two buttons: "Ask about this file" and, when text is highlighted, "Ask about selection". Either one switches to Chat, picks `qwencoder2.5-7b` if it is installed (and says so if it is not), attaches the file text or the highlighted lines to the message box, and puts the cursor in the box. The user types the question and presses Enter, so the picker has shown which model will answer before anything is sent. The text is read again from disk when the button is pressed, not taken from the screen, so it is what is really in the file. If the text area has edits that are not saved, the buttons ask to save first. The attachment is named with the path and, for a selection, the line numbers, such as `hw3/avl.py lines 12–30`, and is kept in the transcript like any attached file. Switching the model to `deepseekr1:8b` before sending works as in any chat.
+- **Asking about it.** Two buttons: "Ask about this file" and, when text is highlighted, "Ask about selection". Either one picks `qwencoder2.5-7b` in the chat on the right if it is installed (and says so if it is not), attaches the file text or the highlighted lines to the message box, and puts the cursor in the box. The user types the question and presses Enter, and the reply appears beside the code. The picker has shown which model will answer before anything is sent. The user can also just type a question without either button. The text is read again from disk when the button is pressed, not taken from the screen, so it is what is really in the file. If the text area has edits that are not saved, the buttons ask to save first. The attachment is named with the path and, for a selection, the line numbers, such as `hw3/avl.py lines 12–30`, and is kept in the transcript like any attached file. Switching the model to `deepseekr1:8b` before sending works as in any chat.
 - **Changing the file.** The user copies a fix out of the chat reply and pastes it into the text area, which replaces whatever is highlighted, then presses Save (or Ctrl/Cmd+S). Save writes the whole file back to the same path, through a temp file and a rename, so a crash never leaves half a file. The helper keeps no copy of the old file. Saving with no changes does nothing. A file that uses Windows line endings keeps them.
 - **Safe writes.** The helper only writes a file that already exists inside the opened folder and passes the same list as above. It never creates files, never follows a path or a link out of the folder, and refuses `..`. When the page opens a file it also gets that file's version. If the file was changed on disk by something else since then, Save is refused and the page says so, with a choice to reload the file (losing the edits) or keep editing. Nothing is overwritten silently.
 - **Unsaved edits.** The title shows a dot while there are unsaved changes. Leaving the tab, switching files, or opening another folder with unsaved edits asks first. The text area is not kept as a draft. The file on disk is the only place it lives.
@@ -94,7 +97,7 @@ If that description is already in the app folder and the image has not changed, 
 
 ## Generating images
 
-A section of its own, like the file view, because making a picture is a different job from answering a message. It is not in the chat sidebar, and a generated image is not a chat turn.
+A section of its own, like the code editor, because making a picture is a different job from answering a message. It is not in the chat sidebar, and a generated image is not a chat turn.
 
 - **Where it works.** `flux.2` runs in Ollama only on Apple Silicon Macs, so the section is turned off everywhere else. See "Turned off by architecture" below.
 - **What is in it.** A prompt box, a picker that lists only image generation models, a small Options area (a few size presets and a seed, with sensible defaults hidden until opened), and a Generate button that becomes a Stop square while it works, the same way Send does. A status line says what is happening: "Loading `flux.2`…", then "Generating…". The finished picture appears under the box.
@@ -178,7 +181,7 @@ Each step is usable before the next one starts.
 
 1. **Helper talks to Ollama.** Stream a reply and leave the model loaded for follow-ups. Each request sets a keepalive so Ollama resets that timer. Force a large model out only when the next request uses a different large model.
 2. **Chat page.** Send a message, see the stream, save and reopen the chat from `transcripts/`. Sidebar, rename, attachments and drag-and-drop are part of this step. Done, except that it has only been tried against a fake Ollama.
-3. **Folder view.** The Files section: open a small workspace, show one file, ask Qwen what it does or where the bug is. Paste or apply a small fix back to that file. The header gets its Chat and Files switch here.
+3. **Code editor.** Choose a folder by clicking through it, show one file, and ask Qwen what it does or where the bug is, in the chat beside it. Paste or apply a small fix back to that file. The header gets its Chat and Code editor switch here.
 4. **Image handoff.** Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
 5. **Search index.** nomic indexes saved text while the chat model stays loaded. A later question can include a few matching notes.
 6. **Generate images.** Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.

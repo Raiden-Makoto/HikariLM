@@ -171,11 +171,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _workspace(self, method: str) -> bool:
         parts = urlparse(self.path)
-        if parts.path not in (WORKSPACE, WORKSPACE + "/file"):
+        if parts.path not in (WORKSPACE, WORKSPACE + "/file", WORKSPACE + "/browse"):
             return False
         query = parse_qs(parts.query)
         try:
-            if method == "GET" and parts.path == WORKSPACE:
+            if method == "GET" and parts.path.endswith("/browse"):
+                self._send_json(workspace.browse(query.get("path", [""])[0]))
+            elif method == "GET" and parts.path == WORKSPACE:
                 self._send_json(workspace.listing(query.get("root", [""])[0]))
             elif method == "GET":
                 self._send_json(workspace.read(query.get("root", [""])[0], query.get("path", [""])[0]))
