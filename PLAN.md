@@ -23,7 +23,7 @@ The page talks to the helper. The helper talks to Ollama. The workspace folder s
 | That same kind of question, if you switch it | `deepseekr1:8b` |
 | A message that includes an image | `gemma3` |
 | Indexing saved text for later search | `nomic-embed-text` |
-| Generating an image, in its own section | `flux.2` (the name as `ollama list` shows it) |
+| Generating an image, in its own section, on Apple Silicon only | `flux.2` (the name as `ollama list` shows it) |
 
 The screen shows which model will answer before you send.
 
@@ -84,6 +84,7 @@ If that description is already in the app folder and the image has not changed, 
 
 A section of its own, like the file view, because making a picture is a different job from answering a message. It is not in the chat sidebar, and a generated image is not a chat turn.
 
+- **Where it works.** `flux.2` runs in Ollama only on Apple Silicon Macs, so the section is turned off everywhere else. See "Turned off by architecture" below.
 - **What is in it.** A prompt box, a picker that lists only image generation models, a small Options area (a few size presets and a seed, with sensible defaults hidden until opened), and a Generate button that becomes a Stop square while it works, the same way Send does. A status line says what is happening: "Loading `flux.2`…", then "Generating…". The finished picture appears under the box.
 - **Trying again.** The picture has Regenerate (same prompt, same seed, so the same result) and Vary (same prompt, new seed). Prompt and seed are kept so a result can be repeated.
 - **Gallery.** Earlier pictures sit under the current one, newest first, each with its prompt. Each can be downloaded, reopened with its prompt and seed back in the boxes, or deleted (asks twice). The gallery is read from `images/`, so it survives a reload and a restart.
@@ -94,7 +95,19 @@ A section of its own, like the file view, because making a picture is a differen
 - **Notifications.** A finished or failed generation notifies when the user is in another tab, by the same rules and the same switch as a chat reply.
 - **Not in this step.** Sending a generated picture into a chat for Gemma to look at, editing an existing picture, and any model that is not `flux.2`-style prompt-to-image.
 
-**Open question: how the helper asks for the image.** Everything else here talks to Ollama over HTTP. Whether the Ollama on the machine can run `flux.2` itself depends on its version, and that has to be checked, not assumed. Step 6 begins by checking it. If Ollama can, the helper uses its HTTP API like everything else and nothing new is added. If it cannot, the plan needs a decision before any code (for example a small local runner that the helper starts and stops, kept to the same memory rule), and this section is updated first.
+### Turned off by architecture
+
+`flux.2` is supported by Ollama only on Apple Silicon (an M-series Mac). On any other machine the Generate section is disabled, decided by the helper from the machine and not by the user.
+
+- **The test.** The machine counts as Apple Silicon when the helper is running on macOS (`platform.system()` is `Darwin`) on an ARM processor. A Python that is running under Rosetta reports an Intel processor on an M-series Mac, so the helper also asks macOS directly (`sysctl hw.optional.arm64`) and trusts that answer. Intel Macs, Windows (including Windows on ARM), Linux (including Linux on ARM), and WSL are all "not supported". The test is one small function in the helper, so widening support later is a one-place change.
+- **What the user sees.** The Generate entry in the header stays visible but is greyed out and not clickable. Its tooltip and, if opened by address, the section itself say why in one line: "Image generation needs a Mac with Apple Silicon. This computer is Linux x86_64." The prompt box, picker, and gallery are not shown. The chat is unaffected.
+- **The helper enforces it.** `/api/state` reports whether image generation is supported and, if not, the reason, and the page reads that rather than guessing from the browser. A generate request on an unsupported machine is refused with the same reason, even if someone calls the helper directly.
+- **Image models stay out of chat everywhere.** On an unsupported machine an image model that happens to be installed is still hidden from the chat picker and refused in `/api/chat`, because it could never answer a message there either.
+- **Supported, but not ready.** On Apple Silicon the section is enabled. If no image model is installed it shows "No image model installed" and the command that adds one. If Ollama refuses the request (for example an Ollama too old to run `flux.2`), Ollama's own message is shown and nothing is saved.
+- **Override.** `LIGHTUSAGI_IMAGES=on` turns the section on and `LIGHTUSAGI_IMAGES=off` turns it off, whatever the machine is, for when Ollama's support widens or for testing. Without it the architecture test decides.
+- **Start script.** `start.py` prints one line saying whether image generation is available on this computer, next to the Ollama model list.
+
+The helper asks Ollama for the picture over HTTP like everything else, so no new component is added. If Ollama's request for image models turns out to differ from its chat request, that difference stays inside the helper.
 
 ## What is in memory
 
@@ -156,4 +169,6 @@ Each step is usable before the next one starts.
 3. **Folder view.** Open a small workspace, show one file, ask Qwen what it does or where the bug is. Paste or apply a small fix back to that file.
 4. **Image handoff.** Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
 5. **Search index.** nomic indexes saved text while the chat model stays loaded. A later question can include a few matching notes.
-6. **Generate images.** First check whether the installed Ollama can run `flux.2`, and settle the open question above if it cannot. Then: keep image models out of the chat picker and refuse them in `/api/chat`, add the Generate section with its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
+6. **Generate images.** Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
+
+   Only the disabled path, the model filtering, and the `images/` handling can be tried on a machine that is not an Apple Silicon Mac, with a fake Ollama standing in. The generation itself has to be tried on a Mac with Apple Silicon, so it is not counted as done until it has run there.

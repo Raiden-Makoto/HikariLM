@@ -2071,7 +2071,10 @@
     }
 
     function applyBackground(url) {
-      document.body.style.backgroundImage = url ? "url(\"" + url.replaceAll("\"", "%22") + "\")" : "";
+      const veil = "color-mix(in srgb, var(--bg) 88%, transparent)";
+      document.body.style.backgroundImage = url
+        ? "linear-gradient(" + veil + ", " + veil + "), url(\"" + url.replaceAll("\"", "%22") + "\")"
+        : "";
       document.body.classList.toggle("has-bg", Boolean(url));
       document.querySelector("#clear-bg").disabled = !url;
     }
