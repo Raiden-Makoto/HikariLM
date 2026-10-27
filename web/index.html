@@ -283,8 +283,7 @@
       font-weight: 600;
       line-height: 1.25;
     }
-    .empty strong span { display: block; text-wrap: balance; }
-    .empty strong span:first-child { font-size: 1rem; font-weight: 500; color: var(--muted); margin-bottom: 0.15rem; }
+    .empty strong { text-wrap: balance; }
     .empty .hint { display: block; margin-bottom: 0.5rem; text-wrap: balance; }
     .empty .keys { display: block; font-size: 0.82rem; opacity: 0.75; }
     .turn {
@@ -656,12 +655,8 @@
       empty.className = "empty";
       empty.id = "empty";
       const title = document.createElement("strong");
-      // Two lines on purpose, so a wrap never leaves one word alone.
-      const hello = document.createElement("span");
-      hello.textContent = greeting();
-      const question = document.createElement("span");
-      question.textContent = "What are we working on?";
-      title.append(hello, question);
+      title.id = "welcome-title";
+      title.textContent = welcomeLine();
       const hint = document.createElement("span");
       hint.className = "hint";
       hint.textContent = "Ask a question, paste some code, or drop in a file, PDF, or picture.";
@@ -672,13 +667,29 @@
       log.replaceChildren(empty);
     }
 
-    function greeting() {
-      const hour = new Date().getHours();
-      if (hour >= 5 && hour < 12) return "Good morning.";
-      if (hour >= 12 && hour < 17) return "Good afternoon.";
-      if (hour >= 17 && hour < 22) return "Good evening.";
-      return "Late one.";
+    // By the clock on this computer: morning 5:00-11:59, afternoon 12:00-16:59,
+    // evening 17:00-23:59, and "Late one" in the small hours (0:00-4:59).
+    function greeting(now = new Date()) {
+      const hour = now.getHours();
+      if (hour >= 5 && hour < 12) return "Good morning";
+      if (hour >= 12 && hour < 17) return "Good afternoon";
+      if (hour >= 17) return "Good evening";
+      return "Late one";
     }
+
+    function welcomeLine(now = new Date()) {
+      return greeting(now) + ", what are we working on?";
+    }
+
+    // A tab left open keeps its old greeting, so check again now and then
+    // and whenever the user comes back to it.
+    function refreshWelcome() {
+      const title = document.querySelector("#welcome-title");
+      if (title && title.textContent !== welcomeLine()) title.textContent = welcomeLine();
+    }
+    setInterval(refreshWelcome, 60_000);
+    window.addEventListener("focus", refreshWelcome);
+    document.addEventListener("visibilitychange", refreshWelcome);
 
     const MAX_FILE = 500_000;
     const MAX_FILES_TOTAL = 2_000_000;
