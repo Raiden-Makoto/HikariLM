@@ -91,6 +91,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(summary)
 
     def do_PATCH(self) -> None:
+        if self.path == "/api/folders":
+            try:
+                payload = self._body(MAX_BODY)
+                self._send_json(store.rename_folder(payload.get("from"), payload.get("to")))
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+            except OSError as error:
+                self._send_json({"error": f"could not change folder: {error.strerror or error}"}, status=500)
+            return
         if not self.path.startswith(CHATS + "/"):
             self._send_json({"error": "not found"}, status=404)
             return

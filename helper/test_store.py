@@ -147,6 +147,53 @@ class StoreTest(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             store.patch("nope", {"pinned": True})
 
+    def _chats_in_folder(self) -> None:
+        for name, folder, pinned in (("a", "Homework", False), ("b", "Homework", True), ("c", "Other", False), ("d", "", False)):
+            store.save(name, "gemma3", self.messages(name))
+            fields = {"pinned": pinned}
+            if folder:
+                fields["folder"] = folder
+            store.patch(name, fields)
+
+    def test_deleting_a_folder_keeps_every_chat(self) -> None:
+        self._chats_in_folder()
+        result = store.rename_folder("Homework", None)
+        self.assertEqual((result["changed"], result["failed"]), (2, 0))
+        by_id = {chat["id"]: chat for chat in store.listing()}
+        self.assertEqual(len(by_id), 4)
+        self.assertEqual(by_id["a"]["folder"], "")
+        self.assertEqual(by_id["b"]["folder"], "")
+        self.assertTrue(by_id["b"]["pinned"])  # pinning is untouched
+        self.assertEqual(by_id["c"]["folder"], "Other")
+        self.assertEqual(len(store.load("a")["messages"]), 2)
+        # Deleting it again, or one that never existed, changes nothing and is not an error.
+        self.assertEqual(store.rename_folder("Homework", None)["changed"], 0)
+        self.assertEqual(store.rename_folder("Nope", "")["changed"], 0)
+
+    def test_renaming_a_folder_and_merging(self) -> None:
+        self._chats_in_folder()
+        store.rename_folder("Homework", "School")
+        self.assertEqual({c["folder"] for c in store.listing() if c["id"] in "ab"}, {"School"})
+        store.rename_folder("School", "other")  # merges, keeping the existing spelling
+        self.assertEqual({c["folder"] for c in store.listing() if c["id"] in "abc"}, {"Other"})
+        store.rename_folder("Other", "OTHER")  # a change of case alone is allowed
+        self.assertEqual({c["folder"] for c in store.listing() if c["id"] in "abc"}, {"OTHER"})
+        with self.assertRaises(ValueError):
+            store.rename_folder("  ", "x")
+
+    def test_folder_names_ignore_case_when_moving_a_chat(self) -> None:
+        store.save("m1", "gemma3", self.messages())
+        store.save("m2", "gemma3", self.messages())
+        store.patch("m1", {"folder": "Homework"})
+        store.patch("m2", {"folder": "  homework "})
+        self.assertEqual({c["folder"] for c in store.listing()}, {"Homework"})
+
+    def test_a_damaged_chat_file_does_not_stop_a_folder_change(self) -> None:
+        self._chats_in_folder()
+        (store.transcripts_dir() / "broken.json").write_text("{not json", encoding="utf-8")
+        result = store.rename_folder("Homework", None)
+        self.assertEqual((result["changed"], result["failed"]), (2, 0))
+
     def test_delete(self) -> None:
         store.save("gone", "gemma3", self.messages())
         self.assertTrue(store.delete("gone"))

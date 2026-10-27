@@ -149,6 +149,8 @@
     .chat-more svg { display: block; width: 1.1rem; height: 1.1rem; }
     .chat-row:hover .chat-more,
     .chat-row:focus-within .chat-more,
+    .folder-row:hover .chat-more,
+    .folder-row:focus-within .chat-more,
     .chat-more[aria-expanded="true"] { display: block; }
     .chat-more:hover, .chat-more[aria-expanded="true"] { color: var(--ink); }
     .side-group {
@@ -174,7 +176,9 @@
       text-align: left;
       cursor: pointer;
     }
-    .folder-head:hover { background: var(--hover); }
+    .folder-row { display: flex; align-items: center; border-radius: 10px; }
+    .folder-row:hover, .folder-row:focus-within { background: var(--hover); }
+    .folder-row .folder-head { flex: 1; min-width: 0; width: auto; }
     .folder-head svg { flex: none; width: 1rem; height: 1rem; color: var(--muted); }
     .folder-head .chevron { transition: transform 0.12s; }
     .folder-head[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
@@ -1216,7 +1220,22 @@
           localStorage.setItem(FOLDERS_CLOSED, JSON.stringify([...foldersClosed]));
           renderChats();
         });
-        item.append(head);
+        const headRow = document.createElement("div");
+        headRow.className = "folder-row";
+        const more = document.createElement("button");
+        more.className = "chat-more";
+        more.type = "button";
+        more.setAttribute("aria-label", "Options for folder " + name);
+        more.setAttribute("aria-haspopup", "menu");
+        more.setAttribute("aria-expanded", "false");
+        more.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+        more.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (menuFor === "folder:" + name) closeMenu(true);
+          else openFolderMenu(name, headRow, more);
+        });
+        headRow.append(head, more);
+        item.append(headRow);
         if (open) {
           const list = document.createElement("ul");
           list.className = "folder-chats";
@@ -1370,6 +1389,93 @@
         items.push(menuItem(name, () => changeChat(chat.id, { folder: name })));
       }
       menu.replaceChildren(...items, input);
+    }
+
+    function openFolderMenu(name, headRow, button) {
+      if (activeRequest) return;
+      closeMenu();
+      menuFor = "folder:" + name;
+      menuButton = button;
+      button.setAttribute("aria-expanded", "true");
+      const inside = chats.filter((chat) => chat.folder === name).length;
+      let armed = false;
+      let timer = null;
+      const remove = menuItem("Delete folder", () => {
+        if (!armed) {
+          armed = true;
+          remove.textContent = "Click again. " + (inside === 1 ? "The chat stays." : "All " + inside + " chats stay.");
+          timer = setTimeout(() => {
+            armed = false;
+            remove.textContent = "Delete folder";
+          }, 4000);
+          return;
+        }
+        clearTimeout(timer);
+        changeFolder(name, null);
+      }, "danger");
+      menu.replaceChildren(
+        menuItem("Rename folder", () => {
+          closeMenu();
+          startFolderRename(name, headRow);
+        }),
+        remove,
+        Object.assign(document.createElement("p"), {
+          className: "menu-note",
+          textContent: "Deleting a folder keeps its " + (inside === 1 ? "chat" : "chats") + ".",
+        }),
+      );
+      placeMenu(button);
+      menu.querySelector("button")?.focus();
+    }
+
+    function startFolderRename(name, headRow) {
+      const input = document.createElement("input");
+      input.className = "chat-rename-input";
+      input.type = "text";
+      input.value = name;
+      input.maxLength = 40;
+      input.setAttribute("aria-label", "Folder name");
+      headRow.replaceChildren(input);
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (commit) => {
+        if (done) return;
+        done = true;
+        const next = input.value.trim();
+        if (commit && next && next !== name) changeFolder(name, next);
+        else renderChats();
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") finish(true);
+        else if (event.key === "Escape") finish(false);
+      });
+      input.addEventListener("blur", () => finish(true));
+    }
+
+    async function changeFolder(from, to) {
+      closeMenu();
+      const count = chats.filter((chat) => chat.folder === from).length;
+      try {
+        const response = await fetch("/api/folders", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ from, to }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "change failed");
+        foldersClosed.delete(from);
+        localStorage.setItem(FOLDERS_CLOSED, JSON.stringify([...foldersClosed]));
+        const plural = (n) => n + (n === 1 ? " chat" : " chats");
+        if (!to) status.textContent = "Folder \u201c" + from + "\u201d deleted. " + plural(result.changed) + " kept, now outside any folder.";
+        else if (chats.some((chat) => chat.folder === result.to && chat.folder !== from)) status.textContent = "Merged \u201c" + from + "\u201d into \u201c" + result.to + "\u201d.";
+        else status.textContent = "Folder renamed to \u201c" + result.to + "\u201d.";
+        if (result.failed) status.textContent += " " + plural(result.failed) + " could not be updated.";
+        if (count === 0 && !result.changed) status.textContent = "That folder was already gone.";
+      } catch (error) {
+        status.textContent = "Could not change that folder: " + error.message;
+      }
+      refreshChats();
     }
 
     async function changeChat(id, fields) {

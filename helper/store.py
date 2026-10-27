@@ -204,6 +204,54 @@ def clean_folder(name) -> str:
     return " ".join(name.split())[:FOLDER_LENGTH]
 
 
+def _folder_names() -> set[str]:
+    return {chat["folder"] for chat in listing() if chat["folder"]}
+
+
+def _same_folder_spelling(name: str, leaving: str = "") -> str:
+    """Folders are matched without regard to case, so "homework" joins an
+    existing "Homework" instead of making a second folder that looks the same."""
+    for existing in sorted(_folder_names()):
+        if existing != leaving and existing.casefold() == name.casefold():
+            return existing
+    return name
+
+
+def rename_folder(old, new) -> dict:
+    """Rename a folder on every chat in it, or remove it when new is empty.
+    Removing a folder never deletes a chat: its chats just lose the folder.
+    If new is the name of another folder, the two merge. One unreadable chat
+    file does not stop the rest; it is counted in "failed"."""
+    old = clean_folder(old)
+    if not old:
+        raise ValueError("folder is required")
+    new = clean_folder(new)
+    if new:
+        new = _same_folder_spelling(new, leaving=old)
+    changed = failed = 0
+    folder = transcripts_dir()
+    paths = sorted(folder.glob("*.json")) if folder.is_dir() else []
+    for path in paths:
+        if not ID_PATTERN.match(path.stem):
+            continue
+        try:
+            data = _read(path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue  # a damaged file is not shown in the sidebar either
+        if data.get("folder") != old:
+            continue
+        if new:
+            data["folder"] = new
+        else:
+            data.pop("folder", None)
+        try:
+            _write(path, data)
+            changed += 1
+        except OSError:
+            failed += 1
+    return {"from": old, "to": new, "changed": changed, "failed": failed}
+
+
 def patch(chat_id: str, fields: dict) -> dict:
     """Change a chat's title, pinned flag, or folder without touching its messages.
     Only the keys present in fields change. A folder of "" or null means no folder."""
@@ -221,7 +269,7 @@ def patch(chat_id: str, fields: dict) -> dict:
     if "folder" in fields:
         folder = clean_folder(fields["folder"])
         if folder:
-            data["folder"] = folder
+            data["folder"] = _same_folder_spelling(folder, leaving=str(data.get("folder") or ""))
         else:
             data.pop("folder", None)
     if not any(key in fields for key in ("title", "pinned", "folder")):
