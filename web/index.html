@@ -15,6 +15,7 @@
       --you: #0b63e5;
       --field: #141414;
       --hover: #1f1f1f;
+      --danger: #ff6b6b;
       --send: #fff;
       --send-ink: #111;
     }
@@ -28,6 +29,7 @@
       --you: #0b63e5;
       --field: #fff;
       --hover: #ececec;
+      --danger: #c62828;
       --send: #111;
       --send-ink: #fff;
     }
@@ -36,7 +38,6 @@
     body {
       margin: 0;
       display: flex;
-      flex-direction: column;
       font-family: Aptos, "Segoe UI Variable Text", "Segoe UI", sans-serif;
       font-size: 16px;
       line-height: 1.5;
@@ -53,15 +54,117 @@
       outline-offset: 2px;
     }
 
+    #sidebar {
+      flex: none;
+      width: 16.5rem;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+    #sidebar[inert] { opacity: 0.55; }
+    body.sidebar-closed #sidebar { display: none; }
+    .side-top { padding: 0.85rem 0.75rem 0.5rem; }
+    #new-chat {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+    }
+    #new-chat:hover { background: var(--hover); }
+    #new-chat svg { width: 1.05rem; height: 1.05rem; }
+    .side-label {
+      margin: 0.6rem 0.75rem 0.3rem 1rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    #chats {
+      flex: 1;
+      margin: 0;
+      padding: 0 0.5rem 0.75rem;
+      overflow: auto;
+      list-style: none;
+    }
+    .chat-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border-radius: 10px;
+    }
+    .chat-row:hover, .chat-row:focus-within { background: var(--hover); }
+    .chat-row.active { background: var(--hover); }
+    .chat-open {
+      flex: 1;
+      min-width: 0;
+      padding: 0.5rem 0.75rem;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .chat-row.active .chat-open { font-weight: 600; }
+    .chat-rename-input {
+      flex: 1;
+      min-width: 0;
+      margin: 0.2rem 0.4rem;
+      padding: 0.3rem 0.5rem;
+      border: 1px solid var(--accent, #3b82f6);
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+    .chat-rename { margin-right: 0; }
+    .chat-delete {
+      flex: none;
+      display: none;
+      margin-right: 0.3rem;
+      padding: 0.25rem 0.4rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .chat-delete svg { display: block; width: 1rem; height: 1rem; }
+    .chat-row:hover .chat-delete,
+    .chat-row:focus-within .chat-delete,
+    .chat-row:hover .chat-rename,
+    .chat-row:focus-within .chat-rename,
+    .chat-delete.confirm { display: block; }
+    .chat-delete:hover { color: var(--ink); }
+    .chat-delete.confirm { color: var(--danger); }
+    .side-empty { margin: 0.5rem 0.5rem; padding: 0 0.5rem; color: var(--muted); font-size: 0.88rem; }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 0.75rem;
       padding: 0.85rem 1.25rem;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
     }
+    .head-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
     h1 {
       margin: 0;
       font-family: Aptos Display, Aptos, "Segoe UI Variable Display", "Segoe UI", sans-serif;
@@ -77,6 +180,7 @@
     .icon-button {
       display: grid;
       place-items: center;
+      flex: none;
       width: 2.2rem;
       height: 2.2rem;
       padding: 0;
@@ -92,7 +196,7 @@
     #log {
       flex: 1;
       overflow: auto;
-      padding: 1.5rem max(1.25rem, calc(50% - 21rem)) 1rem;
+      padding: 1.5rem max(1.25rem, calc(50% - 31rem)) 1rem;
     }
     .empty {
       max-width: 28rem;
@@ -124,6 +228,13 @@
       padding-left: 0.15rem;
       padding-right: 0.15rem;
     }
+    .thinking {
+      margin-bottom: 0.6rem;
+      padding-left: 0.7rem;
+      border-left: 2px solid var(--line);
+      color: var(--muted);
+      font-size: 0.92em;
+    }
     .who {
       display: block;
       margin-bottom: 0.2rem;
@@ -135,7 +246,7 @@
     }
 
     .composer {
-      padding: 0.5rem max(1.25rem, calc(50% - 21rem)) 1.1rem;
+      padding: 0.5rem max(1.25rem, calc(50% - 31rem)) 1.1rem;
     }
     .box {
       display: flex;
@@ -159,6 +270,51 @@
       line-height: 1.45;
     }
     textarea::placeholder { color: var(--muted); }
+    .notice {
+      margin-bottom: 0.5rem;
+      padding: 0.5rem 0.8rem;
+      border: 1px solid var(--you);
+      border-radius: 12px;
+      background: var(--field);
+      font-size: 0.88rem;
+    }
+    .notice[hidden] { display: none; }
+    body.dragging .box { border-color: var(--you); border-style: dashed; box-shadow: 0 0 0 3px color-mix(in srgb, var(--you) 35%, transparent); }
+    body.dragging .box::after {
+      content: "Drop files to attach";
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-align: center;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chips:empty { display: none; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      max-width: 14rem;
+      padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip button {
+      padding: 0 0.3rem;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: inherit;
+      font-size: 1rem;
+      line-height: 1.2;
+      cursor: pointer;
+    }
+    .chip button:hover { color: var(--ink); }
+    .turn .chips { margin-bottom: 0.4rem; }
+    .turn.user .chip { border-color: rgba(255, 255, 255, 0.4); color: #fff; padding-right: 0.6rem; }
+    .box-left { display: flex; align-items: center; gap: 0.2rem; min-width: 0; }
+    #attach:disabled { opacity: 0.5; cursor: default; }
     .box-row {
       display: flex;
       align-items: center;
@@ -166,7 +322,9 @@
       gap: 0.75rem;
     }
     #model {
-      max-width: 60%;
+      min-width: 9.5rem;
+      max-width: 100%;
+      text-overflow: ellipsis;
       padding: 0.3rem 0.5rem;
       border: 0;
       border-radius: 8px;
@@ -194,10 +352,21 @@
     #send.stop .send-icon { display: none; }
     #send.stop .stop-icon { display: block; }
 
-    body.has-bg header { background: color-mix(in srgb, var(--panel) 88%, transparent); }
+    body.has-bg header,
+    body.has-bg #sidebar { background: color-mix(in srgb, var(--panel) 88%, transparent); }
     body.has-bg .turn.assistant {
       padding: 0.8rem 1rem;
       background: color-mix(in srgb, var(--panel) 82%, transparent);
+    }
+
+    @media (max-width: 720px) {
+      #sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 5;
+        width: min(17rem, 85%);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+      }
     }
 
     dialog {
@@ -242,40 +411,71 @@
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>LightUsagi</h1>
-      <p id="status" role="status">Checking Ollama…</p>
+  <aside id="sidebar" aria-label="Chats">
+    <div class="side-top">
+      <button id="new-chat" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        New chat
+      </button>
     </div>
-    <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-  </header>
+    <p class="side-label" id="chats-label">Chats</p>
+    <ul id="chats" aria-labelledby="chats-label"></ul>
+  </aside>
 
-  <main id="log">
-    <p class="empty" id="empty"><strong>Ask something.</strong> Enter sends. Shift+Enter starts a new line.</p>
-  </main>
-
-  <form class="composer" id="composer">
-    <div class="box">
-      <textarea id="message" rows="1" placeholder="Message" aria-label="Message"></textarea>
-      <div class="box-row">
-        <select id="model" aria-label="Model"></select>
-        <button id="send" type="submit" aria-label="Send">
-          <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 19V5"/>
-            <path d="M6 11l6-6 6 6"/>
-          </svg>
-          <svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>
+  <div class="main">
+    <header>
+      <div class="head-left">
+        <button class="icon-button" id="toggle-sidebar" type="button" aria-label="Hide chats" aria-expanded="true" aria-controls="sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M9 4v16"/>
           </svg>
         </button>
+        <div>
+          <h1>LightUsagi</h1>
+          <p id="status" role="status">Checking Ollama…</p>
+        </div>
       </div>
-    </div>
-  </form>
+      <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <main id="log"></main>
+
+    <form class="composer" id="composer">
+      <div class="notice" id="notice" role="status" hidden></div>
+      <div class="box">
+        <div class="chips" id="chips"></div>
+        <textarea id="message" rows="1" placeholder="Message" aria-label="Message"></textarea>
+        <div class="box-row">
+          <div class="box-left">
+            <button class="icon-button" id="attach" type="button" aria-label="Attach files" title="Attach text or code files">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7-7l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>
+              </svg>
+            </button>
+            <input id="file-input" type="file" multiple hidden>
+            <select id="model" aria-label="Model"></select>
+          </div>
+          <button id="send" type="submit" aria-label="Send">
+            <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 19V5"/>
+              <path d="M6 11l6-6 6 6"/>
+            </svg>
+            <svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
 
   <dialog id="settings" aria-labelledby="settings-title">
     <div class="dialog-head">
@@ -312,9 +512,15 @@
     const sendButton = document.querySelector("#send");
     const status = document.querySelector("#status");
     const log = document.querySelector("#log");
+    const sidebar = document.querySelector("#sidebar");
+    const chatList = document.querySelector("#chats");
     const settings = document.querySelector("#settings");
     const bgNote = document.querySelector("#bg-note");
-    const history = [];
+    const narrow = window.matchMedia("(max-width: 720px)");
+
+    let messages = [];
+    let chatId = null;
+    let chats = [];
     let activeRequest = null;
 
     function plainError(message) {
@@ -326,26 +532,528 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    function addTurn(role, text) {
+    function showEmpty() {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.id = "empty";
+      const title = document.createElement("strong");
+      title.textContent = "Ask something.";
+      empty.append(title, "Enter sends. Shift+Enter starts a new line.");
+      log.replaceChildren(empty);
+    }
+
+    const MAX_FILE = 500_000;
+    const MAX_FILES_TOTAL = 2_000_000;
+    const MAX_IMAGE = 10_000_000;
+    const MAX_IMAGES_TOTAL = 30_000_000;
+    const MAX_OFFICE = 50_000_000;
+    const MAX_PDF = 50_000_000;
+    const MAX_PDF_PAGES = 25;
+    const PDF_IMAGE_PAGES = 4;
+    const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+    const chips = document.querySelector("#chips");
+    const fileInput = document.querySelector("#file-input");
+    const attachButton = document.querySelector("#attach");
+    let attached = [];
+
+    function renderChips() {
+      chips.replaceChildren();
+      attached.forEach((file, index) => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        const name = document.createElement("span");
+        name.textContent = file.name;
+        name.title = file.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", "Remove " + file.name);
+        remove.addEventListener("click", () => {
+          attached.splice(index, 1);
+          renderChips();
+          saveDraft(draftKey(), true);
+        });
+        chip.append(name, remove);
+        chips.append(chip);
+      });
+    }
+
+    async function addFiles(list) {
+      let total = attached.reduce((sum, file) => sum + (file.text || "").length, 0);
+      const problems = [];
+      let images = attached.filter((item) => item.image).length;
+      let imageBytes = attached.reduce((sum, item) => sum + (item.image ? item.image.length : 0), 0);
+      let switched = "";
+      const addImage = async (name, size, getData) => {
+        const vision = visionModel();
+        if (!vision) {
+          problems.push(name + " needs a Gemma model, and none is installed in Ollama");
+          return false;
+        }
+        if (size > MAX_IMAGE) {
+          problems.push(name + " is over 10 MB");
+          return false;
+        }
+        if (imageBytes + size > MAX_IMAGES_TOTAL) {
+          problems.push(name + " would make the pictures too big for one message");
+          return false;
+        }
+        attached.push({ name, image: await getData() });
+        imageBytes += size;
+        images += 1;
+        if (modelSelect.value !== vision) {
+          modelSelect.value = vision;
+          switched = vision;
+        }
+        return true;
+      };
+      // Add text to the message. Too long for one file or for the message:
+      // cut at a line break and say so.
+      const addText = (name, text, cut) => {
+        if (text.length > MAX_FILE) {
+          text = text.slice(0, MAX_FILE);
+          cut = true;
+        }
+        const room = MAX_FILES_TOTAL - total;
+        if (room < 200) {
+          problems.push(name + " would make the files too big");
+          return;
+        }
+        if (text.length > room) {
+          text = text.slice(0, room);
+          cut = true;
+        }
+        if (cut) {
+          const lastBreak = text.lastIndexOf("\n");
+          if (lastBreak > 0) text = text.slice(0, lastBreak);
+          text += "\n[cut here: this is longer than one message can hold]";
+          problems.push(name + " was cut to its first " + (text.split("\n").length - 1) + " lines");
+        }
+        total += text.length;
+        attached.push({ name, text });
+      };
+      for (const file of list) {
+        if (IMAGE_TYPES.includes(file.type)) {
+          await addImage(file.name, file.size, () => readBase64(file));
+          continue;
+        }
+        if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+          if (file.size > MAX_PDF) {
+            problems.push(file.name + " is over 50 MB");
+            continue;
+          }
+          let pdf;
+          try {
+            pdf = await readPdf(file);
+          } catch (error) {
+            problems.push(file.name + " could not be read as a PDF");
+            continue;
+          }
+          if (pdf.text.trim().length >= 40) {
+            if (pdf.pages > MAX_PDF_PAGES) {
+              problems.push(file.name + " has " + pdf.pages + " pages; only the first " + MAX_PDF_PAGES + " were read");
+            }
+            addText(file.name, pdf.text, false);
+          } else {
+            // Scanned PDF: no text inside, so Gemma reads the first pages as pictures.
+            const shown = Math.min(pdf.pages, PDF_IMAGE_PAGES);
+            let added = 0;
+            for (let page = 1; page <= shown; page += 1) {
+              const png = await pdf.renderPage(page);
+              if (!(await addImage(file.name + " p" + page, png.length, async () => png))) break;
+              added += 1;
+            }
+            if (added && pdf.pages > shown) {
+              problems.push(file.name + " is scanned; only the first " + shown + " of " + pdf.pages + " pages were attached");
+            }
+          }
+          pdf.close();
+          continue;
+        }
+        if (/\.(docx|xlsx)$/i.test(file.name)) {
+          if (file.size > MAX_OFFICE) {
+            problems.push(file.name + " is over 50 MB");
+            continue;
+          }
+          try {
+            const text = /\.docx$/i.test(file.name) ? await readDocx(file) : await readXlsx(file);
+            if (!text.trim()) problems.push(file.name + " has no text in it");
+            else addText(file.name, text, false);
+          } catch (error) {
+            problems.push(file.name + " could not be read (" + error.message + ")");
+          }
+          continue;
+        }
+        if (/\.(doc|xls|ppt|pptx|odt|ods)$/i.test(file.name)) {
+          problems.push(file.name + " is not supported; save it as .docx or .xlsx, or export it to text");
+          continue;
+        }
+        if (!isTextKind(file.name)) {
+          problems.push(file.name + " is not a supported file type");
+          continue;
+        }
+        // Plain text, markdown, code, csv, tsv. A long one is cut at a line break, not refused.
+        const head = new Uint8Array(await file.slice(0, MAX_FILE + 4).arrayBuffer());
+        const text = decodeText(head, file.size > head.length);
+        if (text === null) {
+          problems.push(file.name + " is not a text file");
+          continue;
+        }
+        addText(file.name, text, file.size > head.length);
+      }
+      renderChips();
+      const notes = [];
+      if (switched) notes.push("Switched to " + switched + " because you attached a picture.");
+      if (problems.length) notes.push("Heads up: " + problems.join("; ") + ".");
+      status.textContent = notes.join(" ");
+      saveDraft(draftKey(), true);
+      if (switched) notify("Switched to " + switched + " to read your image.");
+    }
+
+    // .docx and .xlsx are zip files of XML. The browser can inflate zip data
+    // itself (DecompressionStream), so this needs no library: find the entries
+    // in the zip's central directory and inflate only the ones we read.
+    const MAX_INFLATED = 100_000_000;
+
+    async function openZip(file) {
+      const tail = new Uint8Array(await file.slice(Math.max(0, file.size - 70_000)).arrayBuffer());
+      const tailView = new DataView(tail.buffer);
+      let end = -1;
+      for (let i = tail.length - 22; i >= 0; i -= 1) {
+        if (tailView.getUint32(i, true) === 0x06054b50) { end = i; break; }
+      }
+      if (end < 0) throw new Error("not a zip file");
+      const count = tailView.getUint16(end + 10, true);
+      const dirSize = tailView.getUint32(end + 12, true);
+      const dirStart = tailView.getUint32(end + 16, true);
+      if (dirStart === 0xffffffff || count === 0xffff) throw new Error("zip is too large");
+      const dir = new Uint8Array(await file.slice(dirStart, dirStart + dirSize).arrayBuffer());
+      const view = new DataView(dir.buffer);
+      const entries = new Map();
+      let at = 0;
+      for (let n = 0; n < count && at + 46 <= dir.length; n += 1) {
+        if (view.getUint32(at, true) !== 0x02014b50) break;
+        const nameLength = view.getUint16(at + 28, true);
+        const extraLength = view.getUint16(at + 30, true);
+        const commentLength = view.getUint16(at + 32, true);
+        entries.set(new TextDecoder().decode(dir.subarray(at + 46, at + 46 + nameLength)), {
+          method: view.getUint16(at + 10, true),
+          size: view.getUint32(at + 20, true),
+          offset: view.getUint32(at + 42, true),
+        });
+        at += 46 + nameLength + extraLength + commentLength;
+      }
+      return {
+        has: (name) => entries.has(name),
+        names: () => [...entries.keys()],
+        async text(name) {
+          const entry = entries.get(name);
+          if (!entry) return null;
+          const header = new DataView(await file.slice(entry.offset, entry.offset + 30).arrayBuffer());
+          const start = entry.offset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
+          const raw = file.slice(start, start + entry.size);
+          if (entry.method === 0) return new TextDecoder().decode(await raw.arrayBuffer());
+          if (entry.method !== 8) throw new Error("unsupported zip compression");
+          const stream = raw.stream().pipeThrough(new DecompressionStream("deflate-raw"));
+          const reader = stream.getReader();
+          const decoder = new TextDecoder();
+          let out = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            out += decoder.decode(value, { stream: true });
+            if (out.length > MAX_INFLATED) {
+              reader.cancel();
+              throw new Error("file expands too much");
+            }
+          }
+          return out + decoder.decode();
+        },
+      };
+    }
+
+    function parseXml(text) {
+      const doc = new DOMParser().parseFromString(text, "application/xml");
+      if (doc.querySelector("parsererror")) throw new Error("damaged XML");
+      return doc;
+    }
+
+    const localName = (node) => node.localName;
+    const children = (node, name) => [...node.children].filter((child) => localName(child) === name);
+
+    async function readDocx(file) {
+      const zip = await openZip(file);
+      const body = await zip.text("word/document.xml");
+      if (body === null) throw new Error("no document.xml");
+      const root = parseXml(body).getElementsByTagNameNS("*", "body")[0];
+      const paragraph = (node) => {
+        let out = "";
+        const walk = (item) => {
+          for (const child of item.children) {
+            const name = localName(child);
+            if (name === "t") out += child.textContent;
+            else if (name === "tab") out += "\t";
+            else if (name === "br" || name === "cr") out += "\n";
+            else if (name !== "instrText") walk(child);
+          }
+        };
+        walk(node);
+        return out;
+      };
+      const lines = [];
+      const block = (node) => {
+        for (const child of node.children) {
+          const name = localName(child);
+          if (name === "p") lines.push(paragraph(child));
+          else if (name === "tbl") {
+            for (const row of children(child, "tr")) {
+              lines.push(children(row, "tc").map((cell) =>
+                children(cell, "p").map(paragraph).join(" ")).join("\t"));
+            }
+            lines.push("");
+          } else if (name === "sdt" || name === "customXml") {
+            for (const inner of child.children) if (localName(inner) === "sdtContent") block(inner);
+          }
+        }
+      };
+      block(root);
+      return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    }
+
+    function columnNumber(reference) {
+      let n = 0;
+      for (const ch of reference.replace(/[0-9]/g, "")) n = n * 26 + ch.charCodeAt(0) - 64;
+      return n - 1;
+    }
+
+    async function readXlsx(file) {
+      const zip = await openZip(file);
+      const book = await zip.text("xl/workbook.xml");
+      if (book === null) throw new Error("no workbook.xml");
+      const rels = {};
+      const relText = await zip.text("xl/_rels/workbook.xml.rels");
+      if (relText) {
+        for (const rel of parseXml(relText).getElementsByTagName("Relationship")) {
+          rels[rel.getAttribute("Id")] = rel.getAttribute("Target");
+        }
+      }
+      const shared = [];
+      const sharedText = await zip.text("xl/sharedStrings.xml");
+      if (sharedText) {
+        for (const item of parseXml(sharedText).getElementsByTagNameNS("*", "si")) {
+          // Skip phonetic runs (rPh); keep ordinary and rich-text runs.
+          let value = "";
+          for (const t of item.getElementsByTagNameNS("*", "t")) {
+            if (localName(t.parentNode) !== "rPh") value += t.textContent;
+          }
+          shared.push(value);
+        }
+      }
+      const parts = [];
+      const sheets = [...parseXml(book).getElementsByTagNameNS("*", "sheet")];
+      for (const [index, sheet] of sheets.entries()) {
+        const id = sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+        let target = rels[id] || "worksheets/sheet" + (index + 1) + ".xml";
+        target = target.startsWith("/") ? target.slice(1) : "xl/" + target;
+        const xml = await zip.text(target);
+        if (xml === null) continue;
+        const rows = [];
+        for (const row of parseXml(xml).getElementsByTagNameNS("*", "row")) {
+          const cells = [];
+          let next = 0;
+          for (const cell of children(row, "c")) {
+            const reference = cell.getAttribute("r");
+            const column = reference ? columnNumber(reference) : next;
+            const type = cell.getAttribute("t");
+            const valueNode = children(cell, "v")[0];
+            let value = "";
+            if (type === "inlineStr") value = [...cell.getElementsByTagNameNS("*", "t")].map((t) => t.textContent).join("");
+            else if (valueNode) {
+              value = valueNode.textContent;
+              if (type === "s") value = shared[Number(value)] ?? "";
+              else if (type === "b") value = value === "1" ? "TRUE" : "FALSE";
+            }
+            while (cells.length < column) cells.push("");
+            cells[column] = value.replace(/[\t\r\n]+/g, " ");
+            next = column + 1;
+          }
+          rows.push(cells.join("\t").replace(/\t+$/, ""));
+        }
+        while (rows.length && !rows[rows.length - 1]) rows.pop();
+        if (rows.length) parts.push((sheets.length > 1 ? "--- sheet: " + sheet.getAttribute("name") + " ---\n" : "") + rows.join("\n"));
+      }
+      return parts.join("\n\n");
+    }
+
+    // Plain-text kinds the page accepts: notes, data, and everyday code.
+    // Anything else (.asm, model files, archives...) is refused, even if it
+    // happens to be readable text.
+    const TEXT_EXTENSIONS = new Set([
+      "txt", "md", "markdown", "rst", "log", "csv", "tsv",
+      "json", "jsonl", "yaml", "yml", "toml", "ini", "cfg", "xml", "html", "htm", "css",
+      "py", "r", "rmd", "c", "h", "cpp", "cc", "cxx", "hpp", "hh",
+      "java", "kt", "go", "rs", "rb", "php", "swift", "cs", "scala", "lua", "pl",
+      "js", "mjs", "ts", "jsx", "tsx", "sh", "bash", "sql", "tex",
+    ]);
+    const TEXT_NAMES = new Set(["makefile", "dockerfile", "readme", "license", "cmakelists.txt"]);
+
+    function isTextKind(name) {
+      const lower = name.toLowerCase();
+      if (TEXT_NAMES.has(lower)) return true;
+      const dot = lower.lastIndexOf(".");
+      return dot > 0 || (dot === 0 && lower.length > 1) ? TEXT_EXTENSIONS.has(lower.slice(dot + 1)) : false;
+    }
+
+    // Read bytes as text. Honours a byte-order mark (Excel writes UTF-16 and
+    // UTF-8 BOMs), tries UTF-8, then falls back to Windows-1252, which is what
+    // older CSV exports use. Returns null for binary data.
+    function decodeText(bytes, truncated) {
+      if (bytes.includes(0)) {
+        if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes.subarray(2));
+        if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+        return null;
+      }
+      if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) bytes = bytes.subarray(3);
+      try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch (error) {
+        // A multi-byte character may be split by the cut; trim up to 3 bytes and retry.
+        for (let trim = 1; truncated && trim <= 3; trim += 1) {
+          try {
+            return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, bytes.length - trim));
+          } catch (inner) { /* keep trimming */ }
+        }
+      }
+      const text = new TextDecoder("windows-1252").decode(bytes);
+      // Control characters other than tab, newline, return mean binary, not text.
+      return /[\u0001-\u0008\u000e-\u001f]/.test(text) ? null : text;
+    }
+
+    // pdf.js is bundled in web/vendor and loaded only when a PDF is attached.
+    let pdfjs = null;
+    async function readPdf(file) {
+      if (!pdfjs) {
+        pdfjs = await import("/vendor/pdf.min.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
+      }
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+      let text = "";
+      const limit = Math.min(doc.numPages, MAX_PDF_PAGES);
+      for (let number = 1; number <= limit && text.length < MAX_FILES_TOTAL; number += 1) {
+        const page = await doc.getPage(number);
+        const content = await page.getTextContent();
+        let line = "";
+        for (const item of content.items) {
+          line += item.str;
+          if (item.hasEOL) line += "\n";
+          else if (item.str && !line.endsWith(" ")) line += " ";
+        }
+        text += (limit > 1 ? "\n--- page " + number + " ---\n" : "") + line.replace(/[ \t]+\n/g, "\n").trim() + "\n";
+      }
+      return {
+        text,
+        pages: doc.numPages,
+        close: () => doc.destroy(),
+        async renderPage(number) {
+          const page = await doc.getPage(number);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+          return canvas.toDataURL("image/png").split(",", 2)[1];
+        },
+      };
+    }
+
+    let noticeTimer = null;
+    function notify(text) {
+      const notice = document.querySelector("#notice");
+      notice.textContent = text;
+      notice.hidden = false;
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => { notice.hidden = true; }, 6000);
+    }
+
+    function visionModel() {
+      const names = [...modelSelect.options].map((option) => option.value).filter(Boolean);
+      if (isVision(modelSelect.value)) return modelSelect.value;
+      return names.find(isVision) || "";
+    }
+
+    function isVision(name) {
+      return name.split(":", 1)[0].toLowerCase().startsWith("gemma3");
+    }
+
+    function readBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",", 2)[1] || "");
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function withFiles(message) {
+      const textFiles = (message.files || []).filter((file) => typeof file.text === "string");
+      if (!textFiles.length) return message.content;
+      const blocks = textFiles.map((file) => {
+        let fence = "```";
+        while (file.text.includes(fence)) fence += "`";
+        return "File: " + file.name + "\n" + fence + "\n" + file.text + "\n" + fence;
+      });
+      return blocks.join("\n\n") + "\n\n" + message.content;
+    }
+
+    function addTurn(role, text, thought, files) {
       document.querySelector("#empty")?.remove();
       const block = document.createElement("article");
       block.className = "turn " + role;
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = role === "user" ? "You" : "Model";
-      const body = document.createElement("div");
-      body.textContent = text;
-      block.append(who, body);
+      const thinking = document.createElement("div");
+      thinking.className = "thinking";
+      thinking.textContent = thought || "";
+      thinking.hidden = !thought;
+      const answer = document.createElement("div");
+      answer.textContent = text;
+      block.append(who, thinking, answer);
+      if (files?.length) {
+        const row = document.createElement("div");
+        row.className = "chips";
+        for (const file of files) {
+          const chip = document.createElement("div");
+          chip.className = "chip";
+          const name = document.createElement("span");
+          name.textContent = file.name;
+          chip.append(name);
+          row.append(chip);
+        }
+        who.after(row);
+      }
+      if (role === "user") thinking.remove();
       log.append(block);
       scrollLog();
-      return body;
+      return { block, thinking, answer };
+    }
+
+    function renderLog() {
+      if (messages.length === 0) {
+        showEmpty();
+        return;
+      }
+      log.replaceChildren();
+      for (const message of messages) addTurn(message.role, message.content, message.thinking, message.files);
     }
 
     function setBusy(busy) {
       sendButton.classList.toggle("stop", busy);
       sendButton.setAttribute("aria-label", busy ? "Stop" : "Send");
       messageBox.disabled = busy;
+      attachButton.disabled = busy;
       modelSelect.disabled = busy || !modelSelect.value;
+      sidebar.toggleAttribute("inert", busy);
     }
 
     async function refreshState() {
@@ -372,7 +1080,7 @@
       if (models.length === 0) {
         const option = document.createElement("option");
         option.value = "";
-        option.textContent = "No models";
+        option.textContent = "No model selected";
         modelSelect.append(option);
         modelSelect.disabled = true;
         status.textContent = problem;
@@ -390,6 +1098,261 @@
       refreshState();
     }
 
+    function renderChats() {
+      chatList.replaceChildren();
+      if (chats.length === 0) {
+        const none = document.createElement("li");
+        none.className = "side-empty";
+        none.textContent = "No chats yet.";
+        chatList.append(none);
+        return;
+      }
+      for (const chat of chats) {
+        const row = document.createElement("li");
+        row.className = "chat-row" + (chat.id === chatId ? " active" : "");
+        const open = document.createElement("button");
+        open.className = "chat-open";
+        open.type = "button";
+        open.textContent = chat.title;
+        open.title = chat.title;
+        if (chat.id === chatId) open.setAttribute("aria-current", "true");
+        open.addEventListener("click", () => openChat(chat.id));
+        const rename = document.createElement("button");
+        rename.className = "chat-delete chat-rename";
+        rename.type = "button";
+        rename.setAttribute("aria-label", "Rename chat " + chat.title);
+        rename.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>';
+        rename.addEventListener("click", () => startRename(chat, row));
+        open.addEventListener("dblclick", () => startRename(chat, row));
+        const remove = document.createElement("button");
+        remove.className = "chat-delete";
+        remove.type = "button";
+        remove.setAttribute("aria-label", "Delete chat " + chat.title);
+        remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></svg>';
+        let timer = null;
+        remove.addEventListener("click", () => {
+          if (!remove.classList.contains("confirm")) {
+            remove.classList.add("confirm");
+            remove.textContent = "Delete?";
+            timer = setTimeout(renderChats, 3000);
+            return;
+          }
+          clearTimeout(timer);
+          deleteChat(chat.id);
+        });
+        row.append(open, rename, remove);
+        chatList.append(row);
+      }
+    }
+
+    function startRename(chat, row) {
+      const input = document.createElement("input");
+      input.className = "chat-rename-input";
+      input.type = "text";
+      input.value = chat.title;
+      input.maxLength = 120;
+      input.setAttribute("aria-label", "Chat name");
+      row.replaceChildren(input);
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = async (commit) => {
+        if (done) return;
+        done = true;
+        const title = input.value.trim();
+        if (commit && title && title !== chat.title) {
+          try {
+            const response = await fetch("/api/chats/" + chat.id, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title }),
+            });
+            if (!response.ok) throw new Error((await response.json()).error || "rename failed");
+          } catch (error) {
+            status.textContent = "Could not rename that chat: " + error.message;
+          }
+        }
+        refreshChats();
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") finish(true);
+        else if (event.key === "Escape") finish(false);
+      });
+      input.addEventListener("blur", () => finish(true));
+    }
+
+    async function refreshChats() {
+      try {
+        const response = await fetch("/api/chats");
+        const body = await response.json();
+        chats = body.chats || [];
+      } catch (error) {
+        chats = [];
+      }
+      renderChats();
+    }
+
+    async function saveChat() {
+      try {
+        const response = await fetch("/api/chats/" + chatId, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: modelSelect.value,
+            messages: messages.map((message) => ({
+              ...message,
+              files: message.files?.map((file) =>
+                file.image ? { name: file.name, kind: "image" } : file),
+            })),
+          }),
+        });
+        if (!response.ok) throw new Error((await response.json()).error || "save failed");
+      } catch (error) {
+        status.textContent = "This chat could not be saved: " + error.message;
+        return;
+      }
+      localStorage.setItem(LAST_CHAT, chatId);
+      await refreshChats();
+    }
+
+    function closeSidebarIfNarrow() {
+      if (narrow.matches) setSidebar(false);
+    }
+
+    // Drafts. What is typed and attached but not sent is kept by the helper in
+    // ~/.lightusagi/drafts, one per chat ("new" before a chat has started), so
+    // a reload or a switch to another chat does not lose it. Requests go
+    // through one queue so they land in the order they were made.
+    const DRAFT_NEW = "new";
+    const LAST_CHAT = "lightusagi-chat";
+    let draftTimer = null;
+    let draftQueue = Promise.resolve();
+    const draftKey = () => chatId || DRAFT_NEW;
+
+    function saveDraft(key = draftKey(), withFiles = false, keepalive = false) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+      const empty = !messageBox.value && attached.length === 0;
+      const body = { text: messageBox.value };
+      if (withFiles) {
+        body.files = attached.map((file) =>
+          file.image ? { name: file.name, image: file.image } : { name: file.name, text: file.text });
+      }
+      const request = () => empty
+        ? fetch("/api/drafts/" + key, { method: "DELETE", keepalive })
+        : fetch("/api/drafts/" + key, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            keepalive,
+          });
+      if (keepalive) request().catch(() => {});
+      else draftQueue = draftQueue.then(request).catch(() => {});
+    }
+
+    function scheduleDraft() {
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => saveDraft(), 400);
+    }
+
+    function dropDraft(key) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+      draftQueue = draftQueue.then(() => fetch("/api/drafts/" + key, { method: "DELETE" })).catch(() => {});
+    }
+
+    function flushDraft(keepalive = false) {
+      if (draftTimer !== null) saveDraft(draftKey(), false, keepalive);
+    }
+
+    function clearComposer() {
+      messageBox.value = "";
+      messageBox.style.height = "";
+      attached = [];
+      renderChips();
+    }
+
+    async function loadDraft(key) {
+      let draft;
+      try {
+        await draftQueue;
+        const response = await fetch("/api/drafts/" + key);
+        if (!response.ok) return;
+        draft = await response.json();
+      } catch (error) {
+        return;
+      }
+      // Ignore the answer if the user moved on, or has already started typing.
+      if (draftKey() !== key || messageBox.value || attached.length) return;
+      messageBox.value = draft.text || "";
+      attached = draft.files || [];
+      renderChips();
+      messageBox.style.height = "auto";
+      messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+    }
+
+    function newChat() {
+      if (activeRequest) return;
+      flushDraft();
+      chatId = null;
+      messages = [];
+      localStorage.removeItem(LAST_CHAT);
+      clearComposer();
+      renderLog();
+      renderChats();
+      closeSidebarIfNarrow();
+      messageBox.focus();
+      loadDraft(DRAFT_NEW);
+    }
+
+    async function openChat(id) {
+      if (activeRequest || id === chatId) {
+        closeSidebarIfNarrow();
+        return;
+      }
+      let chat;
+      try {
+        const response = await fetch("/api/chats/" + id);
+        chat = await response.json();
+        if (!response.ok) throw new Error(chat.error || "could not open chat");
+      } catch (error) {
+        status.textContent = "Could not open that chat: " + error.message;
+        refreshChats();
+        return;
+      }
+      flushDraft();
+      chatId = id;
+      messages = chat.messages || [];
+      localStorage.setItem(LAST_CHAT, id);
+      clearComposer();
+      loadDraft(id);
+      if ([...modelSelect.options].some((option) => option.value === chat.model)) {
+        modelSelect.value = chat.model;
+        localStorage.setItem("lightusagi-model", chat.model);
+      }
+      renderLog();
+      renderChats();
+      closeSidebarIfNarrow();
+      messageBox.focus();
+    }
+
+    async function deleteChat(id) {
+      try {
+        await fetch("/api/chats/" + id, { method: "DELETE" });
+      } catch (error) {
+        status.textContent = "Could not delete that chat.";
+      }
+      if (id === chatId) {
+        chatId = null;
+        messages = [];
+        localStorage.removeItem(LAST_CHAT);
+        clearComposer();
+        renderLog();
+        loadDraft(DRAFT_NEW);
+      }
+      refreshChats();
+    }
+
     async function send() {
       const content = messageBox.value.trim();
       if (!content || activeRequest) return;
@@ -398,18 +1361,47 @@
         loadModels();
         return;
       }
-      history.push({ role: "user", content });
-      addTurn("user", content);
+      if (attached.some((file) => file.image) && !isVision(model)) {
+        const vision = visionModel();
+        if (vision) {
+          modelSelect.value = vision;
+          notify("Switched to " + vision + " to read your image. Press send again.");
+        } else {
+          notify("Images need a Gemma model. Remove the image or install gemma3.");
+        }
+        return;
+      }
+      const draftOwner = draftKey();
+      if (!chatId) chatId = crypto.randomUUID();
+      const files = attached;
+      attached = [];
+      renderChips();
+      messages.push({ role: "user", content, files: files.length ? files : undefined });
+      const sent = addTurn("user", content, "", files);
       messageBox.value = "";
+      messageBox.style.height = "";
+      dropDraft(draftOwner);
+      let restored = false;
       const reply = addTurn("assistant", "");
       setBusy(true);
       status.textContent = "Streaming from " + model + "…";
       activeRequest = new AbortController();
+      let saved = false;
+      let answer = "";
+      let thought = "";
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model, messages: history }),
+          body: JSON.stringify({
+            model,
+            messages: messages.map((message, index) => {
+              const out = { role: message.role, content: withFiles(message) };
+              const pictures = (message.files || []).filter((file) => file.image).map((file) => file.image);
+              if (pictures.length && index === messages.length - 1) out.images = pictures;
+              return out;
+            }),
+          }),
           signal: activeRequest.signal,
         });
         if (!response.ok) {
@@ -419,8 +1411,6 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let answer = "";
-        let thought = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -433,21 +1423,47 @@
             if (event.error) throw new Error(event.error);
             thought += event.message?.thinking || "";
             answer += event.message?.content || "";
-            reply.textContent = thought && answer ? thought + "\n\n" + answer : (answer || thought);
+            reply.thinking.textContent = thought;
+            reply.thinking.hidden = !thought;
+            reply.answer.textContent = answer;
             scrollLog();
           }
         }
-        if (answer) history.push({ role: "assistant", content: answer });
-        else history.pop();
+        if (!answer && !thought) messages.pop();
       } catch (error) {
-        history.pop();
-        if (error.name !== "AbortError") reply.textContent = plainError(error.message);
+        if (error.name === "AbortError" && !answer && !thought) {
+          sent.block.remove();
+          reply.block.remove();
+          messageBox.value = content;
+          attached = files;
+          renderChips();
+          restored = true;
+          if (messages.length <= 1) showEmpty();
+        }
+        if (error.name !== "AbortError") {
+          if (answer || thought) {
+            const note = document.createElement("div");
+            note.className = "thinking";
+            note.textContent = "The reply was cut off: " + plainError(error.message);
+            reply.answer.after(note);
+          } else {
+            reply.answer.textContent = plainError(error.message);
+          }
+        }
+        if (!answer && !thought) messages.pop();
       } finally {
+        if (answer || thought) {
+          messages.push({ role: "assistant", content: answer, thinking: thought || undefined, model });
+          saved = true;
+        }
         activeRequest = null;
+        if (messages.length === 0) chatId = null;
+        if (restored) saveDraft(draftKey(), true);
         setBusy(false);
         refreshState();
         messageBox.focus();
       }
+      if (saved) await saveChat();
     }
 
     document.querySelector("#composer").addEventListener("submit", (event) => {
@@ -464,15 +1480,67 @@
         send();
       }
     });
+    messageBox.addEventListener("input", () => {
+      messageBox.style.height = "auto";
+      messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+      scheduleDraft();
+    });
+    window.addEventListener("pagehide", () => flushDraft(true));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushDraft(true);
+    });
+    let dragDepth = 0;
+    const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+    window.addEventListener("dragenter", (event) => {
+      if (!hasFiles(event) || activeRequest) return;
+      dragDepth += 1;
+      document.body.classList.add("dragging");
+    });
+    window.addEventListener("dragleave", (event) => {
+      if (!hasFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) document.body.classList.remove("dragging");
+    });
+    window.addEventListener("dragover", (event) => {
+      if (hasFiles(event)) event.preventDefault();
+    });
+    window.addEventListener("drop", async (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove("dragging");
+      if (activeRequest) return;
+      await addFiles([...event.dataTransfer.files]);
+      messageBox.focus();
+    });
+    attachButton.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const picked = [...fileInput.files];
+      fileInput.value = "";
+      await addFiles(picked);
+      messageBox.focus();
+    });
     modelSelect.addEventListener("change", () => {
       localStorage.setItem("lightusagi-model", modelSelect.value);
     });
     window.addEventListener("focus", () => {
       if (!activeRequest && !modelSelect.value) loadModels();
     });
-    messageBox.addEventListener("input", () => {
-      messageBox.style.height = "auto";
-      messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+    document.querySelector("#new-chat").addEventListener("click", newChat);
+
+    function setSidebar(open) {
+      document.body.classList.toggle("sidebar-closed", !open);
+      const toggle = document.querySelector("#toggle-sidebar");
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? "Hide chats" : "Show chats");
+      if (!narrow.matches) localStorage.setItem("lightusagi-sidebar", open ? "open" : "closed");
+    }
+    document.querySelector("#toggle-sidebar").addEventListener("click", () => {
+      setSidebar(document.body.classList.contains("sidebar-closed"));
+    });
+    document.querySelector(".main").addEventListener("click", (event) => {
+      if (event.target.closest("#toggle-sidebar")) return;
+      if (narrow.matches && !document.body.classList.contains("sidebar-closed")) setSidebar(false);
     });
 
     function applyTheme(theme) {
@@ -526,8 +1594,17 @@
 
     applyTheme(localStorage.getItem("lightusagi-theme") || "dark");
     applyBackground(localStorage.getItem("lightusagi-bg") || "");
-    loadModels();
+    setSidebar(narrow.matches ? false : localStorage.getItem("lightusagi-sidebar") !== "closed");
+    showEmpty();
     messageBox.focus();
+    (async () => {
+      await loadModels();
+      await refreshChats();
+      const last = localStorage.getItem(LAST_CHAT);
+      if (last) await openChat(last);
+      if (!chatId) localStorage.removeItem(LAST_CHAT);
+      await loadDraft(draftKey());
+    })();
   </script>
 </body>
 </html>
