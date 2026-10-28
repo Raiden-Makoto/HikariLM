@@ -111,9 +111,13 @@ The section is called **Code editor** in the header. It has the file list and th
 
 Qwen cannot see images. Gemma writes the image down as text, and Qwen reads that text.
 
-1. Load `gemma3`, forcing out whatever large model is loaded now. Gemma reads the image from its existing path and writes a structure under `descriptions/` in the app folder. For a diagram such as an AVL tree, that text is the tree: each node's value and its left and right children.
+When it happens: a picture is attached in the Chat section (the code editor takes no pictures) and the model picked to answer is one that cannot see, such as Qwen or R1. Attaching a picture still switches the picker to Gemma first, so the default is Gemma answering directly, with a line saying that choosing a coder model makes Gemma write the picture down for it. Nothing about the picture reaches Qwen except the text.
+
+1. Load `gemma3`, forcing out whatever large model is loaded now. Gemma reads the picture the page sent (the browser hands over the picture's bytes, not a path on disk) and writes a structure under `descriptions/` in the app folder, named after a hash of those bytes. While it writes, the text streams into the reply's thinking area, and Stop works. For a diagram such as an AVL tree, that text is the tree: each node's value and its left and right children.
 2. The code request needs Qwen, so the helper forces Gemma to unload and loads `qwencoder2.5-7b`. Qwen reads the text file and writes the code in the chat.
 3. Follow-up questions to Qwen leave it loaded. Ollama drops it when the keepalive expires. nomic indexes the description and the answer while Qwen stays loaded.
+
+The description replaces the picture in the message: the chat shows the picture's name, the transcript keeps the description as a text attachment named `<picture> (read by <model>)`, and every later turn sends Qwen that text, so follow-ups never need Gemma. The picture itself is still never saved. Descriptions in `descriptions/` are kept (they are small, up to 20 KB each) so the same picture sent in another chat is not read again.
 
 If that description is already in the app folder and the image has not changed, Gemma is skipped. Qwen reads the saved text. nomic indexes the words Gemma wrote, not the pixels. A later question can find that description by search while Gemma stays unloaded.
 
@@ -205,7 +209,7 @@ Each step is usable before the next one starts.
 1. **Helper talks to Ollama.** Stream a reply and leave the model loaded for follow-ups. Each request sets a keepalive so Ollama resets that timer. Force a large model out only when the next request uses a different large model.
 2. **Chat page.** Send a message, see the stream, save and reopen the chat from `transcripts/`. Sidebar, rename, attachments and drag-and-drop are part of this step. Done, except that it has only been tried against a fake Ollama.
 3. **Code editor.** Choose a folder by clicking through it, show one file, and ask Qwen what it does or where the bug is, in the chat beside it. Paste a fix back to that file, or press Apply on a code block in the reply. The header gets its Chat and Code editor switch here.
-4. **Image handoff.** Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
+4. **Image handoff.** Done, except that it has only been tried against a fake Ollama, and nomic indexing waits for step 5. Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
 5. **Search index.** nomic indexes saved text while the chat model stays loaded. A later question can include a few matching notes.
 6. **Generate images.** Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
 

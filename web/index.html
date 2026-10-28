@@ -1116,7 +1116,7 @@
       }
       renderChips();
       const notes = [];
-      if (switched) notes.push("Switched to " + switched + " because you attached a picture.");
+      if (switched) notes.push("Switched to " + switched + " because you attached a picture. To get code from it, choose a coder model: " + switched + " will write the picture down for it first.");
       if (problems.length) notes.push("Heads up: " + problems.join("; ") + ".");
       status.textContent = notes.join(" ");
       saveDraft(draftKey(), true);
@@ -2131,6 +2131,42 @@
       refreshChats();
     }
 
+    // Ask the helper to have a vision model write one picture down as text. It
+    // answers from the saved description when it has one, so the vision model
+    // is not loaded again for a picture it has already read.
+    async function describePicture(file, model, signal, onText) {
+      const response = await fetch("/api/describe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, image: file.image, name: file.name }),
+        signal,
+      });
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({}));
+        throw new Error(failure.error || "The picture could not be read.");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+          if (event.error) throw new Error(event.error);
+          if (event.text) onText(event.text);
+          if (typeof event.description === "string") {
+            return { text: event.description, cached: Boolean(event.cached), model: event.model || model };
+          }
+        }
+      }
+      throw new Error("The picture was not described.");
+    }
+
     async function send() {
       const content = messageBox.value.trim();
       if (!content || activeRequest) return;
@@ -2143,15 +2179,15 @@
         notify("The code editor cannot send pictures. Remove the picture, or use the Chat tab.");
         return;
       }
+      // A model that cannot see (Qwen, R1) is given the picture as text: a
+      // Gemma model writes it down first, once, and that text goes with the message.
+      let describer = "";
       if (attached.some((file) => file.image) && !isVision(model)) {
-        const vision = visionModel();
-        if (vision) {
-          modelSelect.value = vision;
-          notify("Switched to " + vision + " to read your image. Press send again.");
-        } else {
+        describer = visionModel();
+        if (!describer) {
           notify("Images need a Gemma model. Remove the image or install gemma3.");
+          return;
         }
-        return;
       }
       const draftOwner = draftKey();
       askNotifyPermission();
@@ -2176,6 +2212,28 @@
       let answer = "";
       let thought = "";
       try {
+        if (describer) {
+          const converted = [];
+          for (const file of files) {
+            if (!file.image) {
+              converted.push(file);
+              continue;
+            }
+            status.textContent = "Reading " + file.name + " with " + describer + "…";
+            let live = "";
+            const result = await describePicture(file, describer, activeRequest.signal, (piece) => {
+              live += piece;
+              reply.thinking.textContent = live;
+              reply.thinking.hidden = false;
+              scrollLog();
+            });
+            converted.push({ name: file.name + " (read by " + (result.model || describer) + ")", text: result.text });
+          }
+          reply.thinking.textContent = "";
+          reply.thinking.hidden = true;
+          messages[messages.length - 1].files = converted;
+          status.textContent = "Streaming from " + model + "…";
+        }
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

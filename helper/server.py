@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import store, workspace
+from helper import descriptions, store, workspace
 from helper.ollama import KEEP_ALIVE, OllamaError, open_chat, tags, unload
 from helper.router import ModelRouter, chat_models
 from helper.version import code_stamp
@@ -148,6 +148,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._same_origin() or self._workspace("POST"):
             return
+        if self.path == "/api/describe":
+            self._describe()
+            return
         if self.path != "/api/chat":
             self._send_json({"error": "not found"}, status=404)
             return
@@ -164,6 +167,82 @@ class Handler(BaseHTTPRequestHandler):
             return
         router.commit(model)
         self._stream(response)
+
+    def _describe(self) -> None:
+        """Have a vision model write a picture down as text, once.
+
+        Streams what Ollama sends so the page can show progress and stop, then
+        one last line, {"description": ...}. A picture already described is
+        answered from descriptions/ without touching Ollama at all.
+        """
+        try:
+            payload = self._body(MAX_BODY)
+            model = payload.get("model")
+            if not isinstance(model, str) or not model.strip():
+                raise ValueError("model is required")
+            model = model.strip()
+            name = payload.get("name") if isinstance(payload.get("name"), str) else "picture"
+            image = payload.get("image")
+            key = descriptions.image_key(image)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        saved = descriptions.load(key)
+        if saved:
+            self._stream_start()
+            self._stream_line({"description": saved["text"], "cached": True, "model": saved.get("model", "")})
+            return
+        try:
+            router.begin(model)
+            response = open_chat(
+                model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE)
+        except OllamaError as error:
+            self._send_json({"error": str(error)}, status=502)
+            return
+        router.commit(model)
+        self._stream_start()
+        text = ""
+        try:
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if event.get("error"):
+                    self._stream_line({"error": str(event["error"])})
+                    return
+                text += (event.get("message") or {}).get("content", "")
+                # Only progress goes to the page; the answer is sent once, at the end.
+                self._stream_line({"progress": len(text), "text": (event.get("message") or {}).get("content", "")})
+                if event.get("done"):
+                    break
+            text = text.strip()
+            if not text:
+                self._stream_line({"error": "The model sent no description of the picture."})
+                return
+            descriptions.save(key, text, model, name)
+            self._stream_line({"description": text[:descriptions.MAX_TEXT], "cached": False, "model": model})
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except OSError as error:
+            self._stream_line({"error": f"The description could not be saved: {error.strerror or error}"})
+        finally:
+            response.close()
+
+    def _stream_start(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+    def _stream_line(self, payload: dict) -> None:
+        self.wfile.write(json.dumps(payload).encode() + b"\n")
+        self.wfile.flush()
 
     def _same_origin(self) -> bool:
         # A page from another address must not be able to read or change files.
