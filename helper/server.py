@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 import os
 import signal
+import threading
+from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import budget, context, descriptions, imagegen, notes, sdserver, store, thinking, workspace
-from helper.ollama import (KEEP_ALIVE, OllamaError, complete, embed, open_chat, open_generate, running, show,
-                           sizes, tags, unload)
-from helper.router import ModelRouter, Work, chat_models
+from helper import budget, context, descriptions, imagegen, keepalive, notes, sdserver, store, thinking, workspace
+from helper.ollama import (KEEP_ALIVE, KEEPER, OllamaError, complete, embed, open_chat, open_generate, running,
+                           show, sizes, tags, unload)
+from helper.router import ModelRouter, Work, chat_models, is_nomic
 from helper.version import code_stamp
 
 HOST = os.environ.get("LIGHTUSAGI_HOST", "127.0.0.1")
@@ -53,11 +55,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin() or self._workspace("GET"):
             return
         if self.path == "/api/state":
-            large = router.large
-            # sd-server stops on its own (Stop, keepalive), so ask it rather than the router.
-            if large and large.startswith(imagegen.SD_PREFIX) and not managed.running():
-                large = None
-            self._send_json({"large_model": large, "code": STARTED_WITH})
+            self._send_json({**self._loaded(), "code": STARTED_WITH})
             return
         if self.path == "/api/pictures":
             self._send_json(self._picture_setup())
@@ -262,10 +260,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": busy, "busy": True}, status=409)
             return
         try:
-            if self.path == "/api/describe":
-                self._describe()
-            else:
-                self._chat()
+            # The keepalive check leaves a model alone while a request here is using it.
+            with ExitStack() as self._models:
+                if self.path == "/api/describe":
+                    self._describe()
+                else:
+                    self._chat()
         finally:
             work.end_chat()
 
@@ -291,6 +291,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._refuse_picture_model(model):
             return
+        self._models.enter_context(KEEPER.using(model, keep_alive))
         settings = context.load_settings()
         try:
             room = self._room(model, settings)
@@ -426,6 +427,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._refuse_picture_model(model):
             return
+        self._models.enter_context(KEEPER.using(model))
         saved = descriptions.load(key)
         if saved:
             self._stream_start()
@@ -541,7 +543,8 @@ class Handler(BaseHTTPRequestHandler):
             if spec is not None or model.startswith(imagegen.REMOTE_PREFIX):
                 self._picture_from_server(request, spec, program, pictures["address"])
             else:
-                self._picture_from_ollama(request)
+                with KEEPER.using(model):
+                    self._picture_from_ollama(request)
         finally:
             work.end_picture()
 
@@ -617,6 +620,24 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"error": f"The picture could not be saved: {error.strerror or error}"})
         finally:
             response.close()
+
+    def _loaded(self) -> dict:
+        """What is really in memory, asked of Ollama and sd-server rather than remembered,
+        since models leave on their own when the keepalive runs out."""
+        large = router.large or ""
+        if large.startswith(imagegen.SD_PREFIX):
+            running_sd = managed.running()
+            return {"large_model": large if running_sd else None,
+                    "unloads_at": managed.stops_at if running_sd else None}
+        try:
+            loaded = [item for item in running() if item["name"] and not is_nomic(item["name"])]
+        except OllamaError:
+            return {"large_model": None, "unloads_at": None}
+        if not loaded:
+            return {"large_model": None, "unloads_at": None}
+        ours = keepalive.key(large) if large else None
+        pick = next((item for item in loaded if keepalive.key(item["name"]) == ours), loaded[0])
+        return {"large_model": pick["name"], "unloads_at": pick["expires"], "also_loaded": len(loaded) - 1}
 
     def _picture_setup(self) -> dict:
         """What Settings shows under Pictures: what was found and what is wrong."""
@@ -826,6 +847,8 @@ def main() -> None:
     # A helper that is told to stop must not leave sd-server holding its model in memory.
     signal.signal(signal.SIGTERM, _stop_on_signal)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
+    stopping = threading.Event()
+    KEEPER.watch(running, unload, stopping, on_unload=router.forget)
     indexer.everything()
     print(f"LightUsagi at http://{HOST}:{PORT}", flush=True)
     print(f"Ollama at {os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')}", flush=True)
@@ -834,5 +857,6 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nstopping", flush=True)
     finally:
+        stopping.set()
         managed.stop()
         server.server_close()

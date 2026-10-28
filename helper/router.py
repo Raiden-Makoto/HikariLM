@@ -10,6 +10,8 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 
+from helper import keepalive
+
 NOMIC = "nomic-embed-text"
 
 
@@ -71,6 +73,12 @@ class ModelRouter:
             previous = self.large
             if previous is not None and previous != model:
                 self._unload(previous)
+                self.large = None
+
+    def forget(self, model: str) -> None:
+        """The model has left memory on its own (keepalive), so there is nothing to unload."""
+        with self._lock:
+            if self.large is not None and keepalive.key(self.large) == keepalive.key(model):
                 self.large = None
 
     def commit(self, model: str) -> None:

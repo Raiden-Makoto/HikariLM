@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from helper import store
+from helper import keepalive, store
 
 PROGRAM = "sd-server"
 LOAD_TIMEOUT = 900          # seconds a model may take to load before giving up
@@ -88,15 +88,9 @@ def model_size(args: list[str]) -> int:
 
 
 def keepalive_seconds(value: str) -> float:
-    value = (value or "5m").strip().lower()
-    try:
-        if value.endswith("ms"):
-            return float(value[:-2]) / 1000
-        if value[-1:] in ("s", "m", "h"):
-            return float(value[:-1]) * {"s": 1, "m": 60, "h": 3600}[value[-1]]
-        return float(value)
-    except ValueError:
-        return 300.0
+    # sd-server holds its model in memory, so "never unload" is not honoured here.
+    found = keepalive.seconds(value)
+    return 300.0 if found == float("inf") else found
 
 
 # --- the /sdapi/v1 calls ---------------------------------------------------------------
@@ -197,6 +191,7 @@ class Managed:
         self.model: str | None = None
         self.base = ""
         self.keep_alive = keepalive_seconds(keep_alive)
+        self.stops_at: float | None = None
 
     def log_path(self) -> Path:
         return store.home() / "sd-server.log"
@@ -244,6 +239,7 @@ class Managed:
                 self._timer = threading.Timer(self.keep_alive, self.stop)
                 self._timer.daemon = True
                 self._timer.start()
+                self.stops_at = time.time() + self.keep_alive
 
     def stop(self) -> None:
         with self._lock:
@@ -261,6 +257,7 @@ class Managed:
             process.wait(10)
 
     def _cancel_timer(self) -> None:
+        self.stops_at = None
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None

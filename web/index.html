@@ -1860,13 +1860,28 @@
       const body = await response.json();
       let text = body.large_model
         ? "Kept loaded: " + (isPictureModel(body.large_model) ? pictureLabel(body.large_model) + " (pictures)" : body.large_model)
-        : "No large model loaded yet.";
+        : "No large model loaded.";
+      if (body.large_model && body.unloads_at && !activeRequest) {
+        const left = body.unloads_at - Date.now() / 1000;
+        if (left > 86400) text += " (pinned by another program)";
+        else if (left > 90) text += " · unloads in " + Math.round(left / 60) + " min";
+        else text += " · unloads in under a minute";
+      }
+      if (body.also_loaded) text += " · " + body.also_loaded + " more model" + (body.also_loaded > 1 ? "s" : "") + " in memory";
       if (lastContext && lastContext.used) {
         text += " · Context used: " + lastContext.used.toLocaleString() + " of " + lastContext.num_ctx.toLocaleString() +
           " tokens (compacts past " + lastContext.threshold.toLocaleString() + ")";
       }
       status.textContent = text;
     }
+
+    // Models leave memory on their own, so the header asks again now and then.
+    setInterval(() => {
+      if (document.visibilityState === "visible" && !activeRequest) refreshState().catch(() => {});
+    }, 30000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !activeRequest) refreshState().catch(() => {});
+    });
 
     async function loadModels() {
       let models = [];
