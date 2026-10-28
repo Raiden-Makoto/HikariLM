@@ -470,6 +470,9 @@
     .work { flex: 1; min-height: 0; display: flex; }
     #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     #pane-resize { display: none; }
+    #pane-head { display: none; }
+    body.view-files #pane-head { display: flex; justify-content: flex-end; padding: 0.4rem 0.75rem 0; }
+    #pane-head .choice { padding: 0.3rem 0.8rem; }
     body.view-files #pane-resize {
       display: block;
       position: absolute;
@@ -774,6 +777,7 @@
 
     <div id="chat-pane">
     <div id="pane-resize" role="separator" aria-orientation="vertical" aria-label="Resize the chat" tabindex="0" title="Drag to resize. Double-click to reset."></div>
+    <div id="pane-head"><button class="choice" id="new-editor-chat" type="button">New chat</button></div>
     <main id="log"></main>
 
     <form class="composer" id="composer">
@@ -1921,7 +1925,7 @@
       try {
         const response = await fetch("/api/chats");
         const body = await response.json();
-        chats = body.chats || [];
+        chats = (body.chats || []).filter((chat) => !isEditorId(chat.id));
       } catch (error) {
         chats = [];
       }
@@ -1947,7 +1951,7 @@
         status.textContent = "This chat could not be saved: " + error.message;
         return;
       }
-      localStorage.setItem(LAST_CHAT, chatId);
+      localStorage.setItem(lastChatKey(), chatId);
       await refreshChats();
     }
 
@@ -1963,8 +1967,12 @@
     const LAST_CHAT = "lightusagi-chat";
     let draftTimer = null;
     let draftQueue = Promise.resolve();
-    // The code editor keeps its own unsent text, apart from the Chat page's.
-    const draftKey = () => (document.body.classList.contains("view-files") ? "editor-" : "") + (chatId || DRAFT_NEW);
+    // The code editor has its own conversations, apart from the Chat page's.
+    // Their ids start with "editor-", so they and their drafts never mix with
+    // the Chat page's, and the chat list leaves them out.
+    const isEditorId = (id) => typeof id === "string" && id.startsWith("editor-");
+    const lastChatKey = () => (inCodeView() ? "lightusagi-chat-editor" : LAST_CHAT);
+    const draftKey = () => chatId || (inCodeView() ? "editor-new" : DRAFT_NEW);
 
     function saveDraft(key = draftKey(), withFiles = false, keepalive = false) {
       clearTimeout(draftTimer);
@@ -2033,13 +2041,13 @@
       flushDraft();
       chatId = null;
       messages = [];
-      localStorage.removeItem(LAST_CHAT);
+      localStorage.removeItem(lastChatKey());
       clearComposer();
       renderLog();
       renderChats();
       closeSidebarIfNarrow();
       messageBox.focus();
-      loadDraft(DRAFT_NEW);
+      loadDraft(draftKey());
     }
 
     async function openChat(id) {
@@ -2060,7 +2068,7 @@
       flushDraft();
       chatId = id;
       messages = chat.messages || [];
-      localStorage.setItem(LAST_CHAT, id);
+      localStorage.setItem(lastChatKey(), id);
       clearComposer();
       loadDraft(id);
       if ([...modelSelect.options].some((option) => option.value === chat.model)) {
@@ -2082,10 +2090,10 @@
       if (id === chatId) {
         chatId = null;
         messages = [];
-        localStorage.removeItem(LAST_CHAT);
+        localStorage.removeItem(lastChatKey());
         clearComposer();
         renderLog();
-        loadDraft(DRAFT_NEW);
+        loadDraft(draftKey());
       }
       refreshChats();
     }
@@ -2114,7 +2122,7 @@
       }
       const draftOwner = draftKey();
       askNotifyPermission();
-      if (!chatId) chatId = crypto.randomUUID();
+      if (!chatId) chatId = (inCodeView() ? "editor-" : "") + crypto.randomUUID();
       const thisChat = chatId;
       let outcome = "";
       let failure = "";
@@ -2283,6 +2291,7 @@
       if (!activeRequest && !modelSelect.value) loadModels();
     });
     document.querySelector("#new-chat").addEventListener("click", newChat);
+    document.querySelector("#new-editor-chat").addEventListener("click", newChat);
 
     function setSidebar(open) {
       document.body.classList.toggle("sidebar-closed", !open);
@@ -2335,6 +2344,7 @@
         note.onclick = () => {
           window.focus();
           note.close();
+          if (id && isEditorId(id) !== inCodeView() && !setSection(isEditorId(id) ? "files" : "chat")) return;
           if (id && id !== chatId) openChat(id);
         };
         setTimeout(() => note.close(), 10000);
@@ -2781,6 +2791,7 @@
     }
 
     let shownSection = null;
+    const parked = {};
 
     function setSection(name, how = "push") {
       const files = name === "files";
@@ -2788,15 +2799,29 @@
       if (how !== "url" && location.pathname !== SECTION_PATHS[name]) {
         history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS[name]);
       }
-      // Unsent text stays with the section it was typed in: keep this one's
-      // draft, then show the other section's.
+      // Chat and Code editor each have their own conversation and unsent
+      // text. Keep this one's, then show the other's.
       const swap = shownSection !== null && shownSection !== name;
-      if (swap) saveDraft(draftKey(), true);
+      if (swap && activeRequest) {
+        notify("Wait for the reply to finish, or stop it, before switching.");
+        return false;
+      }
+      if (swap) {
+        saveDraft(draftKey(), true);
+        parked[shownSection] = { chatId, messages };
+      }
       document.body.classList.toggle("view-files", files);
       shownSection = name;
       if (swap) {
+        const back = parked[name] || { chatId: null, messages: [] };
+        chatId = back.chatId;
+        messages = back.messages;
         clearComposer();
-        loadDraft(draftKey());
+        renderLog();
+        renderChats();
+        if (chatId) loadDraft(draftKey());
+        else if (!parked[name] && localStorage.getItem(lastChatKey())) openChat(localStorage.getItem(lastChatKey()));
+        else loadDraft(draftKey());
       }
       const emptyHint = document.querySelector("#empty .hint");
       if (emptyHint) emptyHint.textContent = welcomeHint();
@@ -3286,9 +3311,9 @@
     (async () => {
       await loadModels();
       await refreshChats();
-      const last = localStorage.getItem(LAST_CHAT);
+      const last = localStorage.getItem(lastChatKey());
       if (last) await openChat(last);
-      if (!chatId) localStorage.removeItem(LAST_CHAT);
+      if (!chatId) localStorage.removeItem(lastChatKey());
       await loadDraft(draftKey());
     })();
   </script>
