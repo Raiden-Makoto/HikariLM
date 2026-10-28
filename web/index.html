@@ -520,7 +520,7 @@
     #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     #pane-resize { display: none; }
     #pane-head { display: none; }
-    .used-notes { margin-top: 0.4rem; font-size: 0.8rem; color: var(--muted, inherit); opacity: 0.75; }
+    .used-notes { margin-top: 0.4rem; font-size: 0.8rem; color: inherit; opacity: 0.8; }
     .apply-row { display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
     body.view-files .apply-row { display: flex; }
     .apply-row .choice { padding: 0.3rem 0.8rem; }
@@ -1108,7 +1108,7 @@
     const MAX_IMAGES_TOTAL = 30_000_000;
     const MAX_OFFICE = 50_000_000;
     const MAX_PDF = 50_000_000;
-    const MAX_PDF_PAGES = 25;
+    const MAX_PDF_PAGES = 150;
     const PDF_IMAGE_PAGES = 4;
     const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
     const chips = document.querySelector("#chips");
@@ -1170,9 +1170,9 @@
       };
       // Add text to the message. Too long for one file or for the message:
       // cut at a line break and say so.
-      const addText = (name, text, cut) => {
-        if (text.length > MAX_FILE) {
-          text = text.slice(0, MAX_FILE);
+      const addText = (name, text, cut, limit = MAX_FILE) => {
+        if (text.length > limit) {
+          text = text.slice(0, limit);
           cut = true;
         }
         const room = MAX_FILES_TOTAL - total;
@@ -1218,7 +1218,7 @@
             if (pdf.pages > MAX_PDF_PAGES) {
               problems.push(file.name + " has " + pdf.pages + " pages; only the first " + MAX_PDF_PAGES + " were read");
             }
-            addText(file.name, pdf.text, false);
+            addText(file.name, pdf.text, false, MAX_FILES_TOTAL);
           } else {
             // Scanned PDF: no text inside, so Gemma reads the first pages as pictures.
             const shown = Math.min(pdf.pages, PDF_IMAGE_PAGES);
@@ -1243,7 +1243,7 @@
           try {
             const text = /\.docx$/i.test(file.name) ? await readDocx(file) : await readXlsx(file);
             if (!text.trim()) problems.push(file.name + " has no text in it");
-            else addText(file.name, text, false);
+            else addText(file.name, text, false, MAX_FILES_TOTAL);
           } catch (error) {
             problems.push(file.name + " could not be read (" + error.message + ")");
           }
@@ -1557,17 +1557,6 @@
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
       });
-    }
-
-    function withFiles(message) {
-      const textFiles = (message.files || []).filter((file) => typeof file.text === "string");
-      if (!textFiles.length) return message.content;
-      const blocks = textFiles.map((file) => {
-        let fence = "```";
-        while (file.text.includes(fence)) fence += "`";
-        return "File: " + file.name + "\n" + fence + "\n" + file.text + "\n" + fence;
-      });
-      return blocks.join("\n\n") + "\n\n" + message.content;
     }
 
     // Replies are Markdown, sometimes with LaTeX. Raw HTML from a model is shown
@@ -2700,14 +2689,19 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
+            // What the documents are searched with, without the earlier notes in front.
+            question: content,
             messages: messages.map((message, index) => {
               const out = {
                 role: message.role,
                 // A chat model cannot see a picture made earlier, only that it was made.
                 content: message.picture
                   ? "[A picture was made here from the prompt above, " + message.picture.width + " × " + message.picture.height + ".]"
-                  : (index === messages.length - 1 ? notesPrefix : "") + withFiles(message),
+                  : (index === messages.length - 1 ? notesPrefix : "") + message.content,
               };
+              // The helper fits file text into the context: whole, as notes, or the closest passages.
+              const texts = (message.files || []).filter((file) => typeof file.text === "string");
+              if (texts.length && !message.picture) out.files = texts.map((file) => ({ name: file.name, text: file.text }));
               const pictures = (message.files || []).filter((file) => file.image).map((file) => file.image);
               if (pictures.length && index === messages.length - 1) out.images = pictures;
               // The helper needs these to compact the way Open WebUI does.
@@ -2750,6 +2744,25 @@
                 if (messages[event.checkpoint]) messages[event.checkpoint].contextSummary = event.summary;
                 status.textContent = "Context compacted: " + event.dropped + " older messages summarized. Streaming from " + model + "…";
               }
+              continue;
+            }
+            if (event.lightusagi === "reading") {
+              status.textContent = event.error
+                ? "Reading the document failed, so the closest passages are sent instead: " + plainError(event.error)
+                : "Reading " + event.name + ", part " + event.part + " of " + event.parts + "…";
+              continue;
+            }
+            if (event.lightusagi === "documents") {
+              const used = document.createElement("div");
+              used.className = "used-notes";
+              used.textContent = event.mode === "notes"
+                ? "Read all of " + event.files.map((file) => file.name + " (" + file.parts + (file.parts === 1 ? " part" : " parts") + ")").join(", ") + ", then answered from notes"
+                : "Too long to send whole, so the closest passages were sent: " +
+                  event.files.map((file) => file.name + " (" + file.used + " of " + file.total + ")").join(", ") +
+                  (event.search === "words" ? ", matched by words since nomic-embed-text is not installed" : "");
+              sent.block.append(used);
+              status.textContent = "Streaming from " + model + "…";
+              scrollLog();
               continue;
             }
             if (event.lightusagi === "thinking_cut") {

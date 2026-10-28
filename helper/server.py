@@ -11,7 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import budget, context, descriptions, imagegen, keepalive, notes, sdserver, store, thinking, workspace
+from helper import (budget, context, descriptions, documents, imagegen, keepalive, notes, sdserver, store, thinking,
+                    workspace)
 from helper.ollama import (KEEP_ALIVE, KEEPER, OllamaError, complete, embed, open_chat, open_generate, running,
                            show, sizes, tags, unload)
 from helper.router import ModelRouter, Work, chat_models, is_nomic
@@ -303,9 +304,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         num_ctx = room["num_ctx"]
         think = thinking.think_value(model, show(model), settings["thinking"])
+        docs = documents.gather(messages)
+        messages = self._without_files(messages, bool(docs))
         decision = context.compaction_needed(messages, settings, num_ctx)
         system = [m for m in messages[:1] if m["role"] == "system"]
-        active = system + messages[decision["start"]:]
+        first = decision["start"]
+        active = system + messages[first:]
         summary = decision["summary"]
         self._stream_start()
         started = True
@@ -329,6 +333,7 @@ class Handler(BaseHTTPRequestHandler):
                 router.commit(model)
                 summary = written.strip() or context.fallback_summary(summary, compacted)
                 active = system + recent
+                first = cut
                 self._stream_line({"lightusagi": "compaction", "done": True, "checkpoint": cut,
                                    "summary": summary, "dropped": len(compacted), "kept": len(recent)})
             except OllamaError as error:
@@ -337,7 +342,20 @@ class Handler(BaseHTTPRequestHandler):
         if getattr(self, "_gone", False):
             return
         sent = context.with_summary(active, summary)
+        if docs:
+            # Where message i of the chat sits in `sent`, if it is still in the active window.
+            shift = len(sent) - len(active) + len(system) - first
+            fitted = self._fit_documents(model, docs, sent, lambda i: i + shift if i >= first else None,
+                                         num_ctx, think, keep_alive, settings)
+            if fitted is None:
+                return
+            sent = fitted
         options = {"num_ctx": num_ctx}
+        budget_tokens = settings["thinking"]["budget"]
+        if think is not None and think is not False:
+            # Thinking takes context too: never more than is left after the prompt and the reply.
+            left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
+            budget_tokens = max(256, min(budget_tokens or left, left))
         try:
             router.begin(model)
             response = open_chat(model, sent, keep_alive, options, think)
@@ -346,13 +364,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": str(error)})
             return
         router.commit(model)
-        budget_tokens = settings["thinking"]["budget"]
         thought = self._stream_reply(response, budget_tokens)
         if thought is None or getattr(self, "_gone", False):
             return
         # Thinking reached the limit before any answer: ask again with thinking off and
         # the reasoning so far, so the model answers now.
         self._stream_line({"lightusagi": "thinking_cut", "budget": budget_tokens})
+        # The reasoning goes back in as prompt, so keep only what leaves room for the answer.
+        keep = max(1000, (num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)) * 4)
+        if len(thought) > keep:
+            thought = thought[:keep // 2] + "\n[…]\n" + thought[-(keep // 2):]
         try:
             response = open_chat(model, thinking.answer_now(sent, thought), keep_alive, options,
                                  None if think is None else thinking.off(model))
@@ -398,6 +419,71 @@ class Handler(BaseHTTPRequestHandler):
                     return thought
         finally:
             response.close()
+
+    @staticmethod
+    def _without_files(messages: list[dict], has_docs: bool) -> list[dict]:
+        """The chat with its file text taken out, so compaction weighs only the conversation.
+        A message keeps a line naming its files. Reported usage counted the file text, so
+        it is dropped and the conversation is estimated instead."""
+        out = []
+        for message in messages:
+            entry = {key: value for key, value in message.items() if key != "files"}
+            names = [file["name"] for file in message.get("files") or []]
+            if names:
+                entry["content"] = documents.mention(names) + "\n\n" + message["content"]
+            if has_docs:
+                entry.pop("usage", None)
+            out.append(entry)
+        return out
+
+    def _fit_documents(self, model: str, docs: list[dict], sent: list[dict], at, num_ctx: int, think,
+                       keep_alive: str, settings: dict) -> list[dict] | None:
+        """Put the chat's documents into `sent`: whole if they fit, else notes from reading all
+        of them (for a request about the whole thing) or the passages closest to the question.
+        None if the page went away while reading."""
+        think_on = think is not None and think is not False
+        room = (num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
+                - (documents.thinking_room(num_ctx, settings["thinking"]["budget"]) if think_on else 0) - 64)
+        room = max(room, 300)
+        sent = list(sent)
+        last = len(sent) - 1
+        if sum(documents.tokens(documents.block(doc["name"], doc["text"])) for doc in docs) <= room:
+            # Each file stays in the message it came with, so Ollama can reuse what it already read.
+            placed: dict[int, list[str]] = {}
+            for doc in docs:
+                target = at(doc["message"])
+                placed.setdefault(last if target is None else target, []).append(documents.block(doc["name"], doc["text"]))
+            for target, blocks in placed.items():
+                sent[target] = {**sent[target], "content": "\n\n".join(blocks) + "\n\n" + sent[target]["content"]}
+            return sent
+        text, info = None, None
+        if documents.wants_whole(self._question):
+            off = None if think is None else thinking.off(model)
+
+            def ask(prompt: str, limit: int) -> str:
+                router.begin(model)
+                written = complete(model, [{"role": "user", "content": prompt}],
+                                   {"num_ctx": num_ctx, "num_predict": limit}, keep_alive, think=off)
+                router.commit(model)
+                return written
+
+            def progress(name: str, part: int, parts: int) -> bool:
+                return self._stream_line({"lightusagi": "reading", "name": name, "part": part, "parts": parts})
+
+            try:
+                got = documents.notes(docs, model, num_ctx, room, ask, progress)
+            except OllamaError as error:
+                self._stream_line({"lightusagi": "reading", "error": str(error)})
+                got = ()
+            if got is None or getattr(self, "_gone", False):
+                return None
+            if got:
+                text, info = got
+        if text is None:
+            text, info = documents.excerpts(self._question, docs, room, embed)
+        self._stream_line({"lightusagi": "documents", **info})
+        sent[last] = {**sent[last], "content": text + "\n\n" + sent[last]["content"]}
+        return sent
 
     def _room(self, model: str, settings: dict) -> dict:
         """How much context this model gets right now. Raises budget.NoRoom if it does not fit at all."""
@@ -771,6 +857,14 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("images must be a list of base64 strings")
                 if images:
                     entry["images"] = images
+            files = message.get("files")
+            if files is not None:
+                if not isinstance(files, list) or not all(
+                        isinstance(f, dict) and isinstance(f.get("name"), str) and isinstance(f.get("text"), str)
+                        for f in files):
+                    raise ValueError("files must be a list of names and texts")
+                if files:
+                    entry["files"] = [{"name": f["name"][:200], "text": f["text"]} for f in files]
             summary = store.clean_summary(message.get("contextSummary"))
             if summary:
                 entry["contextSummary"] = summary
@@ -781,6 +875,8 @@ class Handler(BaseHTTPRequestHandler):
         keep_alive = payload.get("keep_alive", KEEP_ALIVE)
         if not isinstance(keep_alive, str) or not keep_alive.strip():
             raise ValueError("keep_alive must be a duration such as 5m")
+        question = payload.get("question")
+        self._question = question if isinstance(question, str) else cleaned[-1]["content"]
         return model.strip(), cleaned, keep_alive.strip()
 
     def _stream(self, response, started: bool = False) -> None:
