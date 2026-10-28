@@ -18,4 +18,6 @@ If LM Studio's server (llmster) is already running, its models show up in the pi
 
 Your chats and drafts are saved in `~/.lightusagi` (set `LIGHTUSAGI_HOME` to move it).
 
+The tests are in `tests/`. Run them from this folder with `python3 -m unittest`.
+
 How the pieces fit, and the order we will build them, is in [PLAN.md](PLAN.md).

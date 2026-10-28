@@ -1,7 +1,7 @@
 """A stand-in for stable-diffusion.cpp's sd-server, for tests. It answers the same
 /sdapi/v1 calls and draws a one-pixel picture slowly enough to report progress.
 
-    python -m helper.fake_sdserver --model NAME --steps-delay 0.05 --listen-ip 127.0.0.1 --listen-port 8000
+    python -m tests.fake_sdserver --model NAME --steps-delay 0.05 --listen-ip 127.0.0.1 --listen-port 8000
 """
 
 from __future__ import annotations

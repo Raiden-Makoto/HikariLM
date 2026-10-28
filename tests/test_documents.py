@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from helper import documents
-from helper.test_notes import fake_embed
+from tests.test_notes import fake_embed
 
 
 def paper(pages=6, per_page=4):
