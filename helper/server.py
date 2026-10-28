@@ -23,7 +23,7 @@ DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
 # One page, three addresses: the page shows the section the address names.
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
-VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs")
+VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js")
 
 router = ModelRouter(unload)
 STARTED_WITH = code_stamp()

@@ -20,6 +20,16 @@
       --field: #141414;
       --hover: #1f1f1f;
       --danger: #ff6b6b;
+      --syn-keyword: #c586c0;
+      --syn-comment: #6a9955;
+      --syn-string: #ce9178;
+      --syn-number: #b5cea8;
+      --syn-function: #dcdcaa;
+      --syn-type: #4ec9b0;
+      --syn-definition: #9cdcfe;
+      --syn-property: #9cdcfe;
+      --syn-punctuation: #a0a0a0;
+      --syn-meta: #569cd6;
       --send: #fff;
       --send-ink: #111;
     }
@@ -34,6 +44,16 @@
       --field: #fff;
       --hover: #ececec;
       --danger: #c62828;
+      --syn-keyword: #af00db;
+      --syn-comment: #008000;
+      --syn-string: #a31515;
+      --syn-number: #098658;
+      --syn-function: #795e26;
+      --syn-type: #267f99;
+      --syn-definition: #001080;
+      --syn-property: #001080;
+      --syn-punctuation: #555555;
+      --syn-meta: #0000ff;
       --send: #111;
       --send-ink: #fff;
     }
@@ -564,24 +584,16 @@
     .editor { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .editor-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     #file-title { flex: 1; min-width: 8rem; font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }
-    #file-text {
-      flex: 1;
-      min-height: 8rem;
-      max-height: none;
-      padding: 0.75rem 0.9rem;
-      resize: none;
+    /* The editor (CodeMirror) fills this box. Its own look is set in the bundle,
+       from the page's colour variables. */
+    #file-text { position: relative; flex: 1; min-height: 8rem; min-width: 0; }
+    #file-text .cm-editor { position: absolute; inset: 0; }
+    #file-text:empty {
       border: 1px solid var(--line);
       border-radius: 12px;
       background: var(--panel);
-      color: var(--ink);
-      font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
-      font-size: 0.86rem;
-      line-height: 1.5;
-      tab-size: 4;
-      white-space: pre;
-      overflow: auto;
+      opacity: 0.6;
     }
-    #file-text:disabled { opacity: 0.6; }
     #conflict { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     #conflict[hidden] { display: none; }
     #conflict .choice { flex: none; padding: 0.3rem 0.8rem; }
@@ -752,7 +764,7 @@
             <button class="choice" id="conflict-keep" type="button">Keep editing</button>
           </div>
           <p class="note" id="file-note" role="status"></p>
-          <textarea id="file-text" spellcheck="false" wrap="off" aria-label="File text" disabled></textarea>
+          <div id="file-text" role="group" aria-label="File text"></div>
         </div>
       </div>
     </section>
@@ -2395,7 +2407,32 @@
     const fileList = document.querySelector("#file-list");
     const fileTitle = document.querySelector("#file-title");
     const fileNote = document.querySelector("#file-note");
-    const fileText = document.querySelector("#file-text");
+    const fileHost = document.querySelector("#file-text");
+    // The editor is CodeMirror, one file loaded the first time the code editor
+    // is opened. Until it arrives there is simply an empty box.
+    let editor = null;
+    let editorLoading = null;
+    function loadEditor() {
+      if (editor) return Promise.resolve(editor);
+      if (!editorLoading) {
+        editorLoading = import("/vendor/codemirror.js").then((module) => {
+          editor = module.createEditor(fileHost, {
+            onChange: () => {
+              fileNote.textContent = "";
+              refreshFileButtons();
+            },
+            onSelection: () => refreshFileButtons(),
+            onSave: () => saveOpenFile(),
+          });
+          return editor;
+        }, (error) => {
+          editorLoading = null;
+          throw new Error("The code editor did not load (" + (error.message || error) + ").");
+        });
+      }
+      return editorLoading;
+    }
+    const editorText = () => (editor ? editor.getValue() : "");
     const askFile = document.querySelector("#ask-file");
     const askSelection = document.querySelector("#ask-selection");
     const saveFile = document.querySelector("#save-file");
@@ -2412,7 +2449,7 @@
     let saving = false;
     let filesStarted = false;
 
-    const hasEdits = () => Boolean(openPath) && fileText.value !== savedText;
+    const hasEdits = () => Boolean(openPath) && editorText() !== savedText;
 
     async function filesApi(url, options) {
       const response = await fetch(url, options);
@@ -2638,7 +2675,8 @@
       fileTitle.textContent = open ? openPath + (hasEdits() ? " ●" : "") : "No file open";
       saveFile.disabled = !open || saving || !hasEdits();
       askFile.disabled = !open || Boolean(activeRequest);
-      askSelection.disabled = !open || Boolean(activeRequest) || fileText.selectionStart === fileText.selectionEnd;
+      const picked = editor ? editor.getSelection() : { from: 0, to: 0 };
+      askSelection.disabled = !open || Boolean(activeRequest) || picked.from === picked.to;
     }
 
     // Open the folder used last time. A folder from this computer needs the
@@ -2701,6 +2739,7 @@
       document.querySelector("#tab-files").setAttribute("aria-selected", String(files));
       if (files) {
         closeMenu();
+        loadEditor().catch((error) => { fileNote.textContent = error.message; });
         if (!filesStarted) {
           filesStarted = true;
           reopenLast();
@@ -2725,8 +2764,7 @@
       openPath = "";
       openVersion = "";
       savedText = "";
-      fileText.value = "";
-      fileText.disabled = true;
+      if (editor) editor.close();
       conflictBox.hidden = true;
       fileNote.textContent = "";
       refreshFileButtons();
@@ -2926,14 +2964,12 @@
       fileNote.textContent = "Opening…";
       conflictBox.hidden = true;
       try {
-        const body = await source.read(path);
+        const [body, ed] = await Promise.all([source.read(path), loadEditor()]);
         if (token !== openToken) return;
         openPath = body.path;
         openVersion = body.version;
         savedText = body.text;
-        fileText.value = body.text;
-        fileText.disabled = false;
-        fileText.scrollTop = 0;
+        ed.open(body.text, openPath);
         fileNote.textContent = "";
         localStorage.setItem(FILE_KEY, JSON.stringify({
           kind: source.kind,
@@ -2955,7 +2991,7 @@
       if (!hasEdits() || saving) return;
       saving = true;
       refreshFileButtons();
-      const sent = fileText.value;
+      const sent = editorText();
       const path = openPath;
       try {
         const body = await source.write(path, sent, openVersion);
@@ -2994,9 +3030,8 @@
       let name = folderName + "/" + body.path;
       if (selectionOnly) {
         // Not dirty, so the highlight's offsets are offsets into the disk text.
-        const start = fileText.selectionStart;
-        const end = fileText.selectionEnd;
-        if (start === end || body.text !== fileText.value) {
+        const { from: start, to: end } = editor ? editor.getSelection() : { from: 0, to: 0 };
+        if (start === end || body.text !== editorText()) {
           fileNote.textContent = "Highlight some text first.";
           return;
         }
@@ -3109,17 +3144,6 @@
     });
     const savedPane = Number(localStorage.getItem(PANE_KEY));
     if (savedPane > 0) setPane(savedPane, false);
-    fileText.addEventListener("input", () => {
-      fileNote.textContent = "";
-      refreshFileButtons();
-    });
-    for (const type of ["select", "keyup", "mouseup", "focus"]) fileText.addEventListener(type, refreshFileButtons);
-    fileText.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        saveOpenFile();
-      }
-    });
     saveFile.addEventListener("click", saveOpenFile);
     askFile.addEventListener("click", () => askAbout(false));
     askSelection.addEventListener("click", () => askAbout(true));

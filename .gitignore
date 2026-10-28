@@ -1,2 +1,3 @@
 __pycache__/
 *.py[cod]
+tools/editor/node_modules/
