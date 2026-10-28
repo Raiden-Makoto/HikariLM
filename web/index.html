@@ -1005,23 +1005,24 @@
       </div>
       <div class="setting" id="picture-setting">
         <span class="setting-label">Making pictures</span>
-        <p class="note">Pictures come from stable-diffusion.cpp's sd-server, which runs on Windows, macOS and Linux. LightUsagi starts it only to make a picture, after the chat model leaves memory, and stops it before the next chat. Its models then show under "Make pictures" in the model list.</p>
+        <p class="note">Ollama no longer draws pictures, so LightUsagi uses sd-server: a free program from the stable-diffusion.cpp project that draws them, on Windows, macOS and Linux. You download it once. LightUsagi starts it only while a picture is being drawn, and stops it before the next chat so it never holds memory next to a chat model.</p>
         <details id="picture-howto">
           <summary>Set up FLUX.2 klein, step by step (about 5 GB to download, no account needed)</summary>
           <ol class="note steps">
             <li>Download sd-server from <a href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer">stable-diffusion.cpp's releases</a>. For this computer: <span id="howto-system"></span>.</li>
-            <li>Unzip it into <code id="howto-program-dir"></code>, keeping its files together. LightUsagi finds it there, so "sd-server program" below can stay blank.</li>
+            <li>Unzip it, and put everything that comes out of the zip into this folder (make the folder if it is not there): <code id="howto-program-dir"></code>. LightUsagi looks there by itself, so leave "Where sd-server is" below empty.</li>
             <li>Download these three files into <code id="howto-folder"></code>:
               <ul id="howto-files"></ul>
+              The folder starting with a dot is hidden. On a Mac, in Finder press Cmd+Shift+G and paste the folder to open it; on Windows, paste it into File Explorer's address bar.
             </li>
             <li><button class="choice" type="button" id="howto-fill">Add FLUX.2 klein to the list</button> Then pick <strong>flux2-klein</strong> under "Make pictures" in the model list and describe a picture.</li>
           </ol>
         </details>
         <label class="field-row">
-          <span>sd-server program</span>
-          <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="sd-server on the PATH">
+          <span>Where sd-server is</span>
+          <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="Leave empty if you followed the steps above">
         </label>
-        <textarea id="pic-models" spellcheck="false" aria-label="Picture models" placeholder="One model per line: a name, a colon, then sd-server's options. For example:&#10;sd15: -m ~/models/v1-5-pruned-emaonly.safetensors&#10;flux2-klein: --diffusion-model ~/models/flux-2-klein-4b-Q4_0.gguf --vae ~/models/flux2_ae.safetensors --llm ~/models/Qwen3-4B-Q4_K_M.gguf --cfg-scale 1.0 --steps 4"></textarea>
+        <textarea id="pic-models" spellcheck="false" aria-label="Picture models" placeholder="The button in step 4 fills this in. (For other models: one per line, a name, a colon, then sd-server's own options, e.g. sd15: -m ~/models/v1-5-pruned-emaonly.safetensors)"></textarea>
         <details>
           <summary>A picture server you run yourself</summary>
           <label class="field-row">
@@ -3292,8 +3293,9 @@
       if (body.models.length) {
         parts.push(body.program
           ? "sd-server: " + body.program + ". Models: " + body.models.join(", ") + "."
-          : "sd-server was not found" + (serverSettings.pictures.program ? " at that path" : " on the PATH or in " + body.program_dir) +
-            ". See the steps above.");
+          : (serverSettings.pictures.program
+            ? "sd-server is not at the place written in \"Where sd-server is\". Empty that box and use the steps above."
+            : "sd-server is not in " + body.program_dir + " yet. Do steps 1 and 2 above."));
       } else if (!body.server) {
         parts.push("No picture model is set up yet.");
       }

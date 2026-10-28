@@ -622,7 +622,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(f"{model[len(imagegen.SD_PREFIX):]} is not in the picture models in Settings.")
                 program = sdserver.find_program(pictures["program"])
                 if not program:
-                    raise ValueError("sd-server was not found. Set where it is in Settings, under Pictures.")
+                    raise ValueError("sd-server, the program that draws the pictures, is not set up yet. "
+                                     "Open Settings and follow the steps under Making pictures.")
                 if not sdserver.model_files(spec["args"]):
                     raise ValueError(f"None of the model files for {spec['name']} were found. Check its line in Settings.")
                 budget.check_picture(spec["name"], sdserver.model_size(spec["args"]), loaded, budget.memory())
@@ -766,7 +767,8 @@ class Handler(BaseHTTPRequestHandler):
         pictures = context.load_settings()["pictures"]
         models, problems = sdserver.parse_models(pictures["models"])
         program = sdserver.find_program(pictures["program"])
-        missing = [f"{model['name']}: no model file found" for model in models if not sdserver.model_files(model["args"])]
+        missing = [f"{model['name']}: its files are not downloaded yet (step 3)." for model in models
+                   if not sdserver.model_files(model["args"])]
         server = None
         if pictures["address"]:
             try:

@@ -214,7 +214,7 @@ def picture_models(settings: dict, ollama_images: list[str]) -> tuple[list[dict]
             found += [{"id": SD_PREFIX + model["name"], "label": model["name"], "kind": "sd"} for model in models]
         else:
             notes.append(f"sd-server was not found{' at ' + pictures['program'] if pictures['program'] else ''}, "
-                         "so its models are hidden.")
+                         "so its models are hidden. Settings, under Making pictures, has the steps.")
     if pictures["address"]:
         try:
             name = sdserver.current_model(pictures["address"])
