@@ -63,47 +63,82 @@ def answer_now(messages: list[dict], thought: str) -> list[dict]:
 
 
 def without_thinking(text: str) -> str:
-    """An answer with any leading <think>...</think> taken out. A reply that never got
-    past its thinking (it ran out of tokens first) has no answer at all."""
+    """An answer with its <think>...</think> parts taken out, and everything before a
+    stray </think>. A reply that never got past its thinking (it ran out of tokens
+    first) has no answer at all."""
     split = InlineThink()
     _, answer = split.feed(text)
     _, rest = split.flush()
     return (answer + rest).strip()
 
 
+def _half_tag(text: str) -> int:
+    """How many characters at the end of text could be the start of a </think>."""
+    return next((n for n in range(min(len(CLOSE) - 1, len(text)), 0, -1) if CLOSE.startswith(text[-n:])), 0)
+
+
 class InlineThink:
-    """Splits a leading <think>...</think> out of streamed answer text. Tags may arrive
-    cut across pieces, so a possible half tag is held back until the next piece."""
+    """Splits <think>...</think> out of streamed answer text. Tags may arrive cut across
+    pieces, so a possible half tag is held back until the next piece.
+
+    Some templates open the <think> themselves, so the model's text starts inside its
+    reasoning and only a </think> shows where it ends; a model can also close its
+    reasoning twice. So a </think> in the answer means the answer so far was reasoning
+    (a <think> later in an answer is left as text):
+    feed then puts this piece's part in the thinking, and take_back() returns what
+    was already handed out as answer."""
 
     def __init__(self) -> None:
         self.state = "start"
         self.buffer = ""
+        self.shown = ""          # answer handed out since the last </think>
+        self.taken_back = ""
+        self.closed = False      # a </think> went by, so the answer's leading blank lines go
 
     def feed(self, text: str) -> tuple[str, str]:
         """Returns (thinking, answer) for this piece."""
-        if self.state == "answer":
-            return "", text
         self.buffer += text
-        if self.state == "start":
-            lead = self.buffer.lstrip()
-            if not lead or (OPEN.startswith(lead) and lead != OPEN):
-                return "", ""
-            if not lead.startswith(OPEN):
-                self.state = "answer"
-                out, self.buffer = self.buffer, ""
-                return "", out
-            self.state = "thinking"
-            self.buffer = lead[len(OPEN):]
-        end = self.buffer.find(CLOSE)
-        if end >= 0:
-            thought, rest = self.buffer[:end], self.buffer[end + len(CLOSE):].lstrip("\n")
-            self.state, self.buffer = "answer", ""
-            return thought, rest
-        keep = next((n for n in range(min(len(CLOSE) - 1, len(self.buffer)), 0, -1)
-                     if CLOSE.startswith(self.buffer[-n:])), 0)
-        thought = self.buffer[:len(self.buffer) - keep]
-        self.buffer = self.buffer[len(self.buffer) - keep:]
-        return thought, ""
+        thought, answer = "", ""
+        while True:
+            if self.state == "start":
+                lead = self.buffer.lstrip()
+                if not lead or (OPEN.startswith(lead) and lead != OPEN):
+                    break
+                if lead.startswith(OPEN):
+                    self.state, self.buffer = "thinking", lead[len(OPEN):]
+                else:
+                    self.state = "answer"
+                    if self.closed:
+                        self.buffer = lead
+            if self.state == "thinking":
+                end = self.buffer.find(CLOSE)
+                if end < 0:
+                    keep = _half_tag(self.buffer)
+                    thought += self.buffer[:len(self.buffer) - keep]
+                    self.buffer = self.buffer[len(self.buffer) - keep:]
+                    break
+                thought += self.buffer[:end]
+                self.closed = True
+                self.state, self.buffer = "start", self.buffer[end + len(CLOSE):]
+                continue
+            closes = self.buffer.find(CLOSE)
+            if closes >= 0:
+                self.taken_back += self.shown
+                thought += (answer + self.buffer[:closes]).replace(OPEN, "")
+                answer, self.shown, self.closed = "", "", True
+                self.state, self.buffer = "start", self.buffer[closes + len(CLOSE):]
+                continue
+            keep = _half_tag(self.buffer)
+            answer += self.buffer[:len(self.buffer) - keep]
+            self.buffer = self.buffer[len(self.buffer) - keep:]
+            break
+        self.shown += answer
+        return thought, answer
+
+    def take_back(self) -> str:
+        """Answer text handed out earlier that a later </think> showed was reasoning."""
+        out, self.taken_back = self.taken_back, ""
+        return out
 
     def flush(self) -> tuple[str, str]:
         rest, self.buffer = self.buffer, ""

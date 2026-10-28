@@ -46,6 +46,15 @@ def unload(model: str) -> None:
         response.read()
 
 
+def version() -> str:
+    """Ollama's version, or "" when it does not say."""
+    try:
+        with _request("/api/version", timeout=5) as response:
+            return str(json.loads(response.read().decode()).get("version") or "")
+    except (OllamaError, ValueError):
+        return ""
+
+
 def tags() -> list[str]:
     with _request("/api/tags", timeout=10) as response:
         body = json.loads(response.read().decode())

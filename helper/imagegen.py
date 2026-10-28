@@ -1,7 +1,9 @@
 """Making pictures: where it works, which models make them, and the images/ folder.
 
 Ollama runs image generation models such as flux.2 only on Apple Silicon, so
-the section is off everywhere else. Image models never answer messages, so
+the section is off everywhere else. Newer Ollama builds refuse even there; once
+one says so, its picture models are hidden until Ollama is updated, and the
+user is pointed to sd-server. Image models never answer messages, so
 they are kept out of chat everywhere, supported or not.
 """
 
@@ -38,7 +40,14 @@ MAX_SEED = 2 ** 31 - 1
 MAX_STEPS = 100
 ID_PATTERN = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 PNG = b"\x89PNG\r\n\x1a\n"
-INSTALL_HINT = "ollama pull x/flux2-klein"
+# What Ollama answers once a build no longer makes pictures, e.g. "image generation
+# models are not currently supported" (ollama/ollama#14306).
+REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
+REFUSED_FILE = "ollama-pictures.json"
+SD_ALTERNATIVE = ("LightUsagi can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
+                  "on Windows, macOS and Linux: download sd-server from "
+                  "https://github.com/leejet/stable-diffusion.cpp/releases and the model files, then add a line for "
+                  "it in Settings under Pictures (the box shows a flux2-klein example).")
 
 
 # --- where it works ---------------------------------------------------------
@@ -82,6 +91,33 @@ def support() -> dict:
         return {"supported": True, "reason": ""}
     return {"supported": False,
             "reason": f"Image generation needs a Mac with Apple Silicon. This computer is {_machine()}."}
+
+
+def ollama_refuses() -> bool:
+    """Whether the running Ollama already said it does not make pictures. After an
+    update it is asked again."""
+    from helper.ollama import version
+
+    try:
+        saved = json.loads((store.home() / REFUSED_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(saved, dict) and saved.get("version") == version()
+
+
+def note_refusal(error: str, ollama_version: str, model: str) -> str | None:
+    """If Ollama's error says it does not make pictures, remember that for this version
+    and return the message to show instead; otherwise None."""
+    if not REFUSAL.search(error):
+        return None
+    try:
+        store.home().mkdir(parents=True, exist_ok=True)
+        _write(store.home() / REFUSED_FILE, json.dumps({"version": ollama_version, "error": error}).encode())
+    except OSError:
+        pass
+    which = f"Ollama {ollama_version}" if ollama_version else "This Ollama"
+    return (f"{which} cannot make pictures with {model}: it says \"{error}\". Ollama has taken image generation "
+            f"out for now. {SD_ALTERNATIVE} Ollama's picture models are hidden until Ollama is updated.")
 
 
 # --- which models make pictures -----------------------------------------------
@@ -132,7 +168,9 @@ def picture_models(settings: dict, ollama_images: list[str]) -> tuple[list[dict]
     found, notes = [], []
     if ollama_images:
         allowed = support()
-        if allowed["supported"]:
+        if allowed["supported"] and ollama_refuses():
+            notes.append("This Ollama says it does not make pictures, so its picture models are hidden. " + SD_ALTERNATIVE)
+        elif allowed["supported"]:
             found += [{"id": name, "label": name, "kind": "ollama"} for name in ollama_images]
         else:
             notes.append(allowed["reason"] + " Ollama's image models are hidden.")

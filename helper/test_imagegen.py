@@ -157,6 +157,37 @@ class SdServerTest(unittest.TestCase):
         self.assertIn("sd-server was not found", notes[0])
 
 
+class OllamaRefusesTest(unittest.TestCase):
+    ERROR = "image generation models are not currently supported"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        for patcher in (mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": self._tmp.name + "/home",
+                                                     "LIGHTUSAGI_IMAGES": "on"}),
+                        mock.patch("helper.ollama.version", side_effect=lambda: self.version)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.version = "0.13.0"
+        self.settings = {"pictures": imagegen.PICTURE_DEFAULTS}
+
+    def test_points_to_sd_server_and_hides_ollama_until_it_updates(self):
+        self.assertEqual([item["id"] for item in imagegen.picture_models(self.settings, ["x/flux2-klein"])[0]],
+                         ["x/flux2-klein"])
+        message = imagegen.note_refusal(self.ERROR, self.version, "x/flux2-klein")
+        self.assertIn("Ollama 0.13.0 cannot make pictures with x/flux2-klein", message)
+        self.assertIn("sd-server", message)
+        found, notes = imagegen.picture_models(self.settings, ["x/flux2-klein"])
+        self.assertEqual(found, [])
+        self.assertIn("sd-server", notes[0])
+        self.version = "0.14.0"
+        self.assertEqual(len(imagegen.picture_models(self.settings, ["x/flux2-klein"])[0]), 1)
+
+    def test_other_errors_pass_through(self):
+        self.assertIsNone(imagegen.note_refusal("model requires more system memory", self.version, "x/flux2-klein"))
+        self.assertFalse(imagegen.ollama_refuses())
+
+
 class WorkTest(unittest.TestCase):
     def test_a_picture_and_a_chat_never_overlap(self):
         work = Work()

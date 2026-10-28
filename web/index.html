@@ -1560,7 +1560,7 @@
     }
 
     // Replies are Markdown, sometimes with LaTeX. Raw HTML from a model is shown
-    // as text, links go only to web and mail addresses, and pictures on other
+    // as text, apart from a few formatting tags, links go only to web and mail addresses, and pictures on other
     // sites are never fetched. KaTeX writes the math as MathML, which the
     // browser lays out itself, so it needs no fonts; it loads only once a reply
     // has math in it.
@@ -1569,6 +1569,19 @@
     const escapeHtml = (text) =>
       String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
     const safeHref = (href) => (/^(https?:|mailto:|#)/i.test(href || "") ? href : "");
+    // Models often write <br> in table cells, or a small HTML table. These tags are
+    // drawn, with their attributes dropped; any other tag shows as text.
+    const SAFE_TAGS = new Set(("br hr b strong i em u s del ins sub sup mark small code kbd pre p ul ol li " +
+      "blockquote table thead tbody tfoot tr th td h1 h2 h3 h4 h5 h6 details summary").split(" "));
+    function safeHtml(text) {
+      return String(text).split(/(<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>)/i).map((part) => {
+        const tag = /^<(\/?)([a-z][a-z0-9]*)(?:\s[^<>]*)?\/?>$/i.exec(part);
+        if (!tag) return escapeHtml(part);
+        const name = tag[2].toLowerCase();
+        if (name === "think") return "";
+        return SAFE_TAGS.has(name) ? "<" + tag[1] + name + ">" : escapeHtml(part);
+      }).join("");
+    }
 
     function mathHtml(tex, display) {
       if (window.katex) {
@@ -1638,7 +1651,7 @@
       markdown.use({
         extensions: [blockMath, inlineMath],
         renderer: {
-          html: ({ text }) => escapeHtml(text),
+          html: ({ text }) => safeHtml(text),
           link({ href, title, tokens }) {
             const label = this.parser.parseInline(tokens);
             const safe = safeHref(href);
@@ -1705,7 +1718,17 @@
       }
     }
 
+    // Chats saved before the helper split stray </think> tags out still have the
+    // reasoning in the answer: everything up to the last </think> is reasoning.
+    function splitStrayThinking(text, thought) {
+      const end = text.lastIndexOf("</think>");
+      if (end < 0) return { text, thought };
+      const before = text.slice(0, end).replace(/<\/?think>/g, "").trim();
+      return { text: text.slice(end + 8).trim(), thought: [thought, before].filter(Boolean).join("\n\n") };
+    }
+
     function addTurn(role, text, thought, files, message) {
+      if (role === "assistant" && text) ({ text, thought } = splitStrayThinking(text, thought));
       document.querySelector("#empty")?.remove();
       const block = document.createElement("article");
       block.className = "turn " + role;
@@ -2652,6 +2675,7 @@
       let usage;
       let thinkStart = 0;
       let thinkEnd = 0;
+      let answerStart = 0;
       let thinkingCut = false;
       const thinkSeconds = () => (thinkStart ? ((thinkEnd || Date.now()) - thinkStart) / 1000 : null);
       const drawThought = () => showThought(reply.thought, thought,
@@ -2775,6 +2799,16 @@
               scrollLog();
               continue;
             }
+            if (event.lightusagi === "answer_was_thinking") {
+              // A </think> arrived, so what streamed as the answer was the model's reasoning.
+              thought += answer;
+              answer = "";
+              thinkStart ||= answerStart || Date.now();
+              thinkEnd = 0;
+              finishMarkdown(reply.answer, "");
+              drawThought();
+              continue;
+            }
             if (event.lightusagi === "thinking_cut") {
               thinkingCut = true;
               if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + model + " is answering now…";
@@ -2789,6 +2823,7 @@
               thought += reasoning;
             }
             if (piece) {
+              answerStart ||= Date.now();
               if (thinkStart && !thinkEnd && piece.trim()) thinkEnd = Date.now();
               answer += piece;
               streamMarkdown(reply.answer, answer);

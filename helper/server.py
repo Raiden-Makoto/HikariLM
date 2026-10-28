@@ -15,6 +15,7 @@ from helper import (budget, context, descriptions, documents, imagegen, keepaliv
                     thinking, workspace)
 from helper.models import complete, open_chat, running, show, sizes, tags, unload
 from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
+from helper.ollama import version as ollama_version
 from helper.router import ModelRouter, Work, chat_models, is_nomic
 from helper.version import code_stamp
 
@@ -406,6 +407,12 @@ class Handler(BaseHTTPRequestHandler):
                     if event.get("done"):
                         more_thought, more_content = split.flush()
                         inline, content = inline + more_thought, content + more_content
+                    taken_back = split.take_back()
+                    if taken_back:
+                        thought += taken_back
+                        answered = False
+                        if not self._stream_line({"lightusagi": "answer_was_thinking"}):
+                            return None
                     reasoning = str(message.get("thinking") or "") + inline
                     event["message"] = {**message, "content": content, "thinking": reasoning}
                     if reasoning:
@@ -665,13 +672,18 @@ class Handler(BaseHTTPRequestHandler):
             if spec is not None:
                 managed.touch()
 
+    @staticmethod
+    def _picture_refusal(error: str, model: str) -> str:
+        """Ollama's error, or, when it says it does not make pictures, what to do instead."""
+        return imagegen.note_refusal(error, ollama_version(), model) or error
+
     def _picture_from_ollama(self, request: dict) -> None:
         model = request["model"]
         try:
             router.begin(model)
             response = open_generate(imagegen.ollama_payload(request, KEEP_ALIVE))
         except OllamaError as error:
-            self._stream_line({"error": str(error)})
+            self._stream_line({"error": self._picture_refusal(str(error), model)})
             return
         router.commit(model)
         try:
@@ -684,7 +696,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     continue
                 if event.get("error"):
-                    self._stream_line({"error": str(event["error"])})
+                    self._stream_line({"error": self._picture_refusal(str(event["error"]), model)})
                     return
                 if event.get("image"):
                     if getattr(self, "_gone", False) or not self._stream_line({"progress": -1, "total": 0}):
@@ -851,6 +863,8 @@ class Handler(BaseHTTPRequestHandler):
             content = message.get("content")
             if role not in ("system", "user", "assistant") or not isinstance(content, str):
                 raise ValueError("each message needs a role and content")
+            if role == "assistant" and (thinking.OPEN in content or thinking.CLOSE in content):
+                content = thinking.without_thinking(content)
             entry = {"role": role, "content": content}
             images = message.get("images")
             if images is not None:

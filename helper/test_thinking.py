@@ -25,10 +25,34 @@ class InlineThinkTest(unittest.TestCase):
     def test_unfinished_thinking_stays_thinking(self):
         self.assertEqual(split_all(["<think>still going", " </thi"]), ("still going </thi", ""))
 
-    def test_nothing_is_held_once_answering(self):
+    def test_only_a_possible_close_tag_is_held(self):
         split = thinking.InlineThink()
         split.feed("<think>a</think>")
-        self.assertEqual(split.feed("</"), ("", "</"))
+        self.assertEqual(split.feed("x </"), ("", "x "))
+        self.assertEqual(split.feed("b> y"), ("", "</b> y"))
+
+    ISSUE_3 = ("| Which one is better? | It depends. |\n\nLet me know if you need more details! </think> Okay, "
+               "let's break down 2NF, 3NF and 4NF.\n\nThe choice depends on the system. </think>\n\n"
+               "**2NF** removes partial dependencies.")
+
+    def test_reasoning_without_an_opening_tag(self):
+        for size in (1, 3, 40):
+            pieces = [self.ISSUE_3[i:i + size] for i in range(0, len(self.ISSUE_3), size)]
+            split = thinking.InlineThink()
+            thought = answer = taken = ""
+            for piece in pieces:
+                t, a = split.feed(piece)
+                back = split.take_back()
+                self.assertTrue(answer.endswith(back))
+                answer = answer[:len(answer) - len(back)] + a
+                thought, taken = thought + back + t, taken + back
+            t, a = split.flush()
+            thought, answer = thought + t, answer + a
+            self.assertEqual(answer.strip(), "**2NF** removes partial dependencies.")
+            self.assertNotIn("think>", thought)
+            self.assertIn("Which one is better?", thought)
+            self.assertIn("The choice depends on the system.", thought)
+            self.assertEqual(thinking.without_thinking(self.ISSUE_3), "**2NF** removes partial dependencies.")
 
 
 class SettingTest(unittest.TestCase):
