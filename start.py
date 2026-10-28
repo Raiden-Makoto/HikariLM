@@ -29,6 +29,8 @@ def say(text: str = "") -> None:
 
 
 def check_python() -> None:
+    if sys.platform == "win32":
+        sys.exit("LightUsagi runs on macOS and Linux only.")
     if sys.version_info < (3, 9):
         sys.exit(f"LightUsagi needs Python 3.9 or newer. This is Python {sys.version.split()[0]}.")
 

@@ -41,8 +41,6 @@ def _release_asset(assets: list[dict]) -> dict:
             raise SetupError("sd-server has no ready-made download for Intel Macs, so it has to be built from "
                              "github.com/leejet/stable-diffusion.cpp.")
         wanted = [("darwin", "arm64")]
-    elif os.name == "nt":
-        wanted = [("win-vulkan-x64",), ("win-cpu-x64",)]
     elif machine in ("x86_64", "amd64"):
         # The Vulkan build uses any graphics card, but needs Vulkan to be installed.
         cpu = ("linux", "x86_64.zip")

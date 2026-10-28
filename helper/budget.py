@@ -87,23 +87,6 @@ def _mac() -> tuple[int, int | None]:
     return total, mac_available(stats, total)
 
 
-def _windows() -> tuple[int, int | None]:
-    import ctypes
-
-    class Status(ctypes.Structure):
-        _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong),
-                    ("total", ctypes.c_ulonglong), ("available", ctypes.c_ulonglong),
-                    ("page_total", ctypes.c_ulonglong), ("page_available", ctypes.c_ulonglong),
-                    ("virtual_total", ctypes.c_ulonglong), ("virtual_available", ctypes.c_ulonglong),
-                    ("extended", ctypes.c_ulonglong)]
-
-    status = Status()
-    status.length = ctypes.sizeof(Status)
-    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-        raise OSError("GlobalMemoryStatusEx failed")
-    return status.total, status.available
-
-
 def _sysconf() -> tuple[int, int | None]:
     page = os.sysconf("SC_PAGE_SIZE")
     total = os.sysconf("SC_PHYS_PAGES") * page
@@ -126,9 +109,7 @@ def memory(host: str | None = None) -> tuple[int, int | None] | None:
             pass
     if not ollama_is_local(host):
         return None
-    if sys.platform == "win32":
-        readers = (_windows,)
-    elif sys.platform == "darwin":
+    if sys.platform == "darwin":
         readers = (_mac, _sysconf)
     else:
         readers = (_proc, _sysconf)
@@ -137,7 +118,7 @@ def memory(host: str | None = None) -> tuple[int, int | None] | None:
             total, available = reader()
             if total > 0:
                 return total, available
-        except (OSError, KeyError, ValueError, IndexError, AttributeError, subprocess.SubprocessError):
+        except (OSError, KeyError, ValueError, IndexError, subprocess.SubprocessError):
             continue
     return None
 

@@ -22,7 +22,7 @@ class SupportTest(unittest.TestCase):
             got = imagegen.support()
         self.assertFalse(got["supported"])
         self.assertIn("Image generation needs a Mac with Apple Silicon. This computer is Linux", got["reason"])
-        with mock.patch("platform.system", return_value="Windows"), mock.patch("platform.machine", return_value="ARM64"):
+        with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="aarch64"):
             self.assertFalse(imagegen.support()["supported"])
         with mock.patch("platform.system", return_value="Darwin"), mock.patch("platform.machine", return_value="arm64"):
             self.assertTrue(imagegen.support()["supported"])

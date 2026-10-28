@@ -16,6 +16,7 @@ import os
 import platform
 import re
 import secrets
+import shlex
 import subprocess
 import tempfile
 import time
@@ -45,7 +46,7 @@ PNG = b"\x89PNG\r\n\x1a\n"
 REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
 REFUSED_FILE = "ollama-pictures.json"
 SD_ALTERNATIVE = ("LightUsagi can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
-                  "on Windows, macOS and Linux: pick \"Set up picture making…\" in the model list, which downloads "
+                  "on macOS and Linux: pick \"Set up picture making…\" in the model list, which downloads "
                   "and sets it up once.")
 
 
@@ -118,9 +119,8 @@ def klein_setup() -> dict:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError:
         pass
-    quote = (lambda path: f'"{path}"' if " " in path else path)
     files = [{"name": name, "url": url, "found": (folder / name).is_file()} for _, name, url in KLEIN_FILES]
-    line = "flux2-klein: " + " ".join(f"{flag} {quote(str(folder / name))}" for flag, name, _ in KLEIN_FILES)
+    line = "flux2-klein: " + " ".join(f"{flag} {shlex.quote(str(folder / name))}" for flag, name, _ in KLEIN_FILES)
     return {"folder": str(folder), "files": files, "line": f"{line} {KLEIN_OPTIONS}"}
 
 

@@ -57,16 +57,14 @@ class KleinSetupTest(unittest.TestCase):
         self.assertIn("--steps", args)
 
     def test_sd_server_found_where_the_steps_say(self):
-        name = "sd-server" + (".exe" if os.name == "nt" else "")
         with mock.patch("shutil.which", return_value=None):
             self.assertIsNone(sdserver.find_program(""))
             inside = self.home / "sd-server" / "sd-master-bin"
             inside.mkdir(parents=True)
-            (inside / name).write_bytes(b"#!/bin/sh\n")
+            (inside / "sd-server").write_bytes(b"#!/bin/sh\n")
             found = sdserver.find_program("")
-        self.assertEqual(found, str(inside / name))
-        if os.name != "nt":
-            self.assertTrue(os.access(found, os.X_OK))
+        self.assertEqual(found, str(inside / "sd-server"))
+        self.assertTrue(os.access(found, os.X_OK))
 
 
 if __name__ == "__main__":

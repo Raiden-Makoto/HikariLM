@@ -51,10 +51,9 @@ def find_program(configured: str = "") -> str | None:
     found = shutil.which(PROGRAM)
     if found:
         return found
-    name = PROGRAM + (".exe" if os.name == "nt" else "")
     folder = program_dir()
     # The zip may unpack straight into the folder or into one folder inside it.
-    for path in [folder / name, *sorted(folder.glob("*/" + name))]:
+    for path in [folder / PROGRAM, *sorted(folder.glob("*/" + PROGRAM))]:
         if path.is_file():
             _let_run(path)
             return str(path)
@@ -95,7 +94,7 @@ def parse_models(text: str) -> tuple[list[dict], list[str]]:
             problems.append(f"Line {number} needs a name (letters, digits, - _ .), a colon, then the arguments.")
             continue
         try:
-            args = shlex.split(rest, posix=os.name != "nt")
+            args = shlex.split(rest)
         except ValueError:
             problems.append(f"Line {number} has an unclosed quote.")
             continue
@@ -109,8 +108,6 @@ def parse_models(text: str) -> tuple[list[dict], list[str]]:
             problems.append(f"Line {number}: the name {name} is used twice.")
             continue
         seen.add(name)
-        # Windows splitting keeps the quotes around a path with spaces.
-        args = [arg[1:-1] if len(arg) > 1 and arg[0] == arg[-1] == '"' else arg for arg in args]
         models.append({"name": name, "args": [os.path.expanduser(arg) if arg.startswith("~") else arg for arg in args]})
     return models, problems
 

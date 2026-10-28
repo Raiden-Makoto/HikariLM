@@ -16,7 +16,7 @@ from helper import context, imagegen, picsetup, sdserver
 def program_zip() -> bytes:
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w") as archive:
-        archive.writestr("sd-server" + (".exe" if os.name == "nt" else ""), "#!/bin/sh\n")
+        archive.writestr("sd-server", "#!/bin/sh\n")
         archive.writestr("libstable-diffusion.dylib", "lib")
     return data.getvalue()
 
@@ -130,17 +130,23 @@ class PictureSetupTest(unittest.TestCase):
         self.assertFalse(any(item["found"] for item in status["klein"]["files"]))
 
     def test_release_for_each_computer(self):
-        assets = [{"name": name} for name in ("sd-bin-Darwin-macOS-arm64.zip", "sd-bin-win-cuda12-x64.zip",
-                                               "sd-bin-win-vulkan-x64.zip", "sd-bin-Linux-Ubuntu-24.04-x86_64.zip")]
+        assets = [{"name": name} for name in ("sd-bin-Darwin-macOS-arm64.zip", "sd-bin-win-vulkan-x64.zip",
+                                               "sd-bin-Linux-Ubuntu-24.04-x86_64.zip",
+                                               "sd-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip")]
         with mock.patch("sys.platform", "darwin"), mock.patch("platform.machine", return_value="arm64"):
             self.assertIn("Darwin", picsetup._release_asset(assets)["name"])
         with mock.patch("sys.platform", "darwin"), mock.patch("platform.machine", return_value="x86_64"):
             with self.assertRaises(picsetup.SetupError):
                 picsetup._release_asset(assets)
-        with mock.patch("sys.platform", "linux"), mock.patch("os.name", "posix"), \
-                mock.patch("platform.machine", return_value="x86_64"), \
+        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
                 mock.patch("ctypes.util.find_library", return_value=None):
             self.assertEqual(picsetup._release_asset(assets)["name"], "sd-bin-Linux-Ubuntu-24.04-x86_64.zip")
+        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
+                mock.patch("ctypes.util.find_library", return_value="libvulkan.so.1"):
+            self.assertEqual(picsetup._release_asset(assets)["name"], "sd-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip")
+        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="aarch64"):
+            with self.assertRaises(picsetup.SetupError):
+                picsetup._release_asset(assets)
 
 
 if __name__ == "__main__":
