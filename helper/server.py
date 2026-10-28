@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import signal
 import threading
 import traceback
@@ -33,6 +34,8 @@ WORKSPACE = "/api/workspace"
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
           "/vendor/katex.min.js")
+# The page's own scripts and styles: web/js/*.js and web/css/*.css, plain names only.
+PAGE_PART = re.compile(r"/(js|css)/([a-z0-9-]+\.(?:js|css))")
 IMAGES = "/api/images"
 
 managed = sdserver.Managed(KEEP_ALIVE)
@@ -161,9 +164,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        vendor = urlparse(self.path).path
-        if vendor in VENDOR:
-            self._send_file(WEB_ROOT / "vendor" / vendor.rsplit("/", 1)[1], "text/javascript; charset=utf-8")
+        path = urlparse(self.path).path
+        if path in VENDOR:
+            self._send_file(WEB_ROOT / "vendor" / path.rsplit("/", 1)[1], "text/javascript; charset=utf-8")
+            return
+        part = PAGE_PART.fullmatch(path)
+        if part and (WEB_ROOT / part[1] / part[2]).is_file():
+            kind = "text/javascript" if part[1] == "js" else "text/css"
+            self._send_file(WEB_ROOT / part[1] / part[2], kind + "; charset=utf-8")
             return
         self._send_json({"error": "not found"}, status=404)
 
