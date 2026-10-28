@@ -175,6 +175,24 @@ def default_context(shown: dict) -> int:
     return default_source(shown)[0]
 
 
+PICTURE_WORK = 2 * GIB   # what a picture model needs beyond its weights while it draws
+
+
+def check_picture(model: str, size: int, loaded: list[dict], mem: tuple[int, int | None] | None) -> None:
+    """Raise NoRoom if a picture model cannot run safely. It has no context to cut, so it fits or not."""
+    if mem is None:
+        return
+    total, available = mem
+    leaving = sum(item["size"] for item in loaded if not item["name"].startswith("nomic-embed-text"))
+    room = total * SHARE
+    if available is not None:
+        room = min(room, available + leaving)
+    needed = size + PICTURE_WORK + RESERVE
+    if needed > room:
+        raise NoRoom(f"Not enough memory to run {model} safely. It needs about {_gb(needed)}, and about "
+                     f"{_gb(max(0, room))} can be used now. Close some programs or choose a smaller model.")
+
+
 def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list[dict],
          mem: tuple[int, int | None] | None) -> dict:
     """The context length to send, and the most that fits right now.

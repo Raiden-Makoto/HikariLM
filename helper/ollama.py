@@ -106,6 +106,12 @@ def complete(model: str, messages: list[dict], options: dict, keep_alive: str = 
     return str(message.get("content") or "")
 
 
+def open_generate(payload: dict):
+    """Ask an image model for a picture, streamed: progress lines, then one with the picture.
+    The caller closes the response; closing it early stops the picture."""
+    return _request("/api/generate", payload)
+
+
 def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None):
     """Open a streaming chat. The caller closes the response."""
     payload = {

@@ -8,10 +8,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import budget, context, descriptions, notes, store, workspace
-from helper.ollama import (KEEP_ALIVE, OllamaError, complete, embed, open_chat, running, show, sizes, tags,
-                           unload)
-from helper.router import ModelRouter, chat_models
+from helper import budget, context, descriptions, imagegen, notes, store, workspace
+from helper.ollama import (KEEP_ALIVE, OllamaError, complete, embed, open_chat, open_generate, running, show,
+                           sizes, tags, unload)
+from helper.router import ModelRouter, Work, chat_models
 from helper.version import code_stamp
 
 HOST = os.environ.get("LIGHTUSAGI_HOST", "127.0.0.1")
@@ -23,10 +23,12 @@ CHATS = "/api/chats"
 DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
 # One page, three addresses: the page shows the section the address names.
-PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
+PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/", "/generate", "/generate/")
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js")
+IMAGES = "/api/images"
 
 router = ModelRouter(unload)
+work = Work()
 indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
 
@@ -38,7 +40,25 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin() or self._workspace("GET"):
             return
         if self.path == "/api/state":
-            self._send_json({"large_model": router.large, "code": STARTED_WITH})
+            self._send_json({"large_model": router.large, "code": STARTED_WITH, "images": imagegen.support()})
+            return
+        if self.path == IMAGES + "/models":
+            try:
+                pictures = imagegen.split(chat_models(tags()), show)[1]
+            except OllamaError as error:
+                self._send_json({"error": str(error)}, status=502)
+                return
+            self._send_json({"models": pictures, "sizes": imagegen.SIZES, "install": imagegen.INSTALL_HINT,
+                             **imagegen.support()})
+            return
+        if self.path == IMAGES:
+            self._send_json({"images": imagegen.listing()})
+            return
+        if self.path.startswith(IMAGES + "/") and self.path.endswith(".png"):
+            try:
+                self._send_bytes(imagegen.read(self.path[len(IMAGES) + 1:-4]), "image/png")
+            except (FileNotFoundError, ValueError):
+                self._send_json({"error": "picture not found"}, status=404)
             return
         if self.path == "/api/settings":
             self._send_json(context.load_settings())
@@ -66,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/tags":
             try:
-                self._send_json({"models": chat_models(tags())})
+                self._send_json({"models": imagegen.split(chat_models(tags()), show)[0]})
             except OllamaError as error:
                 self._send_json({"error": str(error)}, status=502)
             return
@@ -168,6 +188,17 @@ class Handler(BaseHTTPRequestHandler):
             store.delete_draft(self._chat_id())
             self._send_json({"deleted": True})
             return
+        if self.path.startswith(IMAGES + "/"):
+            try:
+                removed = imagegen.delete(self.path[len(IMAGES) + 1:])
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+                return
+            except OSError as error:
+                self._send_json({"error": f"could not delete: {error.strerror or error}"}, status=500)
+                return
+            self._send_json({"deleted": removed}, status=200 if removed else 404)
+            return
         if not self.path.startswith(CHATS + "/"):
             self._send_json({"error": "not found"}, status=404)
             return
@@ -185,19 +216,46 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._same_origin() or self._workspace("POST"):
             return
-        if self.path == "/api/describe":
-            self._describe()
+        if self.path == "/api/generate":
+            self._generate()
             return
         if self.path == "/api/search":
             self._search()
             return
-        if self.path != "/api/chat":
+        if self.path not in ("/api/chat", "/api/describe"):
             self._send_json({"error": "not found"}, status=404)
             return
+        busy = work.start_chat()
+        if busy:
+            self._send_json({"error": busy, "busy": True}, status=409)
+            return
+        try:
+            if self.path == "/api/describe":
+                self._describe()
+            else:
+                self._chat()
+        finally:
+            work.end_chat()
+
+    def _refuse_picture_model(self, model: str) -> bool:
+        """Image models make pictures and never answer messages. True if refused."""
+        try:
+            shown = show(model)
+        except OllamaError:
+            shown = None
+        if not imagegen.is_image_model(model, shown):
+            return False
+        self._send_json({"error": f"{model} makes pictures and cannot answer messages. Use Generate images."},
+                        status=400)
+        return True
+
+    def _chat(self) -> None:
         try:
             model, messages, keep_alive = self._read_chat()
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
+            return
+        if self._refuse_picture_model(model):
             return
         settings = context.load_settings()
         try:
@@ -276,6 +334,8 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return
+        if self._refuse_picture_model(model):
+            return
         saved = descriptions.load(key)
         if saved:
             self._stream_start()
@@ -326,6 +386,86 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"error": f"The description could not be saved: {error.strerror or error}"})
         finally:
             response.close()
+
+    def _generate(self) -> None:
+        """Make one picture. Streams {"lightusagi":"loading"}, then {"progress", "total"} lines,
+        then {"image": notes} once it is saved. Stop (the page going away) saves nothing."""
+        allowed = imagegen.support()
+        if not allowed["supported"]:
+            self._send_json({"error": allowed["reason"], "unsupported": True}, status=403)
+            return
+        try:
+            request = imagegen.clean_request(self._body(MAX_BODY))
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        model = request["model"]
+        try:
+            names = chat_models(tags())
+            if model not in names:
+                raise ValueError(f"{model} is not installed in Ollama.")
+            shown = show(model)
+            if not imagegen.is_image_model(model, shown):
+                raise ValueError(f"{model} answers messages and cannot make pictures. Choose an image model.")
+            budget.check_picture(model, sizes().get(model, 0), running(), budget.memory())
+        except budget.NoRoom as error:
+            self._send_json({"error": str(error), "memory": True}, status=400)
+            return
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        except OllamaError as error:
+            self._send_json({"error": str(error)}, status=502)
+            return
+        busy = work.start_picture()
+        if busy:
+            self._send_json({"error": busy, "busy": True}, status=409)
+            return
+        try:
+            self._stream_start()
+            self._stream_line({"lightusagi": "loading", "model": model, "unloading": router.large
+                               if router.large and router.large != model else None})
+            try:
+                router.begin(model)
+                response = open_generate(imagegen.ollama_payload(request, KEEP_ALIVE))
+            except OllamaError as error:
+                self._stream_line({"error": str(error)})
+                return
+            router.commit(model)
+            try:
+                while True:
+                    line = response.readline()
+                    if not line:
+                        break
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue
+                    if event.get("error"):
+                        self._stream_line({"error": str(event["error"])})
+                        return
+                    if event.get("image"):
+                        if getattr(self, "_gone", False) or not self._stream_line({"progress": -1, "total": 0}):
+                            return
+                        record = imagegen.save(imagegen.decode(event["image"]), request)
+                        self._stream_line({"image": record})
+                        return
+                    if event.get("done"):
+                        self._stream_line({"error": "Ollama finished without sending a picture. "
+                                                    "This Ollama may not make pictures with " + model + "."})
+                        return
+                    if not self._stream_line({"progress": int(event.get("completed") or 0),
+                                              "total": int(event.get("total") or 0)}):
+                        return
+                self._stream_line({"error": "Ollama stopped before the picture was finished."})
+            except ValueError as error:
+                self._stream_line({"error": str(error)})
+            except OSError as error:
+                self._stream_line({"error": f"The picture could not be saved: {error.strerror or error}"})
+            finally:
+                response.close()
+        finally:
+            work.end_picture()
 
     def _search(self) -> None:
         """A few earlier notes close to a question. Never an error: a send must not wait on this."""
@@ -477,6 +617,16 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
+
+    def _send_bytes(self, body: bytes, content_type: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "private, max-age=31536000, immutable")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close")
         self.end_headers()

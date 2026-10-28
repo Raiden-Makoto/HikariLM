@@ -56,20 +56,27 @@ def port_is_free(host: str, port: int) -> bool:
 
 def report_ollama() -> None:
     """Say what Ollama has. Never stops the start: it can be launched later."""
-    from helper.ollama import OLLAMA_HOST, OllamaError, tags
+    from helper import imagegen
+    from helper.ollama import OLLAMA_HOST, OllamaError, show, tags
     from helper.router import chat_models
 
+    allowed = imagegen.support()
+    pictures = "Image generation is available on this computer." if allowed["supported"] else allowed["reason"]
     try:
-        names = chat_models(tags())
+        names, image_models = imagegen.split(chat_models(tags()), show)
     except OllamaError:
         say(f"Ollama is not running at {OLLAMA_HOST}.")
         say("  Install it from https://ollama.com and start it, then reload the page.")
         say("  The page will list your models as soon as Ollama answers.")
+        say(pictures)
         return
     if names:
         say("Ollama models: " + ", ".join(names))
     else:
         say("Ollama is running but has no chat models yet. Try:  ollama pull gemma3")
+    if image_models:
+        say("Image models: " + ", ".join(image_models))
+    say(pictures)
 
 
 def main() -> None:
