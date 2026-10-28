@@ -22,14 +22,6 @@ body.sidebar-closed #sidebar { display: none; }
 }
 #new-chat:hover { background: var(--hover); }
 #new-chat svg { width: 1.05rem; height: 1.05rem; }
-.side-label {
-  margin: 0.6rem 0.75rem 0.3rem 1rem;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 #chats {
   flex: 1;
   margin: 0;

@@ -1,25 +1,77 @@
 # HikariLM
 
-A local chat page for Ollama. One model stays loaded at a time, and chats, files, and image notes live on the SSD, so that memory stays available for the model and its KV cache.
+A light, local chat page for [Ollama](https://ollama.com), with a code editor beside it. It keeps one large model in memory at a time and puts everything else (chats, files, notes) on disk, so your RAM goes to the model.
+
+No Docker, no packages to install, no account. Your chats never leave your computer.
 
 ## Run it
 
-HikariLM runs on macOS and Linux. Windows is not supported. You need [Ollama](https://ollama.com) running and Python 3.9 or newer. There is nothing to install.
+HikariLM runs on macOS and Linux (Windows is not supported). You need Ollama running and Python 3.9 or newer.
 
-Start it with `./start.sh`, or `python3 start.py`.
+```bash
+./start.sh            # or: python3 start.py
+```
 
-It checks Ollama, lists the models it finds, and opens the page at http://127.0.0.1:8787. Press Ctrl+C to stop. Starting it a second time just opens the page that is already running.
+It checks Ollama, lists your models, and opens http://127.0.0.1:8787. Press Ctrl+C to stop. Running it again while it is running just opens the page.
 
-Options: `--port 9000` to use another port, `--no-browser` to skip opening the page.
+Options: `--port 9000` for another port, `--no-browser` to skip opening the page, `--version`.
 
-To make pictures in Chat, pick *Set up picture making…* in the model list (or the button in Settings) and press *Download and set up*. That downloads once, about 5 GB, into `~/.hikarilm`: `sd-server` from [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) and the FLUX.2 klein picture model. Then *flux2-klein* shows up in the model list. HikariLM runs sd-server only while a picture is being made.
+## What it does
 
-If LM Studio's server (llmster) is already running, its models show up in the picker under *LM Studio*. HikariLM does not start it. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
+- **Chat** with any Ollama model. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
+- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture switches the chat to `gemma3` to read it. Long documents are read in parts so they fit the model's context.
+- **Make pictures** with FLUX.2 klein. Pick *Set up picture making…* in the model list: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made.
+- **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Press Apply on a code block in a reply to put it into the file. Nothing is written until you press Save.
+- **Remembers earlier chats**: with `nomic-embed-text` installed, a few matching notes from past chats are sent along with a new question.
+- **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved.
+- **Organize chats**: pin them, put them in folders, rename them. New chats are named from their first message.
+- **LM Studio**: if its server (llmster) is running, its models join the list under *LM Studio*.
 
-Keys: Cmd+B (Ctrl+B on Linux) hides the side list. In the code editor, Cmd+K adds the open file to your message and Cmd+L adds the highlighted lines. Ctrl+Option+N (Ctrl+Alt+N) starts a new chat; you can change that one in Settings.
+## Models
 
-Your chats and drafts are saved in `~/.hikarilm` (set `HIKARILM_HOME` to move it). HikariLM used to be called LightUsagi: the first start moves an old `~/.lightusagi` folder there, and the page keeps the choices your browser remembered.
+Any chat model works. These are what each part is tuned for:
 
-The tests are in `tests/`. Run them from this folder with `python3 -m unittest`.
+| For | Model |
+|---|---|
+| General chat | `deepseek-r1:8b`, `qwen3`, or any chat model |
+| Questions about code | a coder model, such as `qwen2.5-coder:7b` |
+| Pictures you attach | `gemma3` |
+| Remembering earlier chats | `nomic-embed-text` |
 
-How the pieces fit, and the order we will build them, is in [PLAN.md](PLAN.md).
+```bash
+ollama pull qwen2.5-coder:7b && ollama pull gemma3 && ollama pull nomic-embed-text
+```
+
+## Keys
+
+| Keys (Mac / Linux) | Does |
+|---|---|
+| ⌘B / Ctrl+B | Hide or show the chat list, or the file list in the code editor |
+| ⌘K / Ctrl+K | Code editor: add the open file to your message |
+| ⌘L / Ctrl+L | Code editor: add the highlighted lines, or the cursor's line |
+| ⌃⌥N / Ctrl+Alt+N | New chat (change it in Settings) |
+| ⌘S / Ctrl+S | Code editor: save |
+
+## Where things are saved
+
+Everything is in `~/.hikarilm`: chats, drafts, settings, notes, and pictures you made. Your project folders stay where they are. HikariLM used to be called LightUsagi, and the first start moves an old `~/.lightusagi` folder over.
+
+## Settings from the environment
+
+| Variable | Default | Does |
+|---|---|---|
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Where Ollama is |
+| `HIKARILM_HOME` | `~/.hikarilm` | Where HikariLM saves things |
+| `HIKARILM_PORT`, `HIKARILM_HOST` | `8787`, `127.0.0.1` | Where the page is served |
+| `HIKARILM_KEEP_ALIVE` | `5m` | How long a model stays loaded after its last reply |
+| `HIKARILM_MEMORY_GB` | this computer's | Memory to plan for, when Ollama runs on another machine |
+| `HIKARILM_IMAGES` | automatic | `on` or `off` for Ollama's own picture models (Apple Silicon only) |
+| `LMSTUDIO_HOST`, `LM_API_TOKEN` | `http://127.0.0.1:1234` | Where LM Studio's server is, and its key |
+
+## Development
+
+The helper is Python with the standard library only, and the page is plain HTML, CSS, and JavaScript modules, so there is no build step. Run the tests from this folder with `python3 -m unittest`. The code editor is a CodeMirror bundle in `web/vendor/`; `tools/editor/build.sh` rebuilds it (only needed to change it).
+
+## License
+
+Apache 2.0. The libraries in `web/vendor/` keep their own licenses, next to them.

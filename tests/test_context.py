@@ -46,10 +46,9 @@ class BudgetTest(unittest.TestCase):
         self.assertEqual(budget.per_token({}), budget.FALLBACK_PER_TOKEN)
 
     def test_default_context(self):
-        self.assertEqual(budget.default_context(QWEN), 4096)
-        self.assertEqual(budget.default_context({"parameters": "num_ctx 8192\nstop x"}), 8192)
+        self.assertEqual(budget.default_source(QWEN)[0], 4096)
+        self.assertEqual(budget.default_source({"parameters": "num_ctx 8192\nstop x"})[0], 8192)
         os.environ["OLLAMA_CONTEXT_LENGTH"] = "16384"
-        self.assertEqual(budget.default_context(QWEN), 16384)
         self.assertEqual(budget.default_source(QWEN), (16384, "OLLAMA_CONTEXT_LENGTH"))
         self.assertEqual(budget.default_source({"parameters": "num_ctx 131072"}), (131072, "model"))
         del os.environ["OLLAMA_CONTEXT_LENGTH"]

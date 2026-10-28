@@ -23,6 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+from helper import __version__  # noqa: E402
+
 
 def say(text: str = "") -> None:
     print(text, flush=True)
@@ -87,6 +89,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("HIKARILM_PORT", "8787")))
     parser.add_argument("--host", default=os.environ.get("HIKARILM_HOST", "127.0.0.1"))
     parser.add_argument("--no-browser", action="store_true", help="do not open the page")
+    parser.add_argument("--version", action="version", version="HikariLM " + __version__)
     args = parser.parse_args()
 
     check_python()
@@ -118,7 +121,10 @@ def main() -> None:
     from helper import store
     from helper.server import main as serve
 
-    say("HikariLM")
+    say("HikariLM " + __version__)
+    moved = store.move_old_home()
+    if moved:
+        say("  " + moved)
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
     report_ollama()

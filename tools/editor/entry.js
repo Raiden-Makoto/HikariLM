@@ -1,5 +1,5 @@
 // The code editor, built on CodeMirror 6 and bundled into web/vendor/codemirror.js.
-// The page imports createEditor() from that one file. See PLAN.md, "The editor".
+// The page imports createEditor() from that one file. Run build.sh after changing this.
 
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {

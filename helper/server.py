@@ -946,23 +946,6 @@ class Handler(BaseHTTPRequestHandler):
         self._question = question if isinstance(question, str) else cleaned[-1]["content"]
         return model.strip(), cleaned, keep_alive.strip()
 
-    def _stream(self, response, started: bool = False) -> None:
-        if not started:
-            self._stream_start()
-        try:
-            # Ollama sends one JSON object per line. read(n) would wait for n
-            # bytes and hold tokens back, so pass each line on as it arrives.
-            while True:
-                line = response.readline()
-                if not line:
-                    break
-                self.wfile.write(line)
-                self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
-            return
-        finally:
-            response.close()
-
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload).encode()
         self.send_response(status)

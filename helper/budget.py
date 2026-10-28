@@ -170,10 +170,6 @@ def default_source(shown: dict) -> tuple[int, str]:
     return DEFAULT_CONTEXT, "ollama"
 
 
-def default_context(shown: dict) -> int:
-    return default_source(shown)[0]
-
-
 PICTURE_WORK = 2 * GIB   # what a picture model needs beyond its weights while it draws
 
 
