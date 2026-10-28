@@ -63,7 +63,17 @@ class ModelsTest(unittest.TestCase):
             if name == "broken":
                 raise RuntimeError("no")
             return {"capabilities": ["image"] if name == "pic" else ["completion"]}
-        self.assertEqual(imagegen.split(["qwen", "pic", "broken"], show), (["qwen", "broken"], ["pic"]))
+        self.assertEqual(imagegen.split(["qwen", "pic", "broken"], show), (["qwen", "broken"], ["pic"], []))
+
+    def test_any_model_that_reports_vision_reads_pictures(self):
+        def show(name):
+            if name.startswith("named"):
+                return {}
+            return {"capabilities": ["completion", "vision"] if name in ("llava:7b", "my-own-model") else ["completion"]}
+        names = ["llava:7b", "my-own-model", "gemma3-text-only", "qwen3:8b", "named-qwen2.5vl:7b", "named-llama"]
+        chat, _, vision = imagegen.split(names, show)
+        self.assertEqual(chat, names)
+        self.assertEqual(vision, ["llava:7b", "my-own-model", "named-qwen2.5vl:7b"])
 
 
 class RequestTest(unittest.TestCase):

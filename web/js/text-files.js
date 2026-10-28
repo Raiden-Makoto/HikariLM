@@ -1,5 +1,4 @@
 // Which text and code files are accepted, reading their encoding, PDFs, and short notices.
-import { modelSelect } from "./core.js";
 import { MAX_FILES_TOTAL, MAX_PDF_PAGES } from "./attachments.js";
 
 // Plain-text kinds the page accepts: notes, data, and everyday code.
@@ -90,16 +89,6 @@ export function notify(text) {
   notice.hidden = false;
   clearTimeout(noticeTimer);
   noticeTimer = setTimeout(() => { notice.hidden = true; }, 6000);
-}
-
-export function visionModel() {
-  const names = [...modelSelect.options].map((option) => option.value).filter(Boolean);
-  if (isVision(modelSelect.value)) return modelSelect.value;
-  return names.find(isVision) || "";
-}
-
-export function isVision(name) {
-  return name.split(":", 1)[0].toLowerCase().startsWith("gemma3");
 }
 
 export function readBase64(file) {

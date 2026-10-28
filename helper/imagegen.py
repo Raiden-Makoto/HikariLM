@@ -161,16 +161,34 @@ def is_image_model(name: str, shown: dict | None = None) -> bool:
     return any(part in base for part in IMAGE_NAMES)
 
 
-def split(names: list[str], show) -> tuple[list[str], list[str]]:
-    """(models that answer messages, models that make pictures). A model that cannot be placed answers messages."""
-    chat, images = [], []
+VISION_NAMES = re.compile(r"gemma3|llava|vision|minicpm-v|moondream|pixtral|mllama|qwen[\d.]*-?vl|[-_.:]vl\b")
+
+
+def reads_pictures(name: str, shown: dict | None = None) -> bool:
+    """Whether a chat model can be sent a picture: Ollama's "vision" capability, or the
+    usual names when Ollama does not say."""
+    capabilities = (shown or {}).get("capabilities")
+    if isinstance(capabilities, list) and capabilities:
+        return "vision" in [str(item).lower() for item in capabilities]
+    return bool(VISION_NAMES.search(name.lower()))
+
+
+def split(names: list[str], show) -> tuple[list[str], list[str], list[str]]:
+    """(models that answer messages, models that make pictures, the message models that
+    can also read pictures). A model that cannot be placed answers messages."""
+    chat, images, vision = [], [], []
     for name in names:
         try:
             shown = show(name)
         except Exception:  # an unreadable model is placed by its name
             shown = None
-        (images if is_image_model(name, shown) else chat).append(name)
-    return chat, images
+        if is_image_model(name, shown):
+            images.append(name)
+            continue
+        chat.append(name)
+        if reads_pictures(name, shown):
+            vision.append(name)
+    return chat, images, vision
 
 
 # --- where pictures come from -------------------------------------------------------

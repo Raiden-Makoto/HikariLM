@@ -19,8 +19,8 @@ Options: `--port 9000` for another port, `--no-browser` to skip opening the page
 ## What it does
 
 - **Chat** with any Ollama model. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
-- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture switches the chat to `gemma3` to read it. Long documents are read in parts so they fit the model's context.
-- **Make pictures** with FLUX.2 klein. Pick *Set up picture making…* in the model list: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made.
+- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it: any model Ollama lists with vision, such as `gemma3`, `llava`, or `qwen2.5vl`. Long documents are read in parts so they fit the model's context.
+- **Make pictures** with your own picture models. Pick *Set up picture making…* in the model list for a one-click start with FLUX.2 klein: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made. In Settings you can add any other model `sd-server` runs, or point HikariLM at a picture server you already run (AUTOMATIC1111, Forge, Draw Things).
 - **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Press Apply on a code block in a reply to put it into the file. Nothing is written until you press Save.
 - **Remembers earlier chats**: with `nomic-embed-text` installed, a few matching notes from past chats are sent along with a new question.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved.
@@ -35,7 +35,7 @@ Any chat model works. These are what each part is tuned for:
 |---|---|
 | General chat | `deepseek-r1:8b`, `qwen3`, or any chat model |
 | Questions about code | a coder model, such as `qwen2.5-coder:7b` |
-| Pictures you attach | `gemma3` |
+| Pictures you attach | any vision model, such as `gemma3`, `llava`, or `qwen2.5vl` |
 | Remembering earlier chats | `nomic-embed-text` |
 
 ```bash
@@ -54,7 +54,7 @@ ollama pull qwen2.5-coder:7b && ollama pull gemma3 && ollama pull nomic-embed-te
 
 ## Where things are saved
 
-Everything is in `~/.hikarilm`: chats, drafts, settings, notes, and pictures you made. Your project folders stay where they are. HikariLM used to be called LightUsagi, and the first start moves an old `~/.lightusagi` folder over.
+Everything is in `~/.hikarilm`: chats, drafts, settings, notes, and pictures you made. Your project folders stay where they are.
 
 ## Settings from the environment
 

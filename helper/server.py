@@ -125,14 +125,14 @@ class Handler(BaseHTTPRequestHandler):
             # Picture models are listed apart: they answer with a picture, never with words.
             settings = context.load_settings()
             try:
-                chat, ollama_images = imagegen.split(chat_models(tags()), show)
+                chat, ollama_images, vision = imagegen.split(chat_models(tags()), show)
             except OllamaError as error:
                 pictures, notes_ = imagegen.picture_models(settings, [])
                 self._send_json({"error": str(error), "pictures": pictures, "picture_notes": notes_,
                                  "sizes": imagegen.SIZES}, status=502)
                 return
             pictures, notes_ = imagegen.picture_models(settings, ollama_images)
-            self._send_json({"models": chat, "pictures": pictures, "picture_notes": notes_,
+            self._send_json({"models": chat, "vision": vision, "pictures": pictures, "picture_notes": notes_,
                              "sizes": imagegen.SIZES})
             return
         if self.path == CHATS:

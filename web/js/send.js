@@ -2,12 +2,12 @@
 import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, scrollLog, showEmpty, status } from "./core.js";
 import { renderChips } from "./attachments.js";
-import { isVision, notify, visionModel } from "./text-files.js";
+import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
 import { addTurn, pictureFigure, setBusy, updateApply } from "./turns.js";
 import {
-  inCodeView, isPictureModel, loadModels, pictureLabel, pictureSeed, pictureSize,
-  pictureSteps, refreshState,
+  inCodeView, isPictureModel, isVision, loadModels, pictureLabel, pictureSeed, pictureSize,
+  pictureSteps, refreshState, visionModel,
 } from "./models.js";
 import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
@@ -81,12 +81,12 @@ async function send() {
     return;
   }
   // A model that cannot see (Qwen, R1) is given the picture as text: a
-  // Gemma model writes it down first, once, and that text goes with the message.
+  // vision model writes it down first, once, and that text goes with the message.
   let describer = "";
   if (state.attached.some((file) => file.image) && !isVision(model)) {
     describer = visionModel();
     if (!describer) {
-      notify("Images need a Gemma model. Remove the image or install gemma3.");
+      notify("Pictures need a model that can read them, such as gemma3. Remove the picture or install one.");
       return;
     }
   }

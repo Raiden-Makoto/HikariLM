@@ -33,6 +33,7 @@ export async function loadModels() {
     const response = await fetch("/api/tags");
     const body = await response.json();
     models = body.models || [];
+    visionModels = body.vision || [];
     allPictures = body.pictures || [];
     pictureNotes = body.picture_notes || [];
     fillPictureSizes(body.sizes || {});
@@ -84,8 +85,14 @@ let allModels = [];
 let modelProblem = "";
 export const CODE_MODEL_KEY = "hikarilm-model-code";
 export const inCodeView = () => document.body.classList.contains("view-files");
-const looksVision = (name) =>
-  /gemma3|llava|vision|minicpm-v|moondream|pixtral|mllama|qwen[\d.]*-?vl|[-_.:]vl\b/i.test(name);
+// Models that can read pictures, as the helper found them (Ollama's "vision"
+// capability). A picture goes to the chosen one if it can, otherwise to the first.
+let visionModels = [];
+export const isVision = (name) => visionModels.includes(name);
+export function visionModel() {
+  if (isVision(modelSelect.value)) return modelSelect.value;
+  return allModels.find(isVision) || "";
+}
 export const codeRank = (name) => (/qwen.*coder|coder.*qwen/i.test(name) ? 0 : /code|devstral/i.test(name) ? 1 : 2);
 
 // Models from LM Studio's llmster carry an lms: prefix; the picker shows their own name.
@@ -96,7 +103,7 @@ export const SETUP_PICTURES = "__setup_pictures";
 export function modelsForView() {
   if (!inCodeView()) return allModels;
   return allModels
-    .filter((name) => !looksVision(name))
+    .filter((name) => !isVision(name))
     .map((name, index) => ({ name, index }))
     .sort((a, b) => codeRank(a.name) - codeRank(b.name) || a.index - b.index)
     .map((item) => item.name);

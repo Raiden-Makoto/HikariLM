@@ -2,8 +2,8 @@
 import { state } from "./state.js";
 import { modelSelect, status } from "./core.js";
 import { readDocx, readXlsx } from "./office.js";
-import { decodeText, isTextKind, notify, readBase64, readPdf, visionModel } from "./text-files.js";
-import { inCodeView, updatePictureMode } from "./models.js";
+import { decodeText, isTextKind, notify, readBase64, readPdf } from "./text-files.js";
+import { inCodeView, updatePictureMode, visionModel } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 
 export const MAX_FILE = 500_000;
@@ -50,7 +50,7 @@ export async function addFiles(list) {
   const addImage = async (name, size, getData) => {
     const vision = visionModel();
     if (!vision) {
-      problems.push(name + " needs a Gemma model, and none is installed in Ollama");
+      problems.push(name + " needs a model that can read pictures (such as gemma3, llava or qwen2.5vl), and none is installed");
       return false;
     }
     if (size > MAX_IMAGE) {
@@ -123,7 +123,7 @@ export async function addFiles(list) {
         }
         addText(file.name, pdf.text, false, MAX_FILES_TOTAL);
       } else {
-        // Scanned PDF: no text inside, so Gemma reads the first pages as pictures.
+        // Scanned PDF: no text inside, so a vision model reads the first pages as pictures.
         const shown = Math.min(pdf.pages, PDF_IMAGE_PAGES);
         let added = 0;
         for (let page = 1; page <= shown; page += 1) {

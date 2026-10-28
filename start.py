@@ -66,7 +66,7 @@ def report_ollama() -> None:
 
     image_models = []
     try:
-        names, image_models = imagegen.split(chat_models(tags()), show)
+        names, image_models, _ = imagegen.split(chat_models(tags()), show)
         if names:
             say("Ollama models: " + ", ".join(names))
         else:
