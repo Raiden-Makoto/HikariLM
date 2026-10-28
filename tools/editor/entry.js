@@ -184,6 +184,15 @@ export function createEditor(parent, { onChange, onSelection, onSave }) {
       const { from, to } = view.state.selection.main;
       return { from, to };
     },
+    // Replace a range as one edit, so Ctrl+Z puts it back. Leaves the new text selected.
+    replace(from, to, text) {
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from, head: from + text.length },
+        scrollIntoView: true,
+        userEvent: "input.paste",
+      });
+    },
     hasFocus: () => view.hasFocus,
     focus: () => view.focus(),
   };

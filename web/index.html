@@ -471,6 +471,9 @@
     #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     #pane-resize { display: none; }
     #pane-head { display: none; }
+    .apply-row { display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+    body.view-files .apply-row { display: flex; }
+    .apply-row .choice { padding: 0.3rem 0.8rem; }
     body.view-files #pane-head { display: flex; justify-content: flex-end; padding: 0.4rem 0.75rem 0; }
     #pane-head .choice { padding: 0.3rem 0.8rem; }
     body.view-files #pane-resize {
@@ -1443,9 +1446,39 @@
         who.after(row);
       }
       if (role === "user") thinking.remove();
+      else if (text) updateApply(block, text);
       log.append(block);
       scrollLog();
       return { block, thinking, answer };
+    }
+
+    // Complete code blocks (``` ... ```) in a reply. In the code editor each one
+    // gets an Apply button. This is only the page copying text into the editor,
+    // so it costs the model nothing.
+    function codeBlocks(text) {
+      const found = [];
+      const fence = /^```[^\n]*\n([\s\S]*?)\n?```[ \t]*$/gm;
+      let match;
+      while ((match = fence.exec(text))) found.push(match[1]);
+      return found;
+    }
+
+    function updateApply(block, text) {
+      block.querySelector(".apply-row")?.remove();
+      const blocks = codeBlocks(text);
+      if (!blocks.length) return;
+      const row = document.createElement("div");
+      row.className = "apply-row";
+      blocks.forEach((code, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "choice";
+        button.textContent = blocks.length === 1 ? "Apply code" : "Apply code block " + (index + 1);
+        button.title = "Put this code into the open file as an unsaved edit";
+        button.addEventListener("click", () => applyBlock(code));
+        row.append(button);
+      });
+      block.append(row);
     }
 
     function renderLog() {
@@ -2214,6 +2247,7 @@
         if (!answer && !thought) messages.pop();
       } finally {
         if (answer || thought) {
+          if (answer) updateApply(reply.block, answer);
           messages.push({ role: "assistant", content: answer, thinking: thought || undefined, model });
           saved = true;
         }
@@ -3113,6 +3147,30 @@
       }
       saving = false;
       refreshFileButtons();
+    }
+
+    // Put a code block from a reply into the editor: over the highlighted text
+    // if there is some, otherwise over the whole file after asking. It is an
+    // ordinary unsaved edit, so nothing reaches the disk until Save, and Ctrl+Z
+    // undoes it. If the file changed on disk meanwhile, Save still refuses.
+    function applyBlock(code) {
+      if (!openPath || !editor) {
+        fileNote.textContent = "Open a file first, then apply the code.";
+        return;
+      }
+      const { from, to } = editor.getSelection();
+      const current = editorText();
+      const whole = from === to;
+      const start = whole ? 0 : from;
+      const end = whole ? current.length : to;
+      if (whole && current && !confirm("Replace the whole of " + openPath + " with this code?\n\nNothing is saved until you press Save, and Ctrl+Z undoes it.\nTo replace only part of the file, highlight that part first.")) return;
+      // Keep the trailing line break of whatever is being replaced.
+      let text = code;
+      if (current.slice(start, end).endsWith("\n") && !text.endsWith("\n")) text += "\n";
+      editor.replace(start, end, text);
+      editor.focus();
+      fileNote.textContent = (whole ? "Replaced the whole file" : "Replaced the highlighted text") +
+        " with the code. Not saved yet: read it, then press Save. Ctrl+Z undoes it.";
     }
 
     async function refreshList() {
