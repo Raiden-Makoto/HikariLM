@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import shlex
 import shutil
 import socket
@@ -79,17 +78,6 @@ def _let_run(path: Path) -> None:
 
 
 _let_run.done = set()
-
-
-def release_hint() -> str:
-    """Which file on stable-diffusion.cpp's releases page fits this computer."""
-    machine = platform.machine().lower()
-    if sys.platform == "darwin":
-        return "the file with Darwin-macOS and arm64 in its name" if machine == "arm64" else \
-            "none: the releases are for Apple Silicon Macs, so on an Intel Mac sd-server has to be built from source"
-    if os.name == "nt":
-        return "win-vulkan-x64 (any graphics card), win-cuda12-x64 (NVIDIA), or win-cpu-x64 (no graphics card)"
-    return "Linux…x86_64-vulkan (any graphics card), …x86_64-rocm (AMD), or Linux…x86_64 (CPU only)"
 
 
 def parse_models(text: str) -> tuple[list[dict], list[str]]:

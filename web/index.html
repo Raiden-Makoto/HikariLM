@@ -747,11 +747,17 @@
     .choice[aria-pressed="true"] { border-color: var(--you); background: var(--hover); }
     .choice:disabled { opacity: 0.4; cursor: default; }
     .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
-    .steps { padding-left: 1.3rem; }
-    .steps li { margin: 0.4rem 0; }
-    .steps ul { padding-left: 1rem; margin: 0.3rem 0; }
-    .steps code { word-break: break-all; }
-    #picture-howto summary { cursor: pointer; margin-top: 0.5rem; }
+    #picture-setup { width: min(34rem, 92vw); }
+    #picture-setup code { word-break: break-all; }
+    .setup-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+    .setup-list li { display: flex; gap: 0.5rem; padding: 0.3rem 0; }
+    .setup-list .mark { width: 1.2rem; flex: none; }
+    .setup-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 0.5rem 0; }
+    .setup-bar div { height: 100%; width: 0; background: var(--you); transition: width 0.4s; }
+    #picture-setup .choices { margin-top: 0.75rem; }
+    #picture-setup .choice[hidden] { display: none; }
+    #setup-start { background: var(--send); color: var(--send-ink); }
+    #picture-setting details summary { cursor: pointer; margin-top: 0.5rem; }
     #settings .dialog-body { max-height: 75vh; overflow-y: auto; }
     .field-row {
       display: flex;
@@ -1005,24 +1011,17 @@
       </div>
       <div class="setting" id="picture-setting">
         <span class="setting-label">Making pictures</span>
-        <p class="note">Ollama no longer draws pictures, so LightUsagi uses sd-server: a free program from the stable-diffusion.cpp project that draws them, on Windows, macOS and Linux. You download it once. LightUsagi starts it only while a picture is being drawn, and stops it before the next chat so it never holds memory next to a chat model.</p>
-        <details id="picture-howto">
-          <summary>Set up FLUX.2 klein, step by step (about 5 GB to download, no account needed)</summary>
-          <ol class="note steps">
-            <li>Download sd-server from <a href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer">stable-diffusion.cpp's releases</a>. For this computer: <span id="howto-system"></span>.</li>
-            <li>Unzip it, and put everything that comes out of the zip into this folder (make the folder if it is not there): <code id="howto-program-dir"></code>. LightUsagi looks there by itself, so leave "Where sd-server is" below empty.</li>
-            <li>Download these three files into <code id="howto-folder"></code>:
-              <ul id="howto-files"></ul>
-              The folder starting with a dot is hidden. On a Mac, in Finder press Cmd+Shift+G and paste the folder to open it; on Windows, paste it into File Explorer's address bar.
-            </li>
-            <li><button class="choice" type="button" id="howto-fill">Add FLUX.2 klein to the list</button> Then pick <strong>flux2-klein</strong> under "Make pictures" in the model list and describe a picture.</li>
-          </ol>
+        <div class="choices">
+          <button class="choice" type="button" id="open-picture-setup">Set up picture making…</button>
+        </div>
+        <details>
+          <summary>Advanced: other picture models</summary>
+          <label class="field-row">
+            <span>Where sd-server is</span>
+            <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="Empty: the one set up for you">
+          </label>
+          <textarea id="pic-models" spellcheck="false" aria-label="Picture models" placeholder="Setup fills this in. For other models: one per line, a name, a colon, then sd-server's own options, e.g. sd15: -m ~/models/v1-5-pruned-emaonly.safetensors"></textarea>
         </details>
-        <label class="field-row">
-          <span>Where sd-server is</span>
-          <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="Leave empty if you followed the steps above">
-        </label>
-        <textarea id="pic-models" spellcheck="false" aria-label="Picture models" placeholder="The button in step 4 fills this in. (For other models: one per line, a name, a colon, then sd-server's own options, e.g. sd15: -m ~/models/v1-5-pruned-emaonly.safetensors)"></textarea>
         <details>
           <summary>A picture server you run yourself</summary>
           <label class="field-row">
@@ -1041,6 +1040,28 @@
         </div>
         <p class="note" id="bg-note" role="status"></p>
         <input id="bg-file" type="file" accept="image/*" hidden>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="picture-setup" aria-labelledby="picture-setup-title">
+    <div class="dialog-head">
+      <h2 id="picture-setup-title">Set up picture making</h2>
+      <button class="icon-button" id="close-picture-setup" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <p>Ollama no longer draws pictures. LightUsagi draws them with <strong>FLUX.2 klein</strong>, a free picture model, run by <strong>sd-server</strong>, a small free program. This downloads both once, about 5 GB, into <code id="setup-folder"></code>. Nothing else on the computer changes, and no account is needed.</p>
+      <ul class="setup-list" id="setup-list"></ul>
+      <div class="setup-bar" id="setup-bar" hidden><div></div></div>
+      <p class="note" id="setup-note" role="status"></p>
+      <div class="choices">
+        <button class="choice" type="button" id="setup-start">Download and set up</button>
+        <button class="choice" type="button" id="setup-stop" hidden>Stop</button>
+        <button class="choice" type="button" id="setup-use" hidden>Make a picture</button>
       </div>
     </div>
   </dialog>
@@ -3294,8 +3315,8 @@
         parts.push(body.program
           ? "sd-server: " + body.program + ". Models: " + body.models.join(", ") + "."
           : (serverSettings.pictures.program
-            ? "sd-server is not at the place written in \"Where sd-server is\". Empty that box and use the steps above."
-            : "sd-server is not in " + body.program_dir + " yet. Do steps 1 and 2 above."));
+            ? "sd-server is not at the place written in \"Where sd-server is\". Empty that box, or use Set up picture making."
+            : "sd-server is not in " + body.program_dir + " yet. Use Set up picture making."));
       } else if (!body.server) {
         parts.push("No picture model is set up yet.");
       }
@@ -3305,47 +3326,89 @@
       const hidden = pictureNotes.find((line) => line.includes("picture models are hidden") || line.endsWith("image models are hidden."));
       if (hidden) parts.push(hidden);
       note.textContent = parts.join(" ");
-      showHowto(body);
     }
 
-    let kleinLine = "";
-    function showHowto(body) {
-      const howto = document.querySelector("#picture-howto");
-      if (!body.models.length && !body.server) howto.open = true;
-      document.querySelector("#howto-system").textContent = body.system;
-      document.querySelector("#howto-program-dir").textContent = body.program_dir;
-      document.querySelector("#howto-folder").textContent = body.klein.folder;
-      const list = document.querySelector("#howto-files");
+    // The one-time picture setup: the helper downloads sd-server and FLUX.2 klein
+    // into the app folder and adds the model; this window shows how far it is.
+    const pictureSetup = document.querySelector("#picture-setup");
+    const KLEIN_ID = "sd:flux2-klein";
+    let setupTimer = null;
+    let setupReloaded = false;
+
+    async function refreshSetup() {
+      const note = document.querySelector("#setup-note");
+      let body;
+      try {
+        body = await (await fetch("/api/pictures/setup")).json();
+      } catch (error) {
+        note.textContent = "Could not reach the LightUsagi helper.";
+        return;
+      }
+      document.querySelector("#setup-folder").textContent = body.klein.folder.replace(/[\\/]models$/, "");
+      const parts = [{ key: "sd-server", label: "sd-server, the program that draws", ready: Boolean(body.program) },
+        ...body.klein.files.map((file) => ({ key: file.name, label: file.name, ready: file.found }))];
+      const list = document.querySelector("#setup-list");
       list.replaceChildren();
-      for (const file of body.klein.files) {
+      for (const part of parts) {
         const item = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = file.url;
-        link.textContent = file.name;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        item.append(link, file.found ? " ✓ found" : "");
+        const mark = document.createElement("span");
+        mark.className = "mark";
+        const now = body.running && body.file === part.key;
+        mark.textContent = part.ready ? "✓" : now ? "↓" : "·";
+        const label = document.createElement("span");
+        label.textContent = part.label + (now && body.total ? " (" + Math.round((100 * body.done) / body.total) + "%)" : "");
+        item.append(mark, label);
         list.append(item);
       }
-      kleinLine = body.klein.line;
+      const allReady = parts.every((part) => part.ready);
+      const usable = allPictures.some((item) => item.id === KLEIN_ID);
+      if (body.finished && !usable && !setupReloaded) {
+        setupReloaded = true;
+        loadModels();
+      }
+      const bar = document.querySelector("#setup-bar");
+      bar.hidden = !(body.running && body.total);
+      if (!bar.hidden) bar.firstElementChild.style.width = ((100 * body.done) / body.total).toFixed(1) + "%";
+      note.textContent = body.running
+        ? "Downloading " + body.file + (body.total ? ": " + gigabytes(body.done) + " of " + gigabytes(body.total) : "…") +
+          ". You can close this window; the download keeps going."
+        : body.error || (usable ? "Done. Pick flux2-klein under Make pictures in the model list, then describe a picture." : "");
+      const start = document.querySelector("#setup-start");
+      start.hidden = body.running || usable;
+      start.textContent = allReady ? "Finish setup" : parts.some((part) => part.ready) ? "Carry on" : "Download and set up";
+      document.querySelector("#setup-stop").hidden = !body.running;
+      document.querySelector("#setup-use").hidden = !usable || body.running;
     }
 
-    document.querySelector("#howto-fill").addEventListener("click", () => {
-      const box = document.querySelector("#pic-models");
-      const others = box.value.split("\n").filter((line) => line.trim() && !/^\s*flux2-klein\s*:/i.test(line));
-      box.value = [...others, kleinLine].join("\n");
-      if (serverSettings) savePictureSetting();
-    });
-
-    // "Set up picture making…" in the model list opens these steps.
     function openPictureSetup() {
-      showNotesSetting();
-      showContextSetting();
-      settings.showModal();
-      const howto = document.querySelector("#picture-howto");
-      howto.open = true;
-      howto.scrollIntoView({ block: "start" });
+      setupReloaded = false;
+      pictureSetup.showModal();
+      refreshSetup();
+      clearInterval(setupTimer);
+      setupTimer = setInterval(refreshSetup, 1000);
     }
+    pictureSetup.addEventListener("close", () => clearInterval(setupTimer));
+    document.querySelector("#close-picture-setup").addEventListener("click", () => pictureSetup.close());
+    const setupAction = async (action) => {
+      await fetch("/api/pictures/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      }).catch(() => {});
+      refreshSetup();
+    };
+    document.querySelector("#setup-start").addEventListener("click", () => { setupReloaded = false; setupAction("start"); });
+    document.querySelector("#setup-stop").addEventListener("click", () => setupAction("stop"));
+    document.querySelector("#setup-use").addEventListener("click", () => {
+      pictureSetup.close();
+      modelSelect.value = KLEIN_ID;
+      modelSelect.dispatchEvent(new Event("change"));
+      messageBox.focus();
+    });
+    document.querySelector("#open-picture-setup").addEventListener("click", () => {
+      settings.close();
+      openPictureSetup();
+    });
 
     async function savePictureSetting() {
       const wanted = {

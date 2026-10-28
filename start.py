@@ -54,20 +54,6 @@ def port_is_free(host: str, port: int) -> bool:
         return probe.connect_ex((host, port)) != 0
 
 
-def start_llmster():
-    """Start LM Studio's server when lms is installed, so its models are in the picker.
-    Returns what stops it again, or None when it was already up or is not installed."""
-    from helper import llmster
-
-    if llmster.find_cli() is None or llmster.answers_now():
-        return None
-    say("  Starting LM Studio's server (no model is loaded until you chat with one)...")
-    stop = llmster.start_server()
-    if stop is None:
-        say(f"  LM Studio's server did not come up at {llmster.HOST}. Try:  lms server start")
-    return stop
-
-
 def report_ollama() -> None:
     """Say what Ollama has. Never stops the start: it can be launched later."""
     from helper import context, imagegen
@@ -85,10 +71,6 @@ def report_ollama() -> None:
         say(f"Ollama is not running at {OLLAMA_HOST}.")
         say("  Install it from https://ollama.com and start it, then reload the page.")
         say("  The page will list your models as soon as Ollama answers.")
-    from helper import llmster
-    lms = llmster.names()
-    if lms:
-        say("LM Studio models: " + ", ".join(name[len(llmster.PREFIX):] for name in lms))
     pictures, notes = imagegen.picture_models(context.load_settings(), image_models)
     if pictures:
         say("Picture models: " + ", ".join(item["label"] for item in pictures))
@@ -137,19 +119,13 @@ def main() -> None:
     say("LightUsagi")
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
-    stop_lms = start_llmster()
     report_ollama()
     say("Press Ctrl+C to stop.")
     say()
 
     if not args.no_browser:
         threading.Timer(0.8, webbrowser.open, args=(url,)).start()
-    try:
-        serve()
-    finally:
-        if stop_lms:
-            say("Stopping LM Studio's server.")
-            stop_lms()
+    serve()
 
 
 if __name__ == "__main__":

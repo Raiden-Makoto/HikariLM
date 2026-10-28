@@ -16,14 +16,10 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
 import threading
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
-from pathlib import Path
 
 from helper.ollama import OllamaError
 
@@ -104,63 +100,6 @@ def catalog(quiet: bool = False) -> list[dict]:
 def reachable() -> bool:
     catalog(quiet=True)
     return time.monotonic() >= _absent_until
-
-
-def answers_now() -> bool:
-    """Ask llmster again, even if it did not answer a moment ago."""
-    global _absent_until
-    _absent_until = 0.0
-    _changed()
-    return reachable()
-
-
-def find_cli() -> str | None:
-    """LM Studio's lms command: on the PATH, or where LM Studio and llmster install it."""
-    found = shutil.which("lms")
-    if found:
-        return found
-    for name in ("lms.exe", "lms") if os.name == "nt" else ("lms",):
-        path = Path.home() / ".lmstudio" / "bin" / name
-        if path.is_file():
-            return str(path)
-    return None
-
-
-def _is_local() -> bool:
-    return (urllib.parse.urlsplit(HOST).hostname or "") in ("127.0.0.1", "localhost", "::1")
-
-
-def _lms(cli: str, *args: str, timeout: float = 60) -> bool:
-    try:
-        return subprocess.run([cli, *args], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, timeout=timeout).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
-
-
-def start_server(wait: float = 20):
-    """Start llmster's server with lms when it is installed here and not already up.
-    No model is loaded. Returns a function that stops what this started, or None
-    when nothing was started."""
-    if not _is_local() or answers_now():
-        return None
-    cli = find_cli()
-    if cli is None:
-        return None
-    _lms(cli, "daemon", "up")
-    port = urllib.parse.urlsplit(HOST).port or 1234
-    _lms(cli, "server", "start", "--port", str(port))
-    deadline = time.monotonic() + wait
-    while not answers_now():
-        if time.monotonic() > deadline:
-            return None
-        time.sleep(0.5)
-
-    def stop() -> None:
-        _lms(cli, "server", "stop", timeout=30)
-        _lms(cli, "daemon", "down", timeout=30)
-
-    return stop
 
 
 def _changed() -> None:

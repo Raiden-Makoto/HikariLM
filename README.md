@@ -16,9 +16,9 @@ It checks Ollama, lists the models it finds, and opens the page at http://127.0.
 
 Options: `--port 9000` to use another port, `--no-browser` to skip opening the page.
 
-To make pictures in Chat, pick *Set up picture making…* in the model list (or open Settings, *Making pictures*) and follow the steps: download `sd-server` from [stable-diffusion.cpp's releases](https://github.com/leejet/stable-diffusion.cpp/releases), unzip it into `~/.lightusagi/sd-server`, download the three FLUX.2 klein files it links into `~/.lightusagi/models`, and press *Add FLUX.2 klein to the list*. LightUsagi runs sd-server only while a picture is being made.
+To make pictures in Chat, pick *Set up picture making…* in the model list (or the button in Settings) and press *Download and set up*. That downloads once, about 5 GB, into `~/.lightusagi`: `sd-server` from [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) and the FLUX.2 klein picture model. Then *flux2-klein* shows up in the model list. LightUsagi runs sd-server only while a picture is being made.
 
-Models from LM Studio, such as the BitNet builds Ollama does not have, show up in the picker under *LM Studio*. If LM Studio's `lms` command is installed, the start script starts its server (llmster) with no model loaded, and stops it again when you press Ctrl+C. A server that was already running is left alone. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
+If LM Studio's server (llmster) is already running, its models show up in the picker under *LM Studio*. LightUsagi does not start it. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
 
 Your chats and drafts are saved in `~/.lightusagi` (set `LIGHTUSAGI_HOME` to move it).
 

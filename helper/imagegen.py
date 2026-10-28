@@ -45,8 +45,8 @@ PNG = b"\x89PNG\r\n\x1a\n"
 REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
 REFUSED_FILE = "ollama-pictures.json"
 SD_ALTERNATIVE = ("LightUsagi can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
-                  "on Windows, macOS and Linux: open Settings, and under Making pictures follow "
-                  "\"Set up FLUX.2 klein, step by step\".")
+                  "on Windows, macOS and Linux: pick \"Set up picture making…\" in the model list, which downloads "
+                  "and sets it up once.")
 
 
 # --- where it works ---------------------------------------------------------
@@ -214,7 +214,7 @@ def picture_models(settings: dict, ollama_images: list[str]) -> tuple[list[dict]
             found += [{"id": SD_PREFIX + model["name"], "label": model["name"], "kind": "sd"} for model in models]
         else:
             notes.append(f"sd-server was not found{' at ' + pictures['program'] if pictures['program'] else ''}, "
-                         "so its models are hidden. Settings, under Making pictures, has the steps.")
+                         "so its models are hidden. Use \"Set up picture making…\".")
     if pictures["address"]:
         try:
             name = sdserver.current_model(pictures["address"])

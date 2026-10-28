@@ -13,8 +13,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, imagegen, keepalive, llmster, notes, sdserver, store,
-                    thinking, workspace)
+from helper import (budget, context, descriptions, documents, imagegen, keepalive, llmster, notes, picsetup, sdserver,
+                    store, thinking, workspace)
 from helper.models import complete, open_chat, running, show, sizes, tags, unload
 from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
 from helper.ollama import version as ollama_version
@@ -84,6 +84,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/pictures":
             self._send_json(self._picture_setup())
+            return
+        if self.path == "/api/pictures/setup":
+            self._send_json(picsetup.SETUP.status())
             return
         if self.path.startswith(IMAGES + "/") and self.path.endswith(".png"):
             try:
@@ -273,6 +276,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/generate":
             self._generate()
+            return
+        if self.path == "/api/pictures/setup":
+            action = self._body(MAX_BODY).get("action")
+            if action == "start":
+                picsetup.SETUP.start()
+            elif action == "stop":
+                picsetup.SETUP.stop()
+            else:
+                self._send_json({"error": "action must be start or stop"}, status=400)
+                return
+            self._send_json(picsetup.SETUP.status())
             return
         if self.path == "/api/search":
             self._search()
@@ -623,7 +637,7 @@ class Handler(BaseHTTPRequestHandler):
                 program = sdserver.find_program(pictures["program"])
                 if not program:
                     raise ValueError("sd-server, the program that draws the pictures, is not set up yet. "
-                                     "Open Settings and follow the steps under Making pictures.")
+                                     "Pick \"Set up picture making…\" in the model list.")
                 if not sdserver.model_files(spec["args"]):
                     raise ValueError(f"None of the model files for {spec['name']} were found. Check its line in Settings.")
                 budget.check_picture(spec["name"], sdserver.model_size(spec["args"]), loaded, budget.memory())
@@ -767,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
         pictures = context.load_settings()["pictures"]
         models, problems = sdserver.parse_models(pictures["models"])
         program = sdserver.find_program(pictures["program"])
-        missing = [f"{model['name']}: its files are not downloaded yet (step 3)." for model in models
+        missing = [f"{model['name']}: its files are not downloaded yet; Set up picture making fetches them." for model in models
                    if not sdserver.model_files(model["args"])]
         server = None
         if pictures["address"]:
@@ -776,8 +790,7 @@ class Handler(BaseHTTPRequestHandler):
             except sdserver.PictureError as error:
                 server = {"error": str(error)}
         return {"program": program, "models": [model["name"] for model in models], "problems": problems + missing,
-                "server": server, "ollama": imagegen.support(), "klein": imagegen.klein_setup(),
-                "system": sdserver.release_hint(), "program_dir": str(sdserver.program_dir())}
+                "server": server, "ollama": imagegen.support(), "program_dir": str(sdserver.program_dir())}
 
     def _search(self) -> None:
         """A few earlier notes close to a question. Never an error: a send must not wait on this."""
