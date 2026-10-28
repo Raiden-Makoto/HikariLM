@@ -22,7 +22,7 @@ import json
 import os
 import tempfile
 
-from helper import store
+from helper import imagegen, store
 
 DEFAULT_PROMPT = """### Task:
 Summarize the conversation history that will be compacted out of the active chat context.
@@ -48,6 +48,7 @@ CAP_SHARE = 0.9        # a threshold above this share would leave no room for th
 MAX_CONTEXT = 262144
 
 DEFAULTS = {
+    "pictures": dict(imagegen.PICTURE_DEFAULTS),
     "context": {"all": None, "models": {}},
     "compaction": {"enabled": True, "threshold": None, "retention": 40, "max_tokens": 1000, "prompt": ""},
 }
@@ -92,6 +93,7 @@ def clean_settings(raw) -> dict:
                 models[name.strip()] = number
     prompt = compaction.get("prompt") if isinstance(compaction.get("prompt"), str) else ""
     return {
+        "pictures": imagegen.clean_picture_settings(raw.get("pictures")),
         "context": {"all": _positive(context.get("all"), 512, MAX_CONTEXT), "models": models},
         "compaction": {
             "enabled": compaction.get("enabled", True) is not False,

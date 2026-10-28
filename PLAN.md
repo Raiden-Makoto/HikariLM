@@ -1,6 +1,6 @@
 # Plan
 
-LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab with separate sections: a chat, a code editor for a small folder you already have, and a place to generate images.
+LightUsagi is a local chat page for Ollama. Ollama runs on the machine, with one large model loaded at a time. A small helper reads and writes files on the SSD. The page is one browser tab with separate sections: a chat, which can also make pictures, and a code editor for a small folder you already have.
 
 No Docker. The memory Docker would reserve stays available for the loaded model and its KV cache.
 
@@ -8,8 +8,8 @@ No Docker. The memory Docker would reserve stays available for the loaded model 
 
 Three pieces, and only two of them are ours.
 
-- **Page.** Chat, a code editor (a list of the files in a folder you chose, the one file you have open, and the chat beside it), and a separate Generate images section.
-- **Helper.** Picks the model, reads the files and images that belong to this message, streams the reply, and saves the chat to disk. For an image request it asks the image model and saves the picture it makes. Follow-ups reuse the model Ollama still has loaded. The helper forces a large model out only when the next request needs a different large model. `nomic-embed-text` is small enough to load beside it.
+- **Page.** Chat, where pictures are made too, and a code editor (a list of the files in a folder you chose, the one file you have open, and the chat beside it).
+- **Helper.** Picks the model, reads the files and images that belong to this message, streams the reply, and saves the chat to disk. For a picture it starts stable-diffusion.cpp's `sd-server` (or asks a picture server, or Ollama on Apple Silicon) and saves the picture it makes. Follow-ups reuse the model Ollama still has loaded. The helper forces a large model out only when the next request needs a different large model. `nomic-embed-text` is small enough to load beside it.
 - **Ollama.** Already installed. It holds the weights and the KV cache.
 
 The page talks to the helper. The helper talks to Ollama. The workspace folder stays where it already is. The helper reads from it and does not keep a second copy.
@@ -23,11 +23,11 @@ The page talks to the helper. The helper talks to Ollama. The workspace folder s
 | That same kind of question, if you switch it | `deepseekr1:8b` |
 | A message that includes an image | `gemma3` |
 | Indexing saved text for later search | `nomic-embed-text` |
-| Generating an image, in its own section, on Apple Silicon only | `flux.2` (the name as `ollama list` shows it) |
+| A message to a picture model, which answers with a picture | a model set up for `sd-server`, a picture server's model, or `flux.2` on Apple Silicon |
 
 The screen shows which model will answer before you send.
 
-**Image generation models are not chat models.** `flux.2` and any model like it make pictures from a prompt and cannot answer a question. They never appear in the chat's model picker, in the same way `nomic-embed-text` does not. They appear only in the Generate images section, whose own picker lists only them. The helper enforces this as well as the page: a chat request that names an image model, or a generate request that names a text model, is refused with a plain message.
+**Image generation models are not chat models.** `flux.2` and any model like it make pictures from a prompt and cannot answer a question. In the picker they sit in their own *Make pictures* group, and a message sent to one is a description of a picture (see "Making pictures"). The helper enforces this as well as the page: a chat request that names a picture model, or a picture request that names a text model, is refused with a plain message.
 
 The helper tells the kinds apart by what Ollama reports a model can do, when it reports that, and otherwise by a short list of image model names kept in one place in the helper. A model it cannot place is treated as a chat model.
 
@@ -49,9 +49,9 @@ R1's reasoning is stored in the chat file. Later turns send R1 its earlier answe
 - **Welcome.** An empty chat greets on one line by the clock on the user's computer: "Good morning, what are we working on?" from 5:00 to 11:59, "Good afternoon" from 12:00 to 16:59, "Good evening" from 17:00 to 23:59, and "Late one" from 0:00 to 4:59. A page left open re-checks every minute and when the user returns to it, so it never keeps an old greeting. Under it, a line says what can be dropped in and a reminder that Enter sends. Lines are balanced so a wrap never leaves a single word alone.
 - **Notifications.** When a reply finishes (or stops with an error) while the user is in another tab or window, the tab title changes to "● Reply ready" until they come back, and the browser shows a notification with the chat's name and the start of the answer if it was allowed. Clicking it opens that chat. A reply the user stopped does not notify. The browser asks for permission the first time a message is sent, and if it is refused the title change still works. Nothing is sent anywhere: it is the browser's own notification.
 - **Settings.** A gear in the header opens a small popup with two compact switches and the background picker: **Dark mode** (off by default, so the page starts light) and **Notify when a reply finishes** (on by default). Both are remembered in the browser and applied before the page paints, so a reload never flashes the wrong theme. The background image is chosen and removed from the same popup.
-- **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text` and without image generation models.
-- **Addresses.** Each section has its own address: `/chat`, `/editor`, and `/generate`. The header switches by changing the address without reloading, so Back and Forward move between sections, a reload stays in the section it was in, and a section can be bookmarked. The helper serves the same page at each address, and a bare `/` opens the section used last. Leaving the code editor by Back with unsaved edits asks first, the same as clicking Chat.
-- **Sections.** The header switches between Chat, Code editor, and Generate images. The chat sidebar belongs to Chat only. Chat and Code editor each have their own conversations and unsent text, and Generate images keeps its own prompt.
+- **Model picker.** Lives in the message box and lists what Ollama has, without `nomic-embed-text`, and in Chat a *Make pictures* group under it.
+- **Addresses.** Each section has its own address: `/chat` and `/editor`. The header switches by changing the address without reloading, so Back and Forward move between sections, a reload stays in the section it was in, and a section can be bookmarked. The helper serves the same page at each address, and a bare `/` opens the section used last. Leaving the code editor by Back with unsaved edits asks first, the same as clicking Chat.
+- **Sections.** The header switches between Chat and Code editor. The chat sidebar belongs to Chat only. Chat and Code editor each have their own conversations and unsent text.
 
 ## Attaching files
 
@@ -121,41 +121,29 @@ The description replaces the picture in the message: the chat shows the picture'
 
 If that description is already in the app folder and the image has not changed, Gemma is skipped. Qwen reads the saved text. nomic indexes the words Gemma wrote, not the pixels. A later question can find that description by search while Gemma stays unloaded.
 
-## Generating images
+## Making pictures
 
-A section of its own, like the code editor, because making a picture is a different job from answering a message. It is not in the chat sidebar, and a generated image is not a chat turn.
+Pictures are made in Chat. A picture model is picked in the same model picker as a chat model, the message is the description of the picture, and the reply is the picture. The picture stays in the chat like any reply, so a follow-up in the same chat can go to a chat model.
 
-- **Where it works.** `flux.2` runs in Ollama only on Apple Silicon Macs, so the section is turned off everywhere else. See "Turned off by architecture" below.
-- **What is in it.** A prompt box, a picker that lists only image generation models, a small Options area (a few size presets and a seed, with sensible defaults hidden until opened), and a Generate button that becomes a Stop square while it works, the same way Send does. A status line says what is happening: "Loading `flux.2`…", then "Generating…". The finished picture appears under the box.
-- **Trying again.** The picture has Regenerate (same prompt, same seed, so the same result) and Vary (same prompt, new seed). Prompt and seed are kept so a result can be repeated.
-- **Gallery.** Earlier pictures sit under the current one, newest first, each with its prompt. Each can be downloaded, reopened with its prompt and seed back in the boxes, or deleted (asks twice). The gallery is read from `images/`, so it survives a reload and a restart.
-- **Memory.** `flux.2` is a large model, so it follows the one-large-model rule: loading it forces the chat model out, and the next chat message forces it out again. Several generations in a row keep it loaded for the keepalive, so tweaking a prompt does not reload it each time. `nomic-embed-text` is not affected. Under the Generate button a quiet line says which chat model will be unloaded, so a reload of the chat model afterwards is not a surprise.
-- **One at a time.** A second generation cannot start while one runs. Stop cancels it, and nothing half-made is saved. A chat reply and a picture never run together either, since each needs its own large model: a chat message sent while a picture is being made is refused with a plain message, and so is a picture while a reply is being written.
-- **Memory check.** Before the image model loads, the helper checks that its size plus about 2 GB for drawing fits in the memory that can be used (as in "Context length and compaction"), counting the chat model it unloads as free. If it does not fit, nothing loads and the page says why.
-- **Sizes.** Square 1024 × 1024, Portrait 768 × 1024, Landscape 1024 × 768, Wide 1280 × 720, and Small square 512 × 512. The seed goes to Ollama as `options.seed`; blank picks a random one, which is saved. Steps are blank for the model's own default.
-- **Over the conversation.** The section covers Chat or the code editor without changing them: the conversation, its unsent text, and the open file are still there when you go back.
-- **Where pictures go.** Each result is written to `images/<id>.png` with `images/<id>.json` beside it holding the prompt, model, seed, size, and time, using a temp file and a rename so a crash never leaves half a picture. Deleting a picture removes both files. A picture whose notes file is missing or damaged still shows, without its prompt.
-- **Prompt draft.** The prompt box is kept in `drafts/generate.json` the same way a chat draft is, and removed when it is emptied or a generation starts.
-- **Notifications.** A finished or failed generation notifies when the user is in another tab, by the same rules and the same switch as a chat reply.
-- **Not in this step.** Sending a generated picture into a chat for Gemma to look at, editing an existing picture, and any model that is not `flux.2`-style prompt-to-image.
-
-### Turned off by architecture
-
-`flux.2` is supported by Ollama only on Apple Silicon (an M-series Mac). On any other machine the Generate section is disabled, decided by the helper from the machine and not by the user.
-
-- **The test.** The machine counts as Apple Silicon when the helper is running on macOS (`platform.system()` is `Darwin`) on an ARM processor. A Python that is running under Rosetta reports an Intel processor on an M-series Mac, so the helper also asks macOS directly (`sysctl hw.optional.arm64`) and trusts that answer. Intel Macs, Windows (including Windows on ARM), Linux (including Linux on ARM), and WSL are all "not supported". The test is one small function in the helper, so widening support later is a one-place change.
-- **What the user sees.** The Generate entry in the header stays visible but is greyed out and not clickable. Its tooltip and, if opened by address, the section itself say why in one line: "Image generation needs a Mac with Apple Silicon. This computer is Linux x86_64." The prompt box, picker, and gallery are not shown. The chat is unaffected.
-- **The helper enforces it.** `/api/state` reports whether image generation is supported and, if not, the reason, and the page reads that rather than guessing from the browser. A generate request on an unsupported machine is refused with the same reason, even if someone calls the helper directly.
-- **Image models stay out of chat everywhere.** On an unsupported machine an image model that happens to be installed is still hidden from the chat picker and refused in `/api/chat`, because it could never answer a message there either.
-- **Supported, but not ready.** On Apple Silicon the section is enabled. If no image model is installed it shows "No image model installed" and the command that adds one. If Ollama refuses the request (for example an Ollama too old to run `flux.2`), Ollama's own message is shown and nothing is saved. Ollama's image generation was experimental, and in August 2026 Ollama's maintainers said it had been removed for now ([ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306)), so it needs an Ollama release that still has it. An Ollama that finishes without a picture gets the message "This Ollama may not make pictures with …", and nothing is saved.
-- **Override.** `LIGHTUSAGI_IMAGES=on` turns the section on and `LIGHTUSAGI_IMAGES=off` turns it off, whatever the machine is, for when Ollama's support widens or for testing. Without it the architecture test decides.
-- **Start script.** `start.py` prints one line saying whether image generation is available on this computer, next to the Ollama model list.
-
-The helper asks Ollama for the picture over HTTP like everything else, so no new component is added. If Ollama's request for image models turns out to differ from its chat request, that difference stays inside the helper.
+- **Where pictures come from.** Ollama's own image generation runs only on Apple Silicon Macs, and in August 2026 Ollama's maintainers said it had been removed for now ([ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306)). LM Studio and its `llmster` server make no pictures. So pictures come from [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)'s `sd-server`, which runs on Windows, macOS, and Linux, on the CPU or a GPU (CUDA, Vulkan, Metal, ROCm), and reads Stable Diffusion 1.x, 2.x, XL, SD3, FLUX, and FLUX.2 models, including small quantized `.gguf` files. Its API is the same `/sdapi/v1` that AUTOMATIC1111 uses.
+- **The helper runs sd-server.** `sd-server` keeps its model in its own memory, apart from Ollama's, so it follows the one-large-model rule by hand. The helper starts it only when a picture is asked for, after the chat model has left memory. It stays for the keepalive so a few pictures in a row do not reload it, and the helper stops it when the keepalive runs out, when the next chat message needs its chat model, when a picture is stopped, and when the helper itself stops (including on `SIGTERM`). Stopping the process is what frees its memory. Its output goes to `sd-server.log` in the app folder, and if it exits while loading, the page shows the last error line from that log.
+- **Setting it up.** In Settings, under *Making pictures*: where `sd-server` is (blank looks for it on the PATH), and one line per model, a name, a colon, then `sd-server`'s own model options, for example `sd15: -m ~/models/v1-5-pruned-emaonly.safetensors` or `flux2-klein: --diffusion-model … --vae … --llm … --cfg-scale 1.0 --steps 4`. The helper adds the address and port itself, so `--listen-ip` and `--listen-port` are refused on a line. A line that cannot be read is named in Settings, and so is a model whose files are not there. Settings also says whether `sd-server` was found.
+- **A server you run yourself.** Settings can also take the address of a picture server already running: AUTOMATIC1111, Forge, Draw Things, or an `sd-server` started by hand. Its loaded model shows in the picker as "… (picture server)". Its memory is its own, so the helper cannot free it; Settings says so, and a picture is stopped by asking that server to interrupt.
+- **Ollama's image models.** On an Apple Silicon Mac, an image model Ollama has (such as `flux.2`) is listed with the others. Everywhere else it is hidden from the picker and refused, with the reason "Image generation needs a Mac with Apple Silicon. This computer is …", shown in Settings and printed by `start.py` only when such a model is installed. The test is the helper running on macOS on ARM, with `sysctl hw.optional.arm64` asked as well so a Python under Rosetta still counts. `LIGHTUSAGI_IMAGES=on` or `off` overrides it.
+- **In the picker.** Picture models sit in their own *Make pictures* group, under the chat models, in Chat only; the code editor never lists them. Their ids say where they come from: `sd:<name>` for the helper's own `sd-server`, `remote:<model>` for a server at an address, and Ollama's own name for an Ollama model.
+- **Writing the message.** With a picture model picked, the message box says "Describe the picture" and the attach button is hidden; files are refused. A small Options button opens size, seed, and steps. The sizes are Square 1024 × 1024, Portrait 768 × 1024, Landscape 1024 × 768, Wide 1280 × 720, and Small square 512 × 512. A blank seed picks a random one, which is saved; blank steps use the model's own.
+- **While it draws.** The reply shows "Loading … , after unloading …", then "Drawing… step 3 of 20", then "Saving the picture…". Send becomes Stop, the same as for a reply. Stop ends the drawing, nothing is saved, and the description goes back into the message box.
+- **The reply.** The picture, with its size, seed, and model under it, a Download link, and Vary, which draws the same description with a new seed and puts the new picture in place of the old one (the old file is deleted). A finished or failed picture notifies when the user is in another tab, by the same rules as a reply.
+- **Later chat models.** A chat model cannot see a picture made earlier. What it is sent in that picture's place is a line saying a picture was made from the description above, and its size.
+- **One at a time.** A chat reply and a picture never run together, since each needs its own large model: a chat message sent while a picture is being made is refused with a plain message, and so is a picture while a reply is being written. A picture model named in `/api/chat` is refused too.
+- **Memory check.** Before a picture model loads, the helper checks that the size of its model files plus about 2 GB for drawing fits in the memory that can be used (as in "Context length and compaction"), counting the chat model it unloads as free. If it does not fit, nothing loads and the page says why. A server the user runs is not checked, since its memory is already taken.
+- **Where pictures go.** Each picture is written to `images/<id>.png` with `images/<id>.json` beside it holding the description, model, seed, size, steps, and time, using a temp file and a rename so a crash never leaves half a picture. The chat keeps only those notes, not the picture. The page shows the picture by its address, so its bytes never sit in the page or in the transcript. Deleting the chat deletes its pictures.
+- **Old address.** `/generate`, where pictures used to have their own section, now sends the browser to `/chat`.
+- **Not in this step.** Sending a made picture to Gemma to look at, editing an existing picture, and image-to-image.
 
 ## What is in memory
 
-One large model at a time: Gemma, R1, Qwen, or the image model. Each request sets a keepalive, so a follow-up to the same model skips the load and Ollama resets the timer. Ollama unloads that model on its own when the timer runs out. The helper forces it out only to switch to a different large model. `nomic-embed-text` loads beside the large model and does not take its place.
+One large model at a time: Gemma, R1, Qwen, or the picture model, whether it is in Ollama or in `sd-server`. Each request sets a keepalive, so a follow-up to the same model skips the load and Ollama resets the timer. Ollama unloads that model on its own when the timer runs out. The helper forces it out only to switch to a different large model. `nomic-embed-text` loads beside the large model and does not take its place.
 
 The open chat and the open file are the only project text held in memory. Other chats, images, and descriptions stay on the SSD until a message needs them.
 
@@ -179,7 +167,8 @@ LightUsagi keeps its own files in one folder in the home directory, `~/.lightusa
   drafts/          what is typed and attached but not sent yet, one file per chat
   descriptions/    the text Gemma wrote for an image
   index/           the search index nomic wrote
-  images/          the pictures the image model made, each with a small notes file
+  images/          the pictures made in Chat, each with a small notes file
+  sd-server.log    what sd-server said the last time the helper started it
   settings.json    context length and compaction settings
 ```
 
@@ -190,7 +179,7 @@ Files attached through the page (see "Attaching files") add nothing new to this 
 - The text taken from an attached text file, PDF, `.docx`, or `.xlsx` is saved inside the transcript of the chat it was attached to, in `transcripts/`. That is the only copy, and it goes when the chat is deleted.
 - The original file and any attached picture are never saved in a transcript. The transcript keeps the file name.
 - The one exception is a draft. While a message is typed but not sent, the page keeps the text, the extracted file text, and any attached pictures in `drafts/<chat id>.json` (`new.json` before a chat has started; the code editor's own are `editor-<chat id>.json` and `editor-new.json`), so a reload does not lose them. The file is deleted when the message is sent, when the draft is emptied, and when its chat is deleted. Nothing in `drafts/` outlives the message it was for.
-- `images/` holds pictures LightUsagi made itself, with the prompt, seed, and model beside each. They are its own output, not copies of anything of yours. A picture leaves `images/` only when the user deletes it, or downloads a copy to wherever they choose. The prompt draft for the Generate section is `drafts/generate.json`.
+- `images/` holds pictures LightUsagi made itself, with the prompt, seed, and model beside each. They are its own output, not copies of anything of yours. A picture leaves `images/` when its chat is deleted or Vary replaces it, and a copy leaves when the user downloads it to wherever they choose.
 - Nothing else in this folder is a copy of the workspace.
 
 ## Frameworks
@@ -233,6 +222,4 @@ Each step is usable before the next one starts.
    - **Not in the code editor.** A question there is about the open file, so earlier notes are left out to save tokens.
    - **Setting.** *Use earlier chats and pictures* in Settings, on by default, with a count of notes kept. Off means every question is sent on its own. Indexing continues either way.
 6. **Context length and compaction.** Done, except that it has only been tried against a fake Ollama and a pretend memory size. The context setting, the memory guard, and Open WebUI's compaction, as in "Context length and compaction" above.
-7. **Generate images.** Done on the parts that can be tried here: the architecture test, the disabled section, the model filtering, the refusals, and `images/`, plus the whole section against a fake Ollama with `LIGHTUSAGI_IMAGES=on`. Making a real picture still has to be tried on a Mac with Apple Silicon. Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
-
-   Only the disabled path, the model filtering, and the `images/` handling can be tried on a machine that is not an Apple Silicon Mac, with a fake Ollama standing in. The generation itself has to be tried on a Mac with Apple Silicon, so it is not counted as done until it has run there.
+7. **Making pictures.** Done, except that it has only been tried against a fake `sd-server` and a fake Ollama. Pictures are made in Chat, from a *Make pictures* group in the model picker, as in "Making pictures" above: the helper starts `sd-server` for a picture and stops it before the next chat model loads, or reaches a picture server at an address, or uses Ollama on an Apple Silicon Mac. The picture is the reply, saved with the chat and in `images/`. A real picture still has to be made with a real `sd-server` and model.

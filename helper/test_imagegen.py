@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from helper import budget, imagegen
+from helper import budget, imagegen, sdserver, store
 from helper.router import Work
 
 PNG = imagegen.PNG + b"rest of a picture"
@@ -93,20 +93,23 @@ class FolderTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_save_list_read_delete(self):
+    def test_save_read_delete(self):
         request = imagegen.clean_request({"model": "flux", "prompt": "a fox", "seed": 3})
         record = imagegen.save(imagegen.decode(base64.b64encode(PNG).decode()), request)
+        self.assertEqual((record["prompt"], record["seed"]), ("a fox", 3))
         self.assertEqual(imagegen.read(record["id"]), PNG)
-        listed = imagegen.listing()
-        self.assertEqual([(item["id"], item["prompt"], item["seed"]) for item in listed], [(record["id"], "a fox", 3)])
         self.assertTrue(imagegen.delete(record["id"]))
-        self.assertEqual(imagegen.listing(), [])
+        self.assertFalse((imagegen.images_dir() / f"{record['id']}.json").exists())
         self.assertFalse(imagegen.delete(record["id"]))
 
-    def test_picture_without_notes_still_shows(self):
-        record = imagegen.save(PNG, imagegen.clean_request({"model": "m", "prompt": "x"}))
-        (imagegen.images_dir() / f"{record['id']}.json").write_text("{damaged", encoding="utf-8")
-        self.assertEqual(imagegen.listing()[0]["prompt"], "")
+    def test_a_chat_keeps_only_the_notes_of_its_picture(self):
+        record = imagegen.save(PNG, imagegen.clean_request({"model": "sd:flux", "prompt": "a fox", "seed": 9}))
+        store.save("c1", "sd:flux", [{"role": "user", "content": "a fox"},
+                                     {"role": "assistant", "content": "", "picture": {**record, "image": "AAAA"}}])
+        kept = store.load("c1")["messages"][1]["picture"]
+        self.assertEqual((kept["id"], kept["seed"], kept["prompt"]), (record["id"], 9, "a fox"))
+        self.assertNotIn("image", kept)
+        self.assertEqual(store.picture_ids("c1"), [record["id"]])
 
     def test_bad_input_is_refused(self):
         for bad in ("", "not base64!", base64.b64encode(b"GIF89a").decode()):
@@ -115,6 +118,43 @@ class FolderTest(unittest.TestCase):
         for bad in ("../x", "20260101-000000-zzzzzz", ""):
             with self.assertRaises(ValueError):
                 imagegen.read(bad)
+
+
+class SdServerTest(unittest.TestCase):
+    def test_model_lines(self):
+        models, problems = sdserver.parse_models(
+            "# my models\n"
+            "flux2-klein: --diffusion-model ~/m/flux.gguf --vae ~/m/ae.sft --llm '/m/qwen 3.gguf'\n"
+            "bad line without colon\n"
+            "z: --listen-port 9\n"
+            "flux2-klein: -m x\n")
+        self.assertEqual([m["name"] for m in models], ["flux2-klein"])
+        self.assertEqual(models[0]["args"][1], os.path.expanduser("~/m/flux.gguf"))
+        self.assertEqual(models[0]["args"][-1], "/m/qwen 3.gguf")
+        self.assertEqual(len(problems), 3)
+
+    def test_size_counts_only_files_that_exist(self):
+        with tempfile.NamedTemporaryFile() as handle:
+            handle.write(b"x" * 1000)
+            handle.flush()
+            self.assertEqual(sdserver.model_size(["--diffusion-model", handle.name, "--vae", "/nope"]), 1000)
+
+    def test_keepalive(self):
+        self.assertEqual(sdserver.keepalive_seconds("5m"), 300)
+        self.assertEqual(sdserver.keepalive_seconds("30s"), 30)
+        self.assertEqual(sdserver.keepalive_seconds("nonsense"), 300)
+
+    def test_picker_lists_every_source(self):
+        settings = {"pictures": {"program": "", "models": "flux: -m /x.gguf", "address": ""}}
+        with mock.patch.object(sdserver, "find_program", return_value="/bin/sd-server"), \
+                mock.patch.dict(os.environ, {"LIGHTUSAGI_IMAGES": "off"}):
+            found, notes = imagegen.picture_models(settings, ["x/flux2-klein"])
+        self.assertEqual([item["id"] for item in found], ["sd:flux"])
+        self.assertTrue(any("hidden" in note for note in notes))
+        with mock.patch.object(sdserver, "find_program", return_value=None):
+            found, notes = imagegen.picture_models(settings, [])
+        self.assertEqual(found, [])
+        self.assertIn("sd-server was not found", notes[0])
 
 
 class WorkTest(unittest.TestCase):

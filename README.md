@@ -16,6 +16,8 @@ It checks Ollama, lists the models it finds, and opens the page at http://127.0.
 
 Options: `--port 9000` to use another port, `--no-browser` to skip opening the page.
 
+To make pictures in Chat, download `sd-server` from [stable-diffusion.cpp's releases](https://github.com/leejet/stable-diffusion.cpp/releases) for your system and a model for it, then add them in Settings under *Making pictures*. LightUsagi runs it only while a picture is being made.
+
 Your chats and drafts are saved in `~/.lightusagi` (set `LIGHTUSAGI_HOME` to move it).
 
 How the pieces fit, and the order we will build them, is in [PLAN.md](PLAN.md).

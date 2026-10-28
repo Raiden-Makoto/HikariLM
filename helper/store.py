@@ -73,8 +73,38 @@ def clean_messages(messages) -> list[dict]:
         usage = clean_usage(message.get("usage"))
         if usage:
             entry["usage"] = usage
+        picture = clean_picture(message.get("picture"))
+        if picture and role == "assistant":
+            entry["picture"] = picture
         cleaned.append(entry)
     return cleaned
+
+
+PICTURE_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+
+
+def clean_picture(value) -> dict:
+    """A reply that is a picture: which file in images/, and how it was made. Never the picture itself."""
+    if not isinstance(value, dict) or not isinstance(value.get("id"), str) or not PICTURE_ID.match(value["id"]):
+        return {}
+    kept = {"id": value["id"]}
+    for key, limit in (("prompt", 4000), ("model", 200), ("size", 20)):
+        if isinstance(value.get(key), str):
+            kept[key] = value[key][:limit]
+    for key in ("seed", "width", "height", "steps"):
+        number = value.get(key)
+        if isinstance(number, int) and not isinstance(number, bool) and 0 <= number < 2 ** 32:
+            kept[key] = number
+    return kept
+
+
+def picture_ids(chat_id: str) -> list[str]:
+    """The pictures a chat made, so deleting the chat can delete them too."""
+    try:
+        messages = load(chat_id).get("messages") or []
+    except (FileNotFoundError, ValueError, OSError):
+        return []
+    return [m["picture"]["id"] for m in messages if isinstance(m.get("picture"), dict) and "id" in m["picture"]]
 
 
 MAX_SUMMARY = 20_000

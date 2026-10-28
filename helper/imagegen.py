@@ -106,6 +106,63 @@ def split(names: list[str], show) -> tuple[list[str], list[str]]:
     return chat, images
 
 
+# --- where pictures come from -------------------------------------------------------
+
+SD_PREFIX = "sd:"          # an sd-server model the helper starts and stops
+REMOTE_PREFIX = "remote:"  # a picture server the user runs, reached by its address
+PICTURE_DEFAULTS = {"program": "", "models": "", "address": ""}
+
+
+def clean_picture_settings(raw) -> dict:
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for key, limit in (("program", 1000), ("models", 20000), ("address", 500)):
+        value = raw.get(key)
+        out[key] = value.strip()[:limit] if isinstance(value, str) else ""
+    if out["address"] and not out["address"].startswith(("http://", "https://")):
+        out["address"] = "http://" + out["address"]
+    return out
+
+
+def picture_models(settings: dict, ollama_images: list[str]) -> tuple[list[dict], list[str]]:
+    """Every model that can make a picture now, for the picker, and a plain note for each
+    source that is set up but not usable."""
+    from helper import sdserver
+
+    found, notes = [], []
+    if ollama_images:
+        allowed = support()
+        if allowed["supported"]:
+            found += [{"id": name, "label": name, "kind": "ollama"} for name in ollama_images]
+        else:
+            notes.append(allowed["reason"] + " Ollama's image models are hidden.")
+    pictures = settings.get("pictures") or PICTURE_DEFAULTS
+    models, problems = sdserver.parse_models(pictures["models"])
+    notes += problems
+    if models:
+        program = sdserver.find_program(pictures["program"])
+        if program:
+            found += [{"id": SD_PREFIX + model["name"], "label": model["name"], "kind": "sd"} for model in models]
+        else:
+            notes.append(f"sd-server was not found{' at ' + pictures['program'] if pictures['program'] else ''}, "
+                         "so its models are hidden.")
+    if pictures["address"]:
+        try:
+            name = sdserver.current_model(pictures["address"])
+            found.append({"id": REMOTE_PREFIX + name, "label": name + " (picture server)", "kind": "remote"})
+        except sdserver.PictureError as error:
+            notes.append(str(error))
+    return found, notes
+
+
+def find_sd_model(settings: dict, model_id: str) -> dict | None:
+    from helper import sdserver
+
+    name = model_id[len(SD_PREFIX):]
+    models, _ = sdserver.parse_models((settings.get("pictures") or PICTURE_DEFAULTS)["models"])
+    return next((model for model in models if model["name"] == name), None)
+
+
 # --- a request ------------------------------------------------------------------
 
 def clean_request(payload: dict) -> dict:
@@ -203,27 +260,6 @@ def save(data: bytes, request: dict) -> dict:
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record
-
-
-def _notes(path: Path) -> dict:
-    image_id = path.stem
-    try:
-        record = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
-        if not isinstance(record, dict):
-            raise ValueError
-    except (OSError, ValueError):
-        # A picture whose notes are missing or damaged still shows, without its prompt.
-        return {"id": image_id, "prompt": "", "created": path.stat().st_mtime}
-    record["id"] = image_id
-    return record
-
-
-def listing() -> list[dict]:
-    folder = images_dir()
-    if not folder.is_dir():
-        return []
-    out = [_notes(path) for path in folder.glob("*.png") if ID_PATTERN.match(path.stem)]
-    return sorted(out, key=lambda item: item.get("created") or 0, reverse=True)
 
 
 def read(image_id: str) -> bytes:

@@ -417,7 +417,7 @@
       justify-content: space-between;
       gap: 0.75rem;
     }
-    #model, #gen-model, #gen-size {
+    #model, #picture-size {
       min-width: 9.5rem;
       max-width: 100%;
       text-overflow: ellipsis;
@@ -429,9 +429,9 @@
       font-size: 0.88rem;
       cursor: pointer;
     }
-    #model:hover:not(:disabled), #gen-model:hover:not(:disabled), #gen-size:hover { background: var(--hover); color: var(--ink); }
-    #model:disabled, #gen-model:disabled { cursor: default; opacity: 0.6; }
-    #send, #gen-go {
+    #model:hover:not(:disabled), #picture-size:hover { background: var(--hover); color: var(--ink); }
+    #model:disabled { cursor: default; opacity: 0.6; }
+    #send {
       display: grid;
       place-items: center;
       width: 2.1rem;
@@ -443,11 +443,10 @@
       color: var(--send-ink);
       cursor: pointer;
     }
-    #send svg, #gen-go svg { width: 1.05rem; height: 1.05rem; }
-    #send .stop-icon, #gen-go .stop-icon { display: none; }
-    #send.stop .send-icon, #gen-go.stop .send-icon { display: none; }
-    #send.stop .stop-icon, #gen-go.stop .stop-icon { display: block; }
-    #gen-go:disabled { opacity: 0.4; cursor: default; }
+    #send svg { width: 1.05rem; height: 1.05rem; }
+    #send .stop-icon { display: none; }
+    #send.stop .send-icon { display: none; }
+    #send.stop .stop-icon { display: block; }
 
     body.has-bg header,
     body.has-bg #sidebar { background: color-mix(in srgb, var(--panel) 88%, transparent); }
@@ -467,29 +466,17 @@
     }
     .tab:hover { color: var(--ink); }
     .tab[aria-selected="true"] { background: var(--hover); color: var(--ink); }
-    .tab[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-    .tab[aria-disabled="true"]:hover { color: var(--muted); }
 
-    #generate { display: none; flex: 1; min-width: 0; flex-direction: column; gap: 0.6rem; overflow-y: auto; padding: 1.25rem max(1.25rem, calc(50% - 31rem)); }
-    body.view-generate #generate { display: flex; }
-    /* "html" outranks the body.view-files rules: the editor stays open underneath. */
-    html body.view-generate #chat-pane, html body.view-generate #files, html body.view-generate #sidebar { display: none; }
-    html body.view-generate #toggle-sidebar { visibility: hidden; }
-    #generate [hidden] { display: none; }
-    #generate .note { margin: 0; min-height: 1.2rem; }
-    #gen-off { margin: 12vh auto 0; max-width: 32rem; text-align: center; color: var(--muted); }
-    #gen-prompt { min-height: 3.5rem; }
-    #gen-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-size: 0.85rem; color: var(--muted); }
-    #gen-options[hidden] { display: none; }
-    #gen-options input { width: 7rem; padding: 0.25rem 0.5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: inherit; font: inherit; }
-    .picture { display: flex; flex-direction: column; gap: 0.4rem; }
-    .picture img { display: block; max-width: 100%; height: auto; border-radius: 12px; background: var(--hover); }
-    #gen-current .picture img { width: min(100%, 36rem); align-self: flex-start; }
-    .picture .prompt { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+    /* A picture model is picked: the message is the prompt, and size and seed sit under Options. */
+    #picture-options { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; font-size: 0.85rem; color: var(--muted); }
+    #picture-options[hidden], #picture-toggle[hidden], #attach[hidden] { display: none; }
+    #picture-options input { width: 7rem; padding: 0.25rem 0.5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: inherit; font: inherit; }
+    #picture-toggle { flex: none; padding: 0.2rem 0.6rem; font-size: 0.82rem; }
+    .picture { display: flex; flex-direction: column; gap: 0.4rem; margin: 0; }
+    .picture img { display: block; width: min(100%, 32rem); height: auto; border-radius: 12px; background: var(--hover); }
+    .picture figcaption { font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
     .picture .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .picture .actions .choice { flex: none; padding: 0.3rem 0.65rem; font-size: 0.82rem; text-decoration: none; color: inherit; }
-    #gen-earlier { margin: 1rem 0 0; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem; }
 
     .work { flex: 1; min-height: 0; display: flex; }
     #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -740,6 +727,8 @@
       font: inherit;
     }
     .field-row input { width: 8.5rem; }
+    .field-row input[type="text"] { flex: 1; min-width: 0; max-width: 16rem; }
+    #pic-models { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
     .setting textarea { box-sizing: border-box; width: 100%; min-height: 6rem; margin-top: 0.5rem; resize: vertical; font-size: 0.82rem; }
     .setting details summary { cursor: pointer; margin-top: 0.75rem; font-size: 0.9rem; }
   </style>
@@ -775,7 +764,6 @@
       <div class="tabs" role="tablist" aria-label="Sections">
         <button class="tab" id="tab-chat" type="button" role="tab" aria-selected="true">Chat</button>
         <button class="tab" id="tab-files" type="button" role="tab" aria-selected="false">Code editor</button>
-        <button class="tab" id="tab-generate" type="button" role="tab" aria-selected="false">Generate images</button>
       </div>
       <button class="icon-button" id="open-settings" type="button" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -824,38 +812,6 @@
       </div>
     </section>
 
-    <section id="generate" aria-label="Generate images">
-      <p id="gen-off" role="status" hidden></p>
-      <form class="box" id="gen-form" hidden>
-        <textarea id="gen-prompt" rows="2" placeholder="Describe the picture" aria-label="Picture prompt"></textarea>
-        <div id="gen-options" hidden>
-          <label>Size <select id="gen-size" aria-label="Size"></select></label>
-          <label>Seed <input id="gen-seed" type="number" min="0" max="2147483647" step="1" placeholder="Random"></label>
-          <label>Steps <input id="gen-steps" type="number" min="1" max="100" step="1" placeholder="Model's"></label>
-        </div>
-        <div class="box-row">
-          <div class="box-left">
-            <select id="gen-model" aria-label="Image model"></select>
-            <button class="choice" id="gen-options-toggle" type="button" aria-expanded="false" aria-controls="gen-options">Options</button>
-          </div>
-          <button id="gen-go" type="submit" aria-label="Generate">
-            <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 19V5"/>
-              <path d="M6 11l6-6 6 6"/>
-            </svg>
-            <svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>
-            </svg>
-          </button>
-        </div>
-      </form>
-      <p class="note" id="gen-status" role="status"></p>
-      <p class="note" id="gen-unload"></p>
-      <div id="gen-current"></div>
-      <h2 id="gen-earlier" hidden>Earlier pictures</h2>
-      <div id="gallery"></div>
-    </section>
-
     <div id="chat-pane">
     <div id="pane-resize" role="separator" aria-orientation="vertical" aria-label="Resize the chat" tabindex="0" title="Drag to resize. Double-click to reset."></div>
     <div id="pane-head"><button class="choice" id="new-editor-chat" type="button">New chat</button></div>
@@ -866,6 +822,11 @@
       <div class="box">
         <div class="chips" id="chips"></div>
         <textarea id="message" rows="1" placeholder="Message" aria-label="Message"></textarea>
+        <div id="picture-options" hidden>
+          <label>Size <select id="picture-size" aria-label="Picture size"></select></label>
+          <label>Seed <input id="picture-seed" type="number" min="0" max="2147483647" step="1" placeholder="Random"></label>
+          <label>Steps <input id="picture-steps" type="number" min="1" max="100" step="1" placeholder="Model's"></label>
+        </div>
         <div class="box-row">
           <div class="box-left">
             <button class="icon-button" id="attach" type="button" aria-label="Attach files" title="Attach text or code files">
@@ -875,6 +836,7 @@
             </button>
             <input id="file-input" type="file" multiple hidden>
             <select id="model" aria-label="Model"></select>
+            <button class="choice" id="picture-toggle" type="button" aria-expanded="false" aria-controls="picture-options" hidden>Options</button>
           </div>
           <button id="send" type="submit" aria-label="Send">
             <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -986,6 +948,24 @@
           <textarea id="compact-prompt" aria-label="Summary prompt" placeholder="Summary prompt (blank uses Open WebUI's). Use {{PREVIOUS_SUMMARY}}, {{COMPACTED_MESSAGES}} and {{RECENT_MESSAGES}}."></textarea>
         </details>
         <p class="note" id="compact-note" role="status"></p>
+      </div>
+      <div class="setting" id="picture-setting">
+        <span class="setting-label">Making pictures</span>
+        <p class="note">Pictures come from stable-diffusion.cpp's sd-server, which runs on Windows, macOS and Linux. LightUsagi starts it only to make a picture, after the chat model leaves memory, and stops it before the next chat. Its models then show under "Make pictures" in the model list.</p>
+        <label class="field-row">
+          <span>sd-server program</span>
+          <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="sd-server on the PATH">
+        </label>
+        <textarea id="pic-models" spellcheck="false" aria-label="Picture models" placeholder="One model per line: a name, a colon, then sd-server's options. For example:&#10;sd15: -m ~/models/v1-5-pruned-emaonly.safetensors&#10;flux2-klein: --diffusion-model ~/models/flux-2-klein-4b-Q4_0.gguf --vae ~/models/flux2_ae.safetensors --llm ~/models/Qwen3-4B-Q4_K_M.gguf --cfg-scale 1.0 --steps 4"></textarea>
+        <details>
+          <summary>A picture server you run yourself</summary>
+          <label class="field-row">
+            <span>Address</span>
+            <input id="pic-address" type="text" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:7860">
+          </label>
+          <p class="note">AUTOMATIC1111, Forge, Draw Things or your own sd-server. LightUsagi cannot free its memory, so it keeps its model loaded next to the chat model.</p>
+        </details>
+        <p class="note" id="picture-note" role="status"></p>
       </div>
       <div class="setting">
         <span class="setting-label" id="bg-label">Background image</span>
@@ -1134,6 +1114,7 @@
         images += 1;
         if (modelSelect.value !== vision) {
           modelSelect.value = vision;
+          updatePictureMode();
           switched = vision;
         }
         return true;
@@ -1540,7 +1521,7 @@
       return blocks.join("\n\n") + "\n\n" + message.content;
     }
 
-    function addTurn(role, text, thought, files) {
+    function addTurn(role, text, thought, files, message) {
       document.querySelector("#empty")?.remove();
       const block = document.createElement("article");
       block.className = "turn " + role;
@@ -1553,6 +1534,7 @@
       thinking.hidden = !thought;
       const answer = document.createElement("div");
       answer.textContent = text;
+      if (message?.picture) answer.append(pictureFigure(message));
       block.append(who, thinking, answer);
       if (files?.length) {
         const row = document.createElement("div");
@@ -1609,7 +1591,43 @@
         return;
       }
       log.replaceChildren();
-      for (const message of messages) addTurn(message.role, message.content, message.thinking, message.files);
+      for (const message of messages) addTurn(message.role, message.content, message.thinking, message.files, message);
+    }
+
+    // A picture reply is kept in the chat as its notes; the file is shown by
+    // address, so its bytes never sit in the page or in the saved chat.
+    function pictureFigure(message) {
+      const record = message.picture;
+      const figure = document.createElement("figure");
+      figure.className = "picture";
+      const img = document.createElement("img");
+      img.src = "/api/images/" + record.id + ".png";
+      img.alt = record.prompt;
+      img.loading = "lazy";
+      if (record.width && record.height) {
+        img.width = record.width;
+        img.height = record.height;
+      }
+      const caption = document.createElement("figcaption");
+      caption.textContent = [record.width && record.width + " × " + record.height, "seed " + record.seed, pictureLabel(record.model)]
+        .filter(Boolean).join(" · ");
+      img.addEventListener("error", () => { caption.textContent = "The picture file is missing from the helper's images folder."; });
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const download = document.createElement("a");
+      download.className = "choice";
+      download.href = img.src;
+      download.download = "lightusagi-" + record.id + ".png";
+      download.textContent = "Download";
+      const vary = document.createElement("button");
+      vary.type = "button";
+      vary.className = "choice";
+      vary.textContent = "Vary";
+      vary.title = "Same prompt with a new seed. The new picture replaces this one.";
+      vary.addEventListener("click", () => varyPicture(message, figure));
+      actions.append(download, vary);
+      figure.append(img, caption, actions);
+      return figure;
     }
 
     function setBusy(busy) {
@@ -1619,6 +1637,7 @@
       attachButton.disabled = busy;
       if (busy) closeMenu();
       modelSelect.disabled = busy || !modelSelect.value;
+      for (const input of [pictureSize, pictureSeed, pictureSteps, pictureToggle]) input.disabled = busy;
       sidebar.toggleAttribute("inert", busy);
       document.dispatchEvent(new Event("busychange"));
     }
@@ -1627,20 +1646,11 @@
     // with, where compaction starts, and (after the reply) the tokens used.
     let lastContext = null;
 
-    // The helper decides whether this computer can make pictures; the page only shows it.
-    function showImageSupport(images) {
-      const tab = document.querySelector("#tab-generate");
-      const off = images && !images.supported;
-      tab.setAttribute("aria-disabled", String(Boolean(off)));
-      tab.title = off ? images.reason : "";
-    }
-
     async function refreshState() {
       const response = await fetch("/api/state");
       const body = await response.json();
-      showImageSupport(body.images);
       let text = body.large_model
-        ? "Kept loaded: " + body.large_model
+        ? "Kept loaded: " + (isPictureModel(body.large_model) ? pictureLabel(body.large_model) + " (pictures)" : body.large_model)
         : "No large model loaded yet.";
       if (lastContext && lastContext.used) {
         text += " · Context used: " + lastContext.used.toLocaleString() + " of " + lastContext.num_ctx.toLocaleString() +
@@ -1656,14 +1666,50 @@
         const response = await fetch("/api/tags");
         const body = await response.json();
         models = body.models || [];
+        allPictures = body.pictures || [];
+        pictureNotes = body.picture_notes || [];
+        fillPictureSizes(body.sizes || {});
         if (!response.ok) problem = plainError(body.error || "Could not list models.");
-        else if (models.length === 0) problem = "No chat models installed in Ollama.";
+        else if (models.length === 0 && allPictures.length === 0) problem = "No chat models installed in Ollama.";
       } catch (error) {
         problem = "The helper is not responding.";
       }
       allModels = models;
       fillModels(problem);
     }
+
+    // Picture models answer a message with a picture. They are listed apart in
+    // the picker, only in Chat, and never get the chat's context settings.
+    let allPictures = [];
+    let pictureNotes = [];
+    const SIZE_NAMES = { square: "Square", portrait: "Portrait", landscape: "Landscape", wide: "Wide", small: "Small square" };
+    const pictureSize = document.querySelector("#picture-size");
+    const pictureSeed = document.querySelector("#picture-seed");
+    const pictureSteps = document.querySelector("#picture-steps");
+    const pictureToggle = document.querySelector("#picture-toggle");
+    const isPictureModel = (value) => allPictures.some((item) => item.id === value);
+    const pictureLabel = (id) => allPictures.find((item) => item.id === id)?.label || id.replace(/^(sd|remote):/, "");
+
+    function fillPictureSizes(sizes) {
+      if (pictureSize.options.length || !Object.keys(sizes).length) return;
+      for (const [key, [width, height]] of Object.entries(sizes)) {
+        pictureSize.append(new Option((SIZE_NAMES[key] || key) + ", " + width + " × " + height, key));
+      }
+    }
+
+    function setPictureOptions(open) {
+      document.querySelector("#picture-options").hidden = !open;
+      pictureToggle.setAttribute("aria-expanded", String(open));
+    }
+
+    function updatePictureMode() {
+      const on = isPictureModel(modelSelect.value);
+      pictureToggle.hidden = !on;
+      if (!on) setPictureOptions(false);
+      attachButton.hidden = on;
+      messageBox.placeholder = on ? "Describe the picture" : "Message";
+    }
+    pictureToggle.addEventListener("click", () => setPictureOptions(document.querySelector("#picture-options").hidden));
 
     // The picker shows every chat model in Chat. In the code editor it shows
     // only text-only models, with coder models first, because the editor has
@@ -1688,8 +1734,9 @@
     function fillModels(problem = modelProblem) {
       modelProblem = problem;
       const models = modelsForView();
+      const pictures = inCodeView() ? [] : allPictures;
       modelSelect.replaceChildren();
-      if (models.length === 0) {
+      if (models.length === 0 && pictures.length === 0) {
         const option = document.createElement("option");
         option.value = "";
         option.textContent = allModels.length ? "No text-only model" : "No model selected";
@@ -1698,17 +1745,26 @@
         status.textContent = problem || (allModels.length
           ? "The code editor needs a text-only model, and the installed ones also read pictures."
           : "");
+        updatePictureMode();
         return;
       }
       const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model");
-      for (const name of models) {
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        modelSelect.append(option);
+      const group = (label) => {
+        const element = document.createElement("optgroup");
+        element.label = label;
+        modelSelect.append(element);
+        return element;
+      };
+      const chatPlace = pictures.length && models.length ? group("Chat") : modelSelect;
+      for (const name of models) chatPlace.append(new Option(name, name));
+      if (pictures.length) {
+        const picturePlace = group("Make pictures");
+        for (const item of pictures) picturePlace.append(new Option(item.label, item.id));
       }
-      modelSelect.value = models.includes(saved) ? saved : models[0];
+      const values = [...models, ...pictures.map((item) => item.id)];
+      modelSelect.value = values.includes(saved) ? saved : values[0];
       modelSelect.disabled = Boolean(activeRequest);
+      updatePictureMode();
       refreshState();
     }
 
@@ -2247,6 +2303,7 @@
       if ([...modelSelect.options].some((option) => option.value === chat.model)) {
         modelSelect.value = chat.model;
         localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", chat.model);
+        updatePictureMode();
       }
       renderLog();
       renderChats();
@@ -2332,6 +2389,7 @@
         loadModels();
         return;
       }
+      if (isPictureModel(model)) return sendPicture(content, model);
       if (inCodeView() && attached.some((file) => file.image)) {
         notify("The code editor cannot send pictures. Remove the picture, or use the Chat tab.");
         return;
@@ -2413,7 +2471,10 @@
             messages: messages.map((message, index) => {
               const out = {
                 role: message.role,
-                content: (index === messages.length - 1 ? notesPrefix : "") + withFiles(message),
+                // A chat model cannot see a picture made earlier, only that it was made.
+                content: message.picture
+                  ? "[A picture was made here from the prompt above, " + message.picture.width + " × " + message.picture.height + ".]"
+                  : (index === messages.length - 1 ? notesPrefix : "") + withFiles(message),
               };
               const pictures = (message.files || []).filter((file) => file.image).map((file) => file.image);
               if (pictures.length && index === messages.length - 1) out.images = pictures;
@@ -2518,6 +2579,148 @@
       else if (outcome === "failed") announce("Reply stopped", name, failure, thisChat);
     }
 
+    // Ask the helper for one picture. It first moves the chat model (or the
+    // last picture model) out of memory; show() is told each step.
+    async function makePicture(payload, signal, show) {
+      const label = pictureLabel(payload.model);
+      show("Loading " + label + "…");
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal,
+      });
+      if (!response.ok) throw new Error((await response.json()).error || "The picture could not be made.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split("\n");
+        buffered = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+          if (event.error) throw new Error(event.error);
+          if (event.image) return event.image;
+          if (event.lightusagi === "loading") {
+            show("Loading " + label + (event.unloading ? ", after unloading " + event.unloading : "") + "…");
+          } else if (event.progress < 0) show("Saving the picture…");
+          else if (event.total) show("Drawing… step " + event.progress + " of " + event.total);
+          else if (event.progress !== undefined) show("Drawing…");
+        }
+      }
+      throw new Error("The helper stopped before the picture was finished.");
+    }
+
+    function pictureRequest(prompt, model) {
+      const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
+      return { model, prompt, size: pictureSize.value || "square", seed: number(pictureSeed), steps: number(pictureSteps) };
+    }
+
+    async function sendPicture(prompt, model) {
+      if (attached.length) {
+        notify("A picture model cannot read attached files. Remove them, or pick a chat model.");
+        return;
+      }
+      const draftOwner = draftKey();
+      askNotifyPermission();
+      if (!chatId) chatId = crypto.randomUUID();
+      const thisChat = chatId;
+      messages.push({ role: "user", content: prompt });
+      const sent = addTurn("user", prompt, "");
+      messageBox.value = "";
+      messageBox.style.height = "";
+      dropDraft(draftOwner);
+      const reply = addTurn("assistant", "");
+      const show = (text) => {
+        reply.thinking.textContent = text;
+        reply.thinking.hidden = false;
+        status.textContent = text;
+        scrollLog();
+      };
+      setBusy(true);
+      activeRequest = new AbortController();
+      // The chat model's context figures stop describing what is loaded.
+      lastContext = null;
+      let record = null;
+      let failure = "";
+      try {
+        record = await makePicture(pictureRequest(prompt, model), activeRequest.signal, show);
+      } catch (error) {
+        if (error.name !== "AbortError") failure = plainError(error.message);
+      } finally {
+        activeRequest = null;
+        setBusy(false);
+      }
+      const name = () => chats.find((chat) => chat.id === thisChat)?.title || "";
+      if (record) {
+        const message = { role: "assistant", content: "", model, picture: record };
+        messages.push(message);
+        reply.block.remove();
+        addTurn("assistant", "", "", null, message);
+        await saveChat();
+        announce("Picture ready", name(), prompt, thisChat);
+      } else if (failure) {
+        messages.pop();
+        reply.thinking.hidden = true;
+        reply.answer.textContent = failure;
+        announce("Picture failed", name(), failure, thisChat);
+      } else {
+        // Stopped: nothing was made, so the prompt goes back into the box.
+        messages.pop();
+        sent.block.remove();
+        reply.block.remove();
+        messageBox.value = prompt;
+        saveDraft(draftKey(), true);
+        if (messages.length === 0) showEmpty();
+      }
+      if (messages.length === 0) chatId = null;
+      refreshState().catch(() => {});
+      messageBox.focus();
+    }
+
+    // Vary keeps the prompt, size and steps and draws with a new seed. The new
+    // picture takes the old one's place, and the old file is deleted.
+    async function varyPicture(message, figure) {
+      if (activeRequest) return;
+      const old = message.picture;
+      if (!isPictureModel(old.model)) {
+        notify(pictureLabel(old.model) + " is not set up for pictures any more, so this one cannot be varied.");
+        return;
+      }
+      const line = document.createElement("div");
+      line.className = "thinking";
+      figure.before(line);
+      const show = (text) => {
+        line.textContent = text;
+        status.textContent = text;
+      };
+      setBusy(true);
+      activeRequest = new AbortController();
+      lastContext = null;
+      let record = null;
+      try {
+        record = await makePicture({ model: old.model, prompt: old.prompt, size: old.size, steps: old.steps, seed: null },
+          activeRequest.signal, show);
+      } catch (error) {
+        if (error.name !== "AbortError") notify("No new picture: " + plainError(error.message));
+      } finally {
+        activeRequest = null;
+        setBusy(false);
+        line.remove();
+      }
+      if (record) {
+        message.picture = record;
+        figure.replaceWith(pictureFigure(message));
+        await saveChat();
+        fetch("/api/images/" + old.id, { method: "DELETE" }).catch(() => {});
+      }
+      refreshState().catch(() => {});
+    }
+
     document.querySelector("#composer").addEventListener("submit", (event) => {
       event.preventDefault();
       if (activeRequest) {
@@ -2574,6 +2777,7 @@
     });
     modelSelect.addEventListener("change", () => {
       localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", modelSelect.value);
+      updatePictureMode();
     });
     window.addEventListener("focus", () => {
       if (!activeRequest && !modelSelect.value) loadModels();
@@ -2702,8 +2906,11 @@
     const gigabytes = (bytes) => (bytes / 1024 ** 3).toFixed(1) + " GB";
     const numberOrNull = (input) => (input.value.trim() === "" ? null : Number(input.value));
 
+    // Context length belongs to chat models; a picture model has none.
+    const contextModel = () => (isPictureModel(modelSelect.value) ? "" : modelSelect.value);
+
     async function showContextSetting() {
-      const model = modelSelect.value;
+      const model = contextModel();
       try {
         serverSettings = await (await fetch("/api/settings")).json();
       } catch (error) {
@@ -2721,7 +2928,64 @@
       document.querySelector("#compact-max").value = compaction.max_tokens;
       document.querySelector("#compact-prompt").value = compaction.prompt;
       document.querySelector("#compact-note").textContent = "";
+      const pictures = serverSettings.pictures;
+      document.querySelector("#pic-program").value = pictures.program;
+      document.querySelector("#pic-models").value = pictures.models;
+      document.querySelector("#pic-address").value = pictures.address;
+      showPictureSetup();
       await showMemory();
+    }
+
+    async function showPictureSetup(saved = false) {
+      const note = document.querySelector("#picture-note");
+      let body;
+      try {
+        body = await (await fetch("/api/pictures")).json();
+      } catch (error) {
+        note.textContent = "Could not reach the helper.";
+        return;
+      }
+      const parts = saved ? ["Saved."] : [];
+      if (body.models.length) {
+        parts.push(body.program
+          ? "sd-server: " + body.program + ". Models: " + body.models.join(", ") + "."
+          : "sd-server was not found" + (serverSettings.pictures.program ? " at that path" : " on the PATH") +
+            ". Download it from github.com/leejet/stable-diffusion.cpp/releases.");
+      } else if (!body.server) {
+        parts.push("No picture model is set up yet.");
+      }
+      if (body.server) parts.push(body.server.error ? plainError(body.server.error) : "Picture server: " + body.server.model + ".");
+      parts.push(...body.problems);
+      // Said only when an Ollama image model is installed but cannot run here.
+      const hidden = pictureNotes.find((line) => line.endsWith("image models are hidden."));
+      if (hidden) parts.push(hidden);
+      note.textContent = parts.join(" ");
+    }
+
+    async function savePictureSetting() {
+      const wanted = {
+        context: serverSettings.context,
+        compaction: serverSettings.compaction,
+        pictures: {
+          program: document.querySelector("#pic-program").value,
+          models: document.querySelector("#pic-models").value,
+          address: document.querySelector("#pic-address").value,
+        },
+      };
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wanted),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        document.querySelector("#picture-note").textContent = "Not saved: " + plainError(body.error || "the helper refused it");
+        return;
+      }
+      serverSettings = body;
+      document.querySelector("#pic-address").value = body.pictures.address;
+      await showPictureSetup(true);
+      if (!activeRequest) loadModels();
     }
 
     // Steps of 1,024 up to 8K, then a quarter of each doubling, so there is
@@ -2744,7 +3008,7 @@
 
     async function showMemory() {
       const note = document.querySelector("#context-note");
-      const model = modelSelect.value;
+      const model = contextModel();
       try {
         const body = await (await fetch("/api/context?model=" + encodeURIComponent(model))).json();
         const parts = [];
@@ -2777,7 +3041,7 @@
     }
 
     async function saveContextSetting() {
-      const model = modelSelect.value;
+      const model = contextModel();
       const models = { ...serverSettings.context.models };
       const own = numberOrNull(document.querySelector("#ctx-model"));
       if (model) {
@@ -2793,6 +3057,7 @@
           max_tokens: numberOrNull(document.querySelector("#compact-max")) ?? 1000,
           prompt: document.querySelector("#compact-prompt").value,
         },
+        pictures: serverSettings.pictures,
       };
       const note = document.querySelector("#compact-note");
       const response = await fetch("/api/settings", {
@@ -2811,8 +3076,10 @@
       await showMemory();
     }
 
-    document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file), #compact-prompt")
+    document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt")
       .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
+    document.querySelectorAll("#picture-setting input, #pic-models")
+      .forEach((input) => input.addEventListener("change", () => { if (serverSettings) savePictureSetting(); }));
 
     document.querySelector("#open-settings").addEventListener("click", () => {
       showNotesSetting();
@@ -3200,311 +3467,18 @@
       showFolderDialog();
     }
 
-    // Generate images: one picture at a time from an image model, saved by the
-    // helper into images/. The page shows pictures by address, so a picture's
-    // bytes are never kept in the page beyond what the browser displays.
-    const genForm = document.querySelector("#gen-form");
-    const genPrompt = document.querySelector("#gen-prompt");
-    const genModel = document.querySelector("#gen-model");
-    const genSize = document.querySelector("#gen-size");
-    const genSeed = document.querySelector("#gen-seed");
-    const genSteps = document.querySelector("#gen-steps");
-    const genGo = document.querySelector("#gen-go");
-    const genStatus = document.querySelector("#gen-status");
-    const genCurrent = document.querySelector("#gen-current");
-    const gallery = document.querySelector("#gallery");
-    const SIZE_NAMES = { square: "Square", portrait: "Portrait", landscape: "Landscape", wide: "Wide", small: "Small square" };
-    const gen = { started: false, request: null, images: [], current: null, models: [], draftTimer: null };
-
-    async function showGenerate() {
-      const off = document.querySelector("#gen-off");
-      let body;
-      try {
-        body = await (await fetch("/api/images/models")).json();
-      } catch (error) {
-        body = { error: "The LightUsagi helper is not answering." };
-      }
-      if (body.supported === false) {
-        off.textContent = body.reason;
-        off.hidden = false;
-        for (const part of [genForm, genStatus, genCurrent, gallery, document.querySelector("#gen-unload")]) part.hidden = true;
-        document.querySelector("#gen-earlier").hidden = true;
-        return;
-      }
-      off.hidden = true;
-      for (const part of [genForm, genStatus, genCurrent, gallery, document.querySelector("#gen-unload")]) part.hidden = false;
-      if (!gen.request) {
-        gen.models = body.models || [];
-        const keep = genModel.value || localStorage.getItem("lightusagi-image-model");
-        genModel.replaceChildren(...gen.models.map((name) => new Option(name, name)));
-        if (gen.models.includes(keep)) genModel.value = keep;
-        if (!genSize.options.length) {
-          for (const [key, [width, height]] of Object.entries(body.sizes || {})) {
-            genSize.append(new Option((SIZE_NAMES[key] || key) + ", " + width + " × " + height, key));
-          }
-        }
-        genModel.disabled = gen.models.length === 0;
-        genGo.disabled = gen.models.length === 0;
-        if (body.error) genStatus.textContent = plainError(body.error);
-        else if (gen.models.length === 0) genStatus.textContent = "No image model installed. Add one with:  " + body.install;
-        else if (/^No image model|^Ollama/.test(genStatus.textContent)) genStatus.textContent = "";
-      }
-      await showUnloadLine();
-      if (!gen.started) {
-        gen.started = true;
-        loadGenerateDraft();
-        loadGallery();
-      }
-      if (!gen.request) genPrompt.focus();
-    }
-
-    // Making a picture forces the chat model out of memory, so say which one.
-    async function showUnloadLine() {
-      const line = document.querySelector("#gen-unload");
-      try {
-        const state = await (await fetch("/api/state")).json();
-        line.textContent = state.large_model && !gen.models.includes(state.large_model)
-          ? "Generating unloads " + state.large_model + " from memory. The next chat message loads it again."
-          : "";
-      } catch (error) {
-        line.textContent = "";
-      }
-    }
-
-    async function loadGallery() {
-      try {
-        gen.images = (await (await fetch("/api/images")).json()).images || [];
-      } catch (error) {
-        gen.images = [];
-      }
-      renderGallery();
-    }
-
-    function pictureCard(record, current) {
-      const card = document.createElement("figure");
-      card.className = "picture";
-      card.style.margin = "0";
-      const img = document.createElement("img");
-      img.src = "/api/images/" + record.id + ".png";
-      img.alt = record.prompt || "A generated picture";
-      img.loading = "lazy";
-      if (record.width && record.height) {
-        img.width = record.width;
-        img.height = record.height;
-      }
-      const caption = document.createElement("figcaption");
-      caption.className = "prompt";
-      caption.textContent = record.prompt
-        ? record.prompt + " · seed " + record.seed + " · " + record.model
-        : "The prompt for this picture was not saved.";
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      const button = (label, onClick) => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "choice";
-        item.textContent = label;
-        item.addEventListener("click", onClick);
-        actions.append(item);
-        return item;
-      };
-      const download = document.createElement("a");
-      download.className = "choice";
-      download.href = img.src;
-      download.download = "lightusagi-" + record.id + ".png";
-      download.textContent = "Download";
-      actions.append(download);
-      if (record.prompt) {
-        const again = { prompt: record.prompt, model: record.model, size: record.size, steps: record.steps };
-        if (current) {
-          button("Regenerate", () => generatePicture({ ...again, seed: record.seed })).title = "Same prompt and seed, so the same picture";
-          button("Vary", () => generatePicture({ ...again, seed: null })).title = "Same prompt with a new seed";
-        } else {
-          button("Reopen", () => reopenPicture(record));
-        }
-      }
-      button("Delete", () => deletePicture(record));
-      card.append(img, caption, actions);
-      return card;
-    }
-
-    function renderGallery() {
-      genCurrent.replaceChildren(...(gen.current ? [pictureCard(gen.current, true)] : []));
-      const earlier = gen.images.filter((item) => item.id !== gen.current?.id);
-      document.querySelector("#gen-earlier").hidden = earlier.length === 0;
-      gallery.replaceChildren(...earlier.map((item) => pictureCard(item, false)));
-    }
-
-    function reopenPicture(record) {
-      genPrompt.value = record.prompt;
-      genSeed.value = record.seed ?? "";
-      genSteps.value = record.steps ?? "";
-      if (record.size && [...genSize.options].some((option) => option.value === record.size)) genSize.value = record.size;
-      if (gen.models.includes(record.model)) genModel.value = record.model;
-      setGenOptions(true);
-      gen.current = record;
-      renderGallery();
-      saveGenerateDraft();
-      document.querySelector("#generate").scrollTo({ top: 0, behavior: "smooth" });
-      genPrompt.focus();
-    }
-
-    async function deletePicture(record) {
-      if (!confirm("Delete this picture?")) return;
-      if (!confirm("It cannot be brought back. Delete the picture and its prompt?")) return;
-      const response = await fetch("/api/images/" + record.id, { method: "DELETE" });
-      if (!response.ok && response.status !== 404) {
-        genStatus.textContent = "Could not delete: " + plainError((await response.json()).error || "the helper refused");
-        return;
-      }
-      gen.images = gen.images.filter((item) => item.id !== record.id);
-      if (gen.current?.id === record.id) gen.current = null;
-      renderGallery();
-    }
-
-    function setGenOptions(open) {
-      document.querySelector("#gen-options").hidden = !open;
-      document.querySelector("#gen-options-toggle").setAttribute("aria-expanded", String(open));
-    }
-
-    function setGenBusy(busy) {
-      genGo.classList.toggle("stop", busy);
-      genGo.setAttribute("aria-label", busy ? "Stop" : "Generate");
-      genModel.disabled = busy || gen.models.length === 0;
-      genSize.disabled = busy;
-    }
-
-    async function generatePicture(wanted) {
-      if (gen.request) return;
-      const prompt = (wanted.prompt ?? genPrompt.value).trim();
-      const model = wanted.model && gen.models.includes(wanted.model) ? wanted.model : genModel.value;
-      if (!prompt || !model) {
-        genStatus.textContent = prompt ? "Choose an image model first." : "Write what the picture should show.";
-        return;
-      }
-      const seedText = wanted.seed === undefined ? genSeed.value.trim() : wanted.seed;
-      const payload = {
-        model,
-        prompt,
-        size: wanted.size || genSize.value,
-        seed: seedText === "" || seedText === null ? null : Number(seedText),
-        // Regenerate and Vary repeat the picture's own steps, even when they were the model's default.
-        steps: "steps" in wanted ? wanted.steps : (genSteps.value.trim() === "" ? null : Number(genSteps.value)),
-      };
-      localStorage.setItem("lightusagi-image-model", model);
-      clearTimeout(gen.draftTimer);
-      fetch("/api/drafts/generate", { method: "DELETE" }).catch(() => {});
-      gen.request = new AbortController();
-      setGenBusy(true);
-      genStatus.textContent = "Loading " + model + "…";
-      const started = Date.now();
-      let record = null;
-      let failure = "";
-      try {
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: gen.request.signal,
-        });
-        if (!response.ok) throw new Error((await response.json()).error || "The picture could not be made.");
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffered = "";
-        while (!record) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffered += decoder.decode(value, { stream: true });
-          const lines = buffered.split("\n");
-          buffered = lines.pop();
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            const event = JSON.parse(line);
-            if (event.error) throw new Error(event.error);
-            if (event.image) record = event.image;
-            else if (event.lightusagi === "loading") genStatus.textContent = "Loading " + model + "…";
-            else if (event.progress < 0) genStatus.textContent = "Saving…";
-            else if (event.total) genStatus.textContent = "Generating… step " + event.progress + " of " + event.total;
-            else if (event.progress !== undefined) genStatus.textContent = "Generating…";
-          }
-        }
-        if (!record) throw new Error("The helper stopped before the picture was finished.");
-      } catch (error) {
-        if (error.name === "AbortError") genStatus.textContent = "Stopped. Nothing was saved.";
-        else failure = plainError(error.message);
-      } finally {
-        gen.request = null;
-        setGenBusy(false);
-      }
-      if (record) {
-        gen.current = record;
-        gen.images = [record, ...gen.images.filter((item) => item.id !== record.id)];
-        genStatus.textContent = "Done in " + Math.round((Date.now() - started) / 1000) + " s. Seed " + record.seed + ".";
-        renderGallery();
-        announce("Picture ready", "", prompt, null);
-      } else if (failure) {
-        genStatus.textContent = failure;
-        announce("Picture failed", "", failure, null);
-      }
-      // The chat model's context figures no longer describe what is loaded.
-      lastContext = null;
-      showUnloadLine();
-      refreshState().catch(() => {});
-    }
-
-    async function loadGenerateDraft() {
-      try {
-        const response = await fetch("/api/drafts/generate");
-        if (!response.ok) return;
-        const draft = await response.json();
-        if (!genPrompt.value && typeof draft.text === "string") genPrompt.value = draft.text;
-      } catch (error) {
-        // A missing draft is the normal case.
-      }
-    }
-
-    function saveGenerateDraft(keepalive = false) {
-      clearTimeout(gen.draftTimer);
-      gen.draftTimer = null;
-      const text = genPrompt.value;
-      fetch("/api/drafts/generate", text.trim()
-        ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), keepalive }
-        : { method: "DELETE", keepalive }).catch(() => {});
-    }
-
-    genPrompt.addEventListener("input", () => {
-      clearTimeout(gen.draftTimer);
-      gen.draftTimer = setTimeout(saveGenerateDraft, 600);
-    });
-    genPrompt.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-        event.preventDefault();
-        genForm.requestSubmit();
-      }
-    });
-    window.addEventListener("pagehide", () => { if (gen.draftTimer) saveGenerateDraft(true); });
-    genForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (gen.request) gen.request.abort();
-      else generatePicture({});
-    });
-    document.querySelector("#gen-options-toggle").addEventListener("click", () => {
-      setGenOptions(document.querySelector("#gen-options").hidden);
-    });
-
     // Each section has its own address, so a reload or a bookmark comes back
     // to the same section: /chat and /editor. Returns false if the user chose
     // to stay because of unsaved edits.
-    const SECTION_PATHS = { chat: "/chat", files: "/editor", generate: "/generate" };
+    const SECTION_PATHS = { chat: "/chat", files: "/editor" };
     const SECTION_KEY = "lightusagi-section";
     const FILE_KEY = "lightusagi-file";
-    const sectionFromPath = () =>
-      (/^\/editor\/?$/.test(location.pathname) ? "files" : /^\/generate\/?$/.test(location.pathname) ? "generate" : "chat");
+    const sectionFromPath = () => (/^\/editor\/?$/.test(location.pathname) ? "files" : "chat");
     // A plain "/" has no section in it, so it opens the one used last.
     const sectionToOpen = () =>
-      (/^\/(chat|editor|generate)\/?$/.test(location.pathname) ? sectionFromPath() : localStorage.getItem(SECTION_KEY) || "chat");
-    const sectionShown = () =>
-      (document.body.classList.contains("view-generate") ? "generate" : inCodeView() ? "files" : "chat");
+      (/^\/(chat|editor)\/?$/.test(location.pathname) ? sectionFromPath()
+        : localStorage.getItem(SECTION_KEY) === "files" ? "files" : "chat");
+    const sectionShown = () => (inCodeView() ? "files" : "chat");
 
     // After a reload, put the file that was open back in the editor.
     function restoreFile() {
@@ -3530,11 +3504,8 @@
     }
 
     function setSection(name, how = "push", restore = true) {
-      if (name === "generate") return openGenerate(how);
       const files = name === "files";
-      const fromGenerate = document.body.classList.contains("view-generate");
-      // Coming back from Generate images to the conversation already loaded changes nothing in it.
-      if (!files && !(fromGenerate && shownSection === "chat") && !discardOk()) return false;
+      if (!files && !discardOk()) return false;
       if (how !== "url" && location.pathname !== SECTION_PATHS[name]) {
         history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS[name]);
       }
@@ -3550,8 +3521,6 @@
         parked[shownSection] = { chatId, messages };
       }
       document.body.classList.toggle("view-files", files);
-      document.body.classList.remove("view-generate");
-      document.querySelector("#tab-generate").setAttribute("aria-selected", "false");
       shownSection = name;
       if (swap) {
         const back = parked[name] || { chatId: null, messages: [] };
@@ -3583,23 +3552,6 @@
       } else {
         messageBox.focus();
       }
-      return true;
-    }
-
-    // Generate images sits over the chat or editor conversation without
-    // touching it: the conversation, its draft and the open file stay as they are.
-    function openGenerate(how = "push") {
-      if (how !== "url" && location.pathname !== SECTION_PATHS.generate) {
-        history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS.generate);
-      }
-      if (shownSection === null) shownSection = inCodeView() ? "files" : "chat";
-      closeMenu();
-      document.body.classList.add("view-generate");
-      localStorage.setItem(SECTION_KEY, "generate");
-      document.querySelector("#tab-chat").setAttribute("aria-selected", "false");
-      document.querySelector("#tab-files").setAttribute("aria-selected", "false");
-      document.querySelector("#tab-generate").setAttribute("aria-selected", "true");
-      showGenerate();
       return true;
     }
 
@@ -3997,9 +3949,6 @@
 
     document.querySelector("#tab-chat").addEventListener("click", () => setSection("chat"));
     document.querySelector("#tab-files").addEventListener("click", () => setSection("files"));
-    document.querySelector("#tab-generate").addEventListener("click", (event) => {
-      if (event.currentTarget.getAttribute("aria-disabled") !== "true") setSection("generate");
-    });
     document.addEventListener("busychange", () => {
       refreshFileButtons();
       // A tab switched mid-reply left the picker on the other view's list.
