@@ -154,5 +154,52 @@ class LlmsterTest(unittest.TestCase):
                     models.tags()
 
 
+class StartServerTest(unittest.TestCase):
+    def setUp(self):
+        probe = FakeLlmster()
+        self.port = probe.server.server_address[1]
+        probe.stop()
+        self.fake = None
+        self.ran: list[tuple[str, ...]] = []
+        for name, value in (("HOST", f"http://127.0.0.1:{self.port}"), ("_absent_until", 0.0), ("_cached", None),
+                            ("find_cli", lambda: "lms"), ("_lms", self.lms)):
+            patcher = mock.patch.object(llmster, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(lambda: self.fake and self.fake.stop())
+
+    def lms(self, cli, *args, timeout=60):
+        self.ran.append(args)
+        if args[:2] == ("server", "start"):
+            self.fake = FakeLlmster(int(args[3]))
+        if args[:2] == ("server", "stop") and self.fake:
+            self.fake.stop()
+            self.fake = None
+        return True
+
+    def test_starts_and_stops_what_it_started(self):
+        stop = llmster.start_server(wait=5)
+        self.assertIsNotNone(stop)
+        self.assertEqual(self.ran, [("daemon", "up"), ("server", "start", "--port", str(self.port))])
+        self.assertEqual(llmster.names(), ["lms:falcon3-10b-instruct-1.58bit"])
+        self.assertEqual(self.fake.loaded, {})
+        stop()
+        self.assertEqual(self.ran[2:], [("server", "stop"), ("daemon", "down")])
+
+    def test_leaves_a_running_server_alone(self):
+        self.fake = FakeLlmster(self.port)
+        self.assertIsNone(llmster.start_server(wait=5))
+        self.assertEqual(self.ran, [])
+
+    def test_gives_up_when_it_never_answers(self):
+        with mock.patch.object(llmster, "_lms", lambda *args, **kw: False):
+            self.assertIsNone(llmster.start_server(wait=1))
+
+    def test_not_for_another_machine(self):
+        with mock.patch.object(llmster, "HOST", "http://192.168.1.20:1234"):
+            self.assertIsNone(llmster.start_server(wait=1))
+        self.assertEqual(self.ran, [])
+
+
 if __name__ == "__main__":
     unittest.main()

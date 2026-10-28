@@ -18,7 +18,7 @@ Options: `--port 9000` to use another port, `--no-browser` to skip opening the p
 
 To make pictures in Chat, download `sd-server` from [stable-diffusion.cpp's releases](https://github.com/leejet/stable-diffusion.cpp/releases) for your system and a model for it, then add them in Settings under *Making pictures*. LightUsagi runs it only while a picture is being made.
 
-To use models from LM Studio, such as the BitNet builds Ollama does not have, start its server (`lms server start`, or `lms daemon up` first for headless llmster) and its chat models show up in the picker under *LM Studio*. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
+Models from LM Studio, such as the BitNet builds Ollama does not have, show up in the picker under *LM Studio*. If LM Studio's `lms` command is installed, the start script starts its server (llmster) with no model loaded, and stops it again when you press Ctrl+C. A server that was already running is left alone. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
 
 Your chats and drafts are saved in `~/.lightusagi` (set `LIGHTUSAGI_HOME` to move it).
 
