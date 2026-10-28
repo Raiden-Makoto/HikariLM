@@ -98,6 +98,14 @@ class Keeper:
         with self._lock:
             return key(model) in self._busy
 
+    def leaves_at(self, model: str):
+        """When this watchdog will unload the model, or None while it is busy or unknown."""
+        with self._lock:
+            ended = self._ended.get(key(model))
+            if ended is None or key(model) in self._busy:
+                return None
+            return ended[0] + ended[1]
+
     def overdue(self, loaded: list[dict]) -> list[str]:
         """The loaded models that should have left memory by now."""
         now = self._clock()

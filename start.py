@@ -71,6 +71,10 @@ def report_ollama() -> None:
         say(f"Ollama is not running at {OLLAMA_HOST}.")
         say("  Install it from https://ollama.com and start it, then reload the page.")
         say("  The page will list your models as soon as Ollama answers.")
+    from helper import llmster
+    lms = llmster.names()
+    if lms:
+        say("LM Studio models: " + ", ".join(name[len(llmster.PREFIX):] for name in lms))
     pictures, notes = imagegen.picture_models(context.load_settings(), image_models)
     if pictures:
         say("Picture models: " + ", ".join(item["label"] for item in pictures))

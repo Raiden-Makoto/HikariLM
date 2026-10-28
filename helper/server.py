@@ -11,10 +11,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, imagegen, keepalive, notes, sdserver, store, thinking,
-                    workspace)
-from helper.ollama import (KEEP_ALIVE, KEEPER, OllamaError, complete, embed, open_chat, open_generate, running,
-                           show, sizes, tags, unload)
+from helper import (budget, context, descriptions, documents, imagegen, keepalive, llmster, notes, sdserver, store,
+                    thinking, workspace)
+from helper.models import complete, open_chat, running, show, sizes, tags, unload
+from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
 from helper.router import ModelRouter, Work, chat_models, is_nomic
 from helper.version import code_stamp
 
@@ -36,7 +36,7 @@ managed = sdserver.Managed(KEEP_ALIVE)
 
 
 def unload_any(model: str) -> None:
-    """Free a large model, wherever it runs: sd-server is stopped, Ollama is asked."""
+    """Free a large model, wherever it runs: sd-server is stopped, Ollama or llmster is asked."""
     if model.startswith(imagegen.SD_PREFIX):
         managed.stop()
     elif not model.startswith(imagegen.REMOTE_PREFIX):
@@ -490,7 +490,7 @@ class Handler(BaseHTTPRequestHandler):
         shown = show(model)
         size = sizes().get(model, 0)
         return budget.plan(model, context.requested_context(settings, model), shown, size, running(),
-                           budget.memory())
+                           budget.memory(llmster.HOST if llmster.is_lms(model) else None))
 
     def _describe(self) -> None:
         """Have a vision model write a picture down as text, once.
@@ -723,7 +723,8 @@ class Handler(BaseHTTPRequestHandler):
             return {"large_model": None, "unloads_at": None}
         ours = keepalive.key(large) if large else None
         pick = next((item for item in loaded if keepalive.key(item["name"]) == ours), loaded[0])
-        return {"large_model": pick["name"], "unloads_at": pick["expires"], "also_loaded": len(loaded) - 1}
+        unloads_at = pick["expires"] if pick["expires"] is not None else KEEPER.leaves_at(pick["name"])
+        return {"large_model": pick["name"], "unloads_at": unloads_at, "also_loaded": len(loaded) - 1}
 
     def _picture_setup(self) -> dict:
         """What Settings shows under Pictures: what was found and what is wrong."""

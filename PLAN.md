@@ -35,6 +35,12 @@ The helper tells the kinds apart by what Ollama reports a model can do, when it 
 
 R1's reasoning is stored in the chat file. Later turns send R1 its earlier answers, not the reasoning trace.
 
+### Models from LM Studio
+
+LM Studio's headless server, llmster, has models Ollama does not, such as the 1.58-bit BitNet builds of Falcon3. When llmster is running, its chat models join the picker in an *LM Studio* group. The helper names them `lms:<key>`, so the two servers' models never mix up. The helper finds llmster at `LMSTUDIO_HOST` (default `http://127.0.0.1:1234`) and sends `LM_API_TOKEN` when one is set. If llmster is not running, it is skipped quietly and checked again 30 seconds later. Either server can be missing as long as the other has models.
+
+An llmster model goes through the same steps as an Ollama one: context length, compaction, long documents, and holding to the keepalive. The helper loads it through llmster's `/api/v1/models/load` with the context length chosen for the chat, and loads it again only when that length changes. It chats through the OpenAI-style `/v1/chat/completions` and turns that stream into Ollama's shape, reasoning included. Models loaded this way never time out in llmster, so the helper's keepalive watchdog unloads them, and the header shows when. Switching between an Ollama model and an llmster model unloads the other one first, so only one large model is ever in memory. Embeddings for search still come from Ollama's `nomic-embed-text`; without Ollama, documents fall back to matching rare words.
+
 ## The chat page
 
 - **Sidebar.** Past chats from `transcripts/`. Click one to open it. Double-click renames it. The `⋯` button on a chat opens a menu with Pin, Rename, Move to folder, and Delete (asks twice). It is a drawer on narrow screens.
@@ -255,3 +261,4 @@ Each step is usable before the next one starts.
 8. **Markdown replies and short thinking.** Done, except that it has only been tried against a fake Ollama, with a model that never stops thinking and one that thinks between `<think>` tags. Replies are drawn as Markdown with math, thinking is folded into one line, and the helper holds thinking to its limit, as in "The chat page" and "Thinking, kept short" above.
 9. **Holding models to the keepalive.** Done, except that it has only been tried against a fake Ollama that never unloads on its own. The helper unloads a model Ollama left past its keepalive, and the header shows what is really loaded and when it goes, as in "What is in memory" above.
 10. **Long documents.** Done, except that it has only been tried against a fake Ollama with a made-up 6-page paper. Files too long for the context are read in parts and answered from notes, or sent as the passages closest to the question, and thinking is held to what the context has left, as in "Long documents" above.
+11. **Models from LM Studio.** Done, except that it has only been tried against a fake llmster. llmster's chat models join the picker, load at the chat's context length, stream like Ollama's, and are unloaded by the keepalive watchdog, as in "Models from LM Studio" above.

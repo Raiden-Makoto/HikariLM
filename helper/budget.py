@@ -114,16 +114,17 @@ def _sysconf() -> tuple[int, int | None]:
     return total, available
 
 
-def memory() -> tuple[int, int | None] | None:
-    """(total, available) in bytes for the computer Ollama runs on. Available is None if it
-    cannot be told. None if the memory cannot be known, so nothing is checked."""
+def memory(host: str | None = None) -> tuple[int, int | None] | None:
+    """(total, available) in bytes for the computer Ollama (or the server at `host`) runs on.
+    Available is None if it cannot be told. None if the memory cannot be known, so nothing
+    is checked."""
     forced = os.environ.get("LIGHTUSAGI_MEMORY_GB")
     if forced:
         try:
             return int(float(forced) * GIB), None
         except ValueError:
             pass
-    if not ollama_is_local():
+    if not ollama_is_local(host):
         return None
     if sys.platform == "win32":
         readers = (_windows,)
