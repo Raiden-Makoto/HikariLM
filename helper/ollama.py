@@ -71,14 +71,49 @@ def embed(texts: list[str]) -> list[list[float]]:
     return vectors
 
 
-def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE):
+def sizes() -> dict[str, int]:
+    """Bytes on disk for each installed model, which is about what its weights take in memory."""
+    with _request("/api/tags", timeout=10) as response:
+        body = json.loads(response.read().decode())
+    return {item.get("name") or item.get("model"): int(item.get("size") or 0) for item in body.get("models", [])}
+
+
+def running() -> list[dict]:
+    """What Ollama has in memory now, with how much each one takes."""
+    with _request("/api/ps", timeout=10) as response:
+        body = json.loads(response.read().decode())
+    return [{"name": item.get("name") or item.get("model"), "size": int(item.get("size") or 0)}
+            for item in body.get("models", [])]
+
+
+_shown: dict[str, dict] = {}
+
+
+def show(model: str) -> dict:
+    """A model's details (layers, heads, trained context). They do not change, so they are kept."""
+    if model not in _shown:
+        with _request("/api/show", {"model": model}, timeout=30) as response:
+            _shown[model] = json.loads(response.read().decode())
+    return _shown[model]
+
+
+def complete(model: str, messages: list[dict], options: dict, keep_alive: str = KEEP_ALIVE) -> str:
+    """One answer, not streamed. Used to write a compaction summary."""
+    with _request("/api/chat", {"model": model, "messages": messages, "stream": False,
+                                "keep_alive": keep_alive, "options": options}) as response:
+        body = json.loads(response.read().decode())
+    message = body.get("message") or {}
+    return str(message.get("content") or "")
+
+
+def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None):
     """Open a streaming chat. The caller closes the response."""
-    return _request(
-        "/api/chat",
-        {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            "keep_alive": keep_alive,
-        },
-    )
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "keep_alive": keep_alive,
+    }
+    if options:
+        payload["options"] = options
+    return _request("/api/chat", payload)

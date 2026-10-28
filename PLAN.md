@@ -156,6 +156,16 @@ One large model at a time: Gemma, R1, Qwen, or the image model. Each request set
 
 The open chat and the open file are the only project text held in memory. Other chats, images, and descriptions stay on the SSD until a message needs them.
 
+## Context length and compaction
+
+The context length decides how much memory Ollama sets aside next to the model, so the helper sets it on every request (`num_ctx`) rather than leaving it to Ollama, and checks it against the computer's memory before anything loads.
+
+- **Choosing it.** Settings has *Context length* for all models and one for the model that is picked; blank means Ollama's own (the model's `num_ctx`, else `OLLAMA_CONTEXT_LENGTH`, else 4096). The per-model one wins. Both are saved in `settings.json` in the app folder.
+- **Memory guard.** Before a chat, a summary, or a picture description, the helper works out what the model will take: its size from `/api/tags`, plus the cache for each token of context, from the model's layers and heads in `/api/show`, `OLLAMA_KV_CACHE_TYPE`, and `OLLAMA_NUM_PARALLEL`. Memory is read from `/proc/meminfo` (or the Mac's own counters), and `LIGHTUSAGI_MEMORY_GB` overrides it. What can be used is the smaller of 75% of all memory and what is free now plus the large models Ollama would unload for this one, less 1 GB kept for the system. If the context asked for does not fit, it is cut to what does (in steps of 256, and never past what the model was trained for) and the page says so. If not even 2,048 tokens fit, the request is refused with a plain message and Ollama is never asked to load the model. Settings shows the computer's memory and how far the picked model fits.
+- **Compaction, as Open WebUI does it.** Before each send the helper estimates the tokens in the chat: the counts Ollama reported for the latest reply, plus about one token per four characters for anything after it (four per message, 1,000 per picture). Past the threshold, it finds the cut the way Open WebUI's `find_boundary` does: keep the newest 40% of messages (10 to 50, set in Advanced), and cut at the last user message at or before that point, never the first one. The same model summarizes the older part with Open WebUI's default prompt (previous summary, messages being compacted, recent messages kept), up to 1,000 tokens. The summary is saved with the chat on the first message kept, as a checkpoint. Later sends start at the latest checkpoint and put the summary in the system message under `[CONVERSATION SUMMARY]`. The whole chat stays in the transcript and on the page; only what is sent shrinks. If the summary fails, the whole chat is sent as it is; if it comes back empty, the old summary plus the first 500 characters of each compacted message is used instead, up to 4,000 characters.
+- **Where it differs from Open WebUI.** It is on by default. The threshold is 75% of the context length the helper actually uses (at most 90%, so the reply has room), rather than a fixed 80,000 tokens. The summary prompt is cut in the middle of each part so it fits that same context. The summary always uses the model already loaded, so no second large model is loaded for it.
+- **On the page.** The status line shows the tokens used after each reply and where compaction starts, and "Compacting context…" while it runs. Advanced in Settings sets the threshold, the share kept, the summary length, and the prompt.
+
 ## What is on the SSD
 
 LightUsagi keeps its own files in one folder in the home directory, `~/.lightusagi`, the same idea as `~/.ollama`. Your project folders and images stay at the paths they already have. The helper reads them from there and writes its own notes into the app folder.
@@ -167,6 +177,7 @@ LightUsagi keeps its own files in one folder in the home directory, `~/.lightusa
   descriptions/    the text Gemma wrote for an image
   index/           the search index nomic wrote
   images/          the pictures the image model made, each with a small notes file
+  settings.json    context length and compaction settings
 ```
 
 A description remembers which image it came from, and whether that image has changed, so Gemma can be skipped the next time.
@@ -218,6 +229,7 @@ Each step is usable before the next one starts.
    - **Using it.** When a message is sent in Chat, the helper embeds the question with `nomic-embed-text` (small enough to sit beside the loaded model, so nothing is forced out), compares it with the saved vectors, and returns up to three notes at or above a match of 0.6, at most one per chat or picture, never from the chat that is open. Those notes, cut to 800 characters each, are put in front of the question for that one send only. They are not saved into the chat, and the message in the chat shows a line, "Used earlier notes: …", naming them. A question under 15 characters does not search. If there are no notes yet, nothing is embedded at all. A failed search never delays or blocks the send.
    - **Not in the code editor.** A question there is about the open file, so earlier notes are left out to save tokens.
    - **Setting.** *Use earlier chats and pictures* in Settings, on by default, with a count of notes kept. Off means every question is sent on its own. Indexing continues either way.
-6. **Generate images.** Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
+6. **Context length and compaction.** Done, except that it has only been tried against a fake Ollama and a pretend memory size. The context setting, the memory guard, and Open WebUI's compaction, as in "Context length and compaction" above.
+7. **Generate images.** Add the architecture test and report it in `/api/state`. Keep image models out of the chat picker and refuse them in `/api/chat`. Add the Generate section, disabled with its reason on anything but Apple Silicon. Where it is enabled, add its own picker, run one generation at a time under the one-large-model rule, and save each picture and its notes to `images/`. Usable on its own, so it does not wait for steps 3 to 5.
 
    Only the disabled path, the model filtering, and the `images/` handling can be tried on a machine that is not an Apple Silicon Mac, with a fake Ollama standing in. The generation itself has to be tried on a Mac with Apple Silicon, so it is not counted as done until it has run there.

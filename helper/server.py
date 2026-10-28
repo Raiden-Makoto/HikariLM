@@ -8,8 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import descriptions, notes, store, workspace
-from helper.ollama import KEEP_ALIVE, OllamaError, embed, open_chat, tags, unload
+from helper import budget, context, descriptions, notes, store, workspace
+from helper.ollama import (KEEP_ALIVE, OllamaError, complete, embed, open_chat, running, show, sizes, tags,
+                           unload)
 from helper.router import ModelRouter, chat_models
 from helper.version import code_stamp
 
@@ -38,6 +39,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/state":
             self._send_json({"large_model": router.large, "code": STARTED_WITH})
+            return
+        if self.path == "/api/settings":
+            self._send_json(context.load_settings())
+            return
+        if self.path.startswith("/api/context?"):
+            model = parse_qs(urlparse(self.path).query).get("model", [""])[0]
+            out = {"memory": None, "model": model}
+            mem = budget.memory()
+            if mem:
+                out["memory"] = {"total": mem[0], "available": mem[1]}
+            try:
+                settings = context.load_settings()
+                room = self._room(model, settings)
+                out.update(room)
+                out["threshold"] = context.threshold_for(settings, room["num_ctx"])
+            except (budget.NoRoom, OllamaError) as error:
+                out["error"] = str(error)
+            self._send_json(out)
             return
         if self.path == "/api/notes":
             self._send_json({**notes.count(), "error": indexer.last_error})
@@ -77,6 +96,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         if not self._same_origin() or self._workspace("PUT"):
+            return
+        if self.path == "/api/settings":
+            try:
+                self._send_json(context.save_settings(self._body(MAX_BODY)))
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+            except OSError as error:
+                self._send_json({"error": f"could not save: {error.strerror or error}"}, status=500)
             return
         if self.path.startswith(DRAFTS + "/"):
             try:
@@ -169,14 +196,63 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return
+        settings = context.load_settings()
         try:
-            router.begin(model)
-            response = open_chat(model, messages, keep_alive)
+            room = self._room(model, settings)
+        except budget.NoRoom as error:
+            self._send_json({"error": str(error), "memory": True}, status=400)
+            return
         except OllamaError as error:
             self._send_json({"error": str(error)}, status=502)
             return
+        num_ctx = room["num_ctx"]
+        decision = context.compaction_needed(messages, settings, num_ctx)
+        system = [m for m in messages[:1] if m["role"] == "system"]
+        active = system + messages[decision["start"]:]
+        summary = decision["summary"]
+        self._stream_start()
+        started = True
+        self._stream_line({"lightusagi": "context", **room, "tokens": decision["tokens"],
+                           "threshold": decision["threshold"]})
+        if decision["cut"] is not None:
+            # Like Open WebUI: summarize the older part with the same model, keep the rest.
+            self._stream_line({"lightusagi": "compaction", "done": False})
+            cut = decision["cut"]
+            compacted = messages[decision["start"]:cut]
+            recent = messages[cut:]
+            max_tokens = settings["compaction"]["max_tokens"]
+            prompt = context.summary_prompt(settings["compaction"]["prompt"], compacted, recent, summary,
+                                            num_ctx - max_tokens - 256)
+            try:
+                router.begin(model)
+                written = complete(model, [{"role": "user", "content": prompt}],
+                                   {"num_ctx": num_ctx, "num_predict": max_tokens}, keep_alive)
+                router.commit(model)
+                summary = written.strip() or context.fallback_summary(summary, compacted)
+                active = system + recent
+                self._stream_line({"lightusagi": "compaction", "done": True, "checkpoint": cut,
+                                   "summary": summary, "dropped": len(compacted), "kept": len(recent)})
+            except OllamaError as error:
+                # Like Open WebUI: a failed compaction sends the whole active window instead.
+                self._stream_line({"lightusagi": "compaction", "done": True, "error": str(error)})
+        if getattr(self, "_gone", False):
+            return
+        try:
+            router.begin(model)
+            response = open_chat(model, context.with_summary(active, summary), keep_alive, {"num_ctx": num_ctx})
+        except OllamaError as error:
+            if started:
+                self._stream_line({"error": str(error)})
+            return
         router.commit(model)
-        self._stream(response)
+        self._stream(response, started=True)
+
+    def _room(self, model: str, settings: dict) -> dict:
+        """How much context this model gets right now. Raises budget.NoRoom if it does not fit at all."""
+        shown = show(model)
+        size = sizes().get(model, 0)
+        return budget.plan(model, context.requested_context(settings, model), shown, size, running(),
+                           budget.memory())
 
     def _describe(self) -> None:
         """Have a vision model write a picture down as text, once.
@@ -203,9 +279,14 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"description": saved["text"], "cached": True, "model": saved.get("model", "")})
             return
         try:
+            room = self._room(model, context.load_settings())
             router.begin(model)
             response = open_chat(
-                model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE)
+                model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE,
+                {"num_ctx": room["num_ctx"]})
+        except budget.NoRoom as error:
+            self._send_json({"error": str(error), "memory": True}, status=400)
+            return
         except OllamaError as error:
             self._send_json({"error": str(error)}, status=502)
             return
@@ -270,9 +351,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True
 
-    def _stream_line(self, payload: dict) -> None:
-        self.wfile.write(json.dumps(payload).encode() + b"\n")
-        self.wfile.flush()
+    def _stream_line(self, payload: dict) -> bool:
+        """Send one line. False once the page has gone (Stop, or the tab closed)."""
+        if getattr(self, "_gone", False):
+            return False
+        try:
+            self.wfile.write(json.dumps(payload).encode() + b"\n")
+            self.wfile.flush()
+            return True
+        except (BrokenPipeError, ConnectionResetError):
+            self._gone = True
+            return False
 
     def _same_origin(self) -> bool:
         # A page from another address must not be able to read or change files.
@@ -352,19 +441,21 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("images must be a list of base64 strings")
                 if images:
                     entry["images"] = images
+            summary = store.clean_summary(message.get("contextSummary"))
+            if summary:
+                entry["contextSummary"] = summary
+            usage = store.clean_usage(message.get("usage"))
+            if usage:
+                entry["usage"] = usage
             cleaned.append(entry)
         keep_alive = payload.get("keep_alive", KEEP_ALIVE)
         if not isinstance(keep_alive, str) or not keep_alive.strip():
             raise ValueError("keep_alive must be a duration such as 5m")
         return model.strip(), cleaned, keep_alive.strip()
 
-    def _stream(self, response) -> None:
-        self.send_response(200)
-        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.close_connection = True
+    def _stream(self, response, started: bool = False) -> None:
+        if not started:
+            self._stream_start()
         try:
             # Ollama sends one JSON object per line. read(n) would wait for n
             # bytes and hold tokens back, so pass each line on as it arrives.

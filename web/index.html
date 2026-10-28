@@ -698,6 +698,26 @@
     .choice[aria-pressed="true"] { border-color: var(--you); background: var(--hover); }
     .choice:disabled { opacity: 0.4; cursor: default; }
     .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
+    #settings .dialog-body { max-height: 75vh; overflow-y: auto; }
+    .field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .field-row input, .setting textarea {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--field);
+      color: inherit;
+      font: inherit;
+    }
+    .field-row input { width: 8.5rem; }
+    .setting textarea { box-sizing: border-box; width: 100%; min-height: 6rem; margin-top: 0.5rem; resize: vertical; font-size: 0.82rem; }
+    .setting details summary { cursor: pointer; margin-top: 0.75rem; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -872,6 +892,47 @@
           <input class="switch" id="notes-toggle" type="checkbox" role="switch">
         </label>
         <p class="note" id="notes-note" role="status"></p>
+      </div>
+      <div class="setting" id="context-setting">
+        <span class="setting-label">Context length</span>
+        <datalist id="context-choices">
+          <option value="2048"></option><option value="4096"></option><option value="8192"></option>
+          <option value="16384"></option><option value="32768"></option><option value="65536"></option>
+          <option value="131072"></option>
+        </datalist>
+        <label class="field-row">
+          <span>All models</span>
+          <input id="ctx-all" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Ollama's">
+        </label>
+        <label class="field-row">
+          <span id="ctx-model-label">This model</span>
+          <input id="ctx-model" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Same">
+        </label>
+        <p class="note" id="context-note" role="status"></p>
+      </div>
+      <div class="setting">
+        <label class="switch-row">
+          <span class="setting-label">Compact long chats</span>
+          <input class="switch" id="compact-toggle" type="checkbox" role="switch">
+        </label>
+        <p class="note">When a chat gets close to the context length, older messages are summarized by the same model, the way Open WebUI does it. The whole chat stays saved here.</p>
+        <details>
+          <summary>Advanced</summary>
+          <label class="field-row">
+            <span>Compact past (tokens)</span>
+            <input id="compact-threshold" type="number" min="256" max="262144" step="256" placeholder="75% of context">
+          </label>
+          <label class="field-row">
+            <span>Recent messages kept (%)</span>
+            <input id="compact-retention" type="number" min="10" max="50" step="5">
+          </label>
+          <label class="field-row">
+            <span>Summary length (tokens)</span>
+            <input id="compact-max" type="number" min="64" max="8192" step="64">
+          </label>
+          <textarea id="compact-prompt" aria-label="Summary prompt" placeholder="Summary prompt (blank uses Open WebUI's). Use {{PREVIOUS_SUMMARY}}, {{COMPACTED_MESSAGES}} and {{RECENT_MESSAGES}}."></textarea>
+        </details>
+        <p class="note" id="compact-note" role="status"></p>
       </div>
       <div class="setting">
         <span class="setting-label" id="bg-label">Background image</span>
@@ -1509,12 +1570,21 @@
       document.dispatchEvent(new Event("busychange"));
     }
 
+    // What the last send used, from the helper: the context length it ran
+    // with, where compaction starts, and (after the reply) the tokens used.
+    let lastContext = null;
+
     async function refreshState() {
       const response = await fetch("/api/state");
       const body = await response.json();
-      status.textContent = body.large_model
+      let text = body.large_model
         ? "Kept loaded: " + body.large_model
         : "No large model loaded yet.";
+      if (lastContext && lastContext.used) {
+        text += " · Context used: " + lastContext.used.toLocaleString() + " of " + lastContext.num_ctx.toLocaleString() +
+          " tokens (compacts past " + lastContext.threshold.toLocaleString() + ")";
+      }
+      status.textContent = text;
     }
 
     async function loadModels() {
@@ -2236,6 +2306,8 @@
       let saved = false;
       let answer = "";
       let thought = "";
+      let usage;
+      lastContext = null;
       try {
         // A few earlier notes close to the question go along with it, just for
         // this send. They are not saved into the chat.
@@ -2283,6 +2355,9 @@
               };
               const pictures = (message.files || []).filter((file) => file.image).map((file) => file.image);
               if (pictures.length && index === messages.length - 1) out.images = pictures;
+              // The helper needs these to compact the way Open WebUI does.
+              if (message.contextSummary) out.contextSummary = message.contextSummary;
+              if (message.usage) out.usage = message.usage;
               return out;
             }),
           }),
@@ -2305,6 +2380,24 @@
             if (!line.trim()) continue;
             const event = JSON.parse(line);
             if (event.error) throw new Error(event.error);
+            if (event.lightusagi === "context") {
+              lastContext = event;
+              if (event.clamped) {
+                notify("Context cut to " + event.num_ctx.toLocaleString() + " tokens so " + model + " fits in this computer's memory.");
+              }
+              continue;
+            }
+            if (event.lightusagi === "compaction") {
+              if (!event.done) status.textContent = "Compacting context…";
+              else if (event.error) status.textContent = "Context compaction failed, so the chat is sent as it is: " + plainError(event.error);
+              else {
+                // The summary is kept on the first message that stays, as a checkpoint.
+                if (messages[event.checkpoint]) messages[event.checkpoint].contextSummary = event.summary;
+                status.textContent = "Context compacted: " + event.dropped + " older messages summarized. Streaming from " + model + "…";
+              }
+              continue;
+            }
+            if (event.done) usage = { prompt_eval_count: event.prompt_eval_count || 0, eval_count: event.eval_count || 0 };
             thought += event.message?.thinking || "";
             answer += event.message?.content || "";
             reply.thinking.textContent = thought;
@@ -2346,7 +2439,8 @@
       } finally {
         if (answer || thought) {
           if (answer) updateApply(reply.block, answer);
-          messages.push({ role: "assistant", content: answer, thinking: thought || undefined, model });
+          messages.push({ role: "assistant", content: answer, thinking: thought || undefined, model, usage });
+          if (usage && lastContext) lastContext.used = usage.prompt_eval_count + usage.eval_count;
           saved = true;
         }
         activeRequest = null;
@@ -2540,8 +2634,96 @@
       showNotesSetting();
     });
 
+    // Context length and compaction live in the helper, which enforces them
+    // and refuses a context that would not fit in memory.
+    let serverSettings = null;
+    const gigabytes = (bytes) => (bytes / 1024 ** 3).toFixed(1) + " GB";
+    const numberOrNull = (input) => (input.value.trim() === "" ? null : Number(input.value));
+
+    async function showContextSetting() {
+      const model = modelSelect.value;
+      try {
+        serverSettings = await (await fetch("/api/settings")).json();
+      } catch (error) {
+        document.querySelector("#context-note").textContent = "Could not reach the helper.";
+        return;
+      }
+      const { context: ctx, compaction } = serverSettings;
+      document.querySelector("#ctx-all").value = ctx.all ?? "";
+      document.querySelector("#ctx-model").value = (model && ctx.models[model]) ?? "";
+      document.querySelector("#ctx-model").disabled = !model;
+      document.querySelector("#ctx-model-label").textContent = model ? "Only " + model : "This model";
+      document.querySelector("#compact-toggle").checked = compaction.enabled;
+      document.querySelector("#compact-threshold").value = compaction.threshold ?? "";
+      document.querySelector("#compact-retention").value = compaction.retention;
+      document.querySelector("#compact-max").value = compaction.max_tokens;
+      document.querySelector("#compact-prompt").value = compaction.prompt;
+      document.querySelector("#compact-note").textContent = "";
+      await showMemory();
+    }
+
+    async function showMemory() {
+      const note = document.querySelector("#context-note");
+      const model = modelSelect.value;
+      try {
+        const body = await (await fetch("/api/context?model=" + encodeURIComponent(model))).json();
+        const parts = [];
+        if (body.memory) {
+          parts.push("This computer: " + gigabytes(body.memory.total) +
+            (body.memory.available ? ", " + gigabytes(body.memory.available) + " free." : "."));
+        }
+        if (body.error) parts.push(plainError(body.error));
+        else if (model) {
+          parts.push(model + " will use " + body.num_ctx.toLocaleString() + " tokens and fits up to " +
+            body.max_fit.toLocaleString() + " here" + (body.clamped ? ", so the length asked for is cut to that." : "."));
+        }
+        note.textContent = parts.join(" ") || "Blank uses Ollama's own setting.";
+      } catch (error) {
+        note.textContent = "";
+      }
+    }
+
+    async function saveContextSetting() {
+      const model = modelSelect.value;
+      const models = { ...serverSettings.context.models };
+      const own = numberOrNull(document.querySelector("#ctx-model"));
+      if (model) {
+        if (own) models[model] = own;
+        else delete models[model];
+      }
+      const wanted = {
+        context: { all: numberOrNull(document.querySelector("#ctx-all")), models },
+        compaction: {
+          enabled: document.querySelector("#compact-toggle").checked,
+          threshold: numberOrNull(document.querySelector("#compact-threshold")),
+          retention: numberOrNull(document.querySelector("#compact-retention")) ?? 40,
+          max_tokens: numberOrNull(document.querySelector("#compact-max")) ?? 1000,
+          prompt: document.querySelector("#compact-prompt").value,
+        },
+      };
+      const note = document.querySelector("#compact-note");
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wanted),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        note.textContent = "Not saved: " + plainError(body.error || "the helper refused it");
+        return;
+      }
+      serverSettings = body;
+      note.textContent = "Saved.";
+      document.querySelector("#compact-retention").value = body.compaction.retention;
+      await showMemory();
+    }
+
+    document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file), #compact-prompt")
+      .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
+
     document.querySelector("#open-settings").addEventListener("click", () => {
       showNotesSetting();
+      showContextSetting();
       settings.showModal();
     });
     document.querySelector("#close-settings").addEventListener("click", () => settings.close());

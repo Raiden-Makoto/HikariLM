@@ -67,8 +67,34 @@ def clean_messages(messages) -> list[dict]:
         files = clean_files(message.get("files"))
         if files:
             entry["files"] = files
+        summary = clean_summary(message.get("contextSummary"))
+        if summary:
+            entry["contextSummary"] = summary
+        usage = clean_usage(message.get("usage"))
+        if usage:
+            entry["usage"] = usage
         cleaned.append(entry)
     return cleaned
+
+
+MAX_SUMMARY = 20_000
+
+
+def clean_summary(value) -> str:
+    """A compaction checkpoint: the summary of everything before this message."""
+    return value.strip()[:MAX_SUMMARY] if isinstance(value, str) and value.strip() else ""
+
+
+def clean_usage(value) -> dict:
+    """The token counts Ollama reported for a reply."""
+    if not isinstance(value, dict):
+        return {}
+    kept = {}
+    for key in ("prompt_eval_count", "eval_count"):
+        number = value.get(key)
+        if isinstance(number, int) and not isinstance(number, bool) and 0 <= number < 10_000_000:
+            kept[key] = number
+    return kept
 
 
 FILLER = re.compile(
