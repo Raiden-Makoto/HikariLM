@@ -1643,7 +1643,7 @@
         open.append(where);
       }
       if (chat.id === chatId) open.setAttribute("aria-current", "true");
-      open.addEventListener("click", () => openChat(chat.id));
+      open.addEventListener("click", () => openChatAnywhere(chat.id));
       open.addEventListener("dblclick", () => startRename(chat, row));
       const more = document.createElement("button");
       more.className = "chat-more";
@@ -1925,7 +1925,7 @@
       try {
         const response = await fetch("/api/chats");
         const body = await response.json();
-        chats = (body.chats || []).filter((chat) => !isEditorId(chat.id));
+        chats = body.chats || [];
       } catch (error) {
         chats = [];
       }
@@ -2344,8 +2344,7 @@
         note.onclick = () => {
           window.focus();
           note.close();
-          if (id && isEditorId(id) !== inCodeView() && !setSection(isEditorId(id) ? "files" : "chat")) return;
-          if (id && id !== chatId) openChat(id);
+          if (id && (id !== chatId || isEditorId(id) !== inCodeView())) openChatAnywhere(id);
         };
         setTimeout(() => note.close(), 10000);
       } catch (error) {
@@ -2793,7 +2792,14 @@
     let shownSection = null;
     const parked = {};
 
-    function setSection(name, how = "push") {
+    // Open a chat from anywhere. A chat made in the code editor opens in the
+    // code editor, at /editor, and any other chat opens in Chat.
+    async function openChatAnywhere(id) {
+      if (isEditorId(id) !== inCodeView() && !setSection(isEditorId(id) ? "files" : "chat", "push", false)) return;
+      await openChat(id);
+    }
+
+    function setSection(name, how = "push", restore = true) {
       const files = name === "files";
       if (!files && !discardOk()) return false;
       if (how !== "url" && location.pathname !== SECTION_PATHS[name]) {
@@ -2820,8 +2826,8 @@
         renderLog();
         renderChats();
         if (chatId) loadDraft(draftKey());
-        else if (!parked[name] && localStorage.getItem(lastChatKey())) openChat(localStorage.getItem(lastChatKey()));
-        else loadDraft(draftKey());
+        else if (restore && !parked[name] && localStorage.getItem(lastChatKey())) openChat(localStorage.getItem(lastChatKey()));
+        else if (restore) loadDraft(draftKey());
       }
       const emptyHint = document.querySelector("#empty .hint");
       if (emptyHint) emptyHint.textContent = welcomeHint();
