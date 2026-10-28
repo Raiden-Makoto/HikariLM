@@ -116,6 +116,18 @@ input[type="search"]:focus-visible, #browse-input:focus-visible { outline: 2px s
    from the page's colour variables. */
 #file-text { position: relative; flex: 1; min-height: 8rem; min-width: 0; }
 #file-text .cm-editor { position: absolute; inset: 0; }
+#file-text[hidden], #file-preview[hidden], .editor-bar .choice[hidden] { display: none; }
+#file-preview {
+  flex: 1;
+  min-height: 8rem;
+  padding: 0.9rem 1.2rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
 #file-text:empty {
   border: 1px solid var(--line);
   border-radius: 12px;

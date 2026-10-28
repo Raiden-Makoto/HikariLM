@@ -13,7 +13,10 @@ import {
   HighlightStyle, StreamLanguage, bracketMatching, foldGutter, foldKeymap, indentOnInput, indentUnit,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import {
+  acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completeAnyWord, completionKeymap,
+  completionStatus,
+} from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 
@@ -114,6 +117,14 @@ const theme = EditorView.theme({
   ".cm-searchMatch": { backgroundColor: "color-mix(in srgb, var(--you) 25%, transparent)" },
   ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "color-mix(in srgb, var(--you) 45%, transparent)" },
   ".cm-tooltip": { backgroundColor: "var(--field)", color: "var(--ink)", border: "1px solid var(--line)" },
+  ".cm-tooltip.cm-tooltip-autocomplete": { borderRadius: "8px", overflow: "hidden" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace' },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "0.1rem 0.6rem" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "color-mix(in srgb, var(--you) 35%, transparent)", color: "var(--ink)",
+  },
+  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "bold" },
+  ".cm-completionDetail": { color: "var(--muted)", fontStyle: "normal" },
 });
 
 const colours = HighlightStyle.define([
@@ -133,6 +144,21 @@ const colours = HighlightStyle.define([
   { tag: t.invalid, color: "var(--danger)" },
 ]);
 
+// Suggestions as you type: the language's own (keywords, names in the file)
+// plus any word already in the file. Tab takes the highlighted one. Enter
+// still starts a new line, so typing never gets eaten by a suggestion.
+// A word with no type merges with the language's suggestion of the same name.
+const anyWord = (context) => {
+  const found = completeAnyWord(context);
+  return found && { ...found, options: found.options.map(({ type, ...option }) => option) };
+};
+const suggestions = [
+  autocompletion({ defaultKeymap: false, icons: false }),
+  EditorState.languageData.of(() => [{ autocomplete: anyWord }]),
+  Prec.high(keymap.of(completionKeymap.filter((binding) => binding.key !== "Enter"))),
+];
+const suggesting = (view) => completionStatus(view.state) === "active";
+
 export function createEditor(parent, { onChange, onSelection, onSave }) {
   const editable = new Compartment();
   let escapedFromTab = false;
@@ -140,8 +166,13 @@ export function createEditor(parent, { onChange, onSelection, onSave }) {
   const keys = Prec.highest(keymap.of([
     { key: "Mod-s", preventDefault: true, run: () => { onSave(); return true; } },
     // Esc, then Tab, moves focus on instead of indenting, so the keyboard is not trapped.
-    { key: "Escape", run: () => { escapedFromTab = true; return false; } },
-    { key: "Tab", run: (view) => (escapedFromTab ? (escapedFromTab = false, false) : indentMore(view)) },
+    // Esc that only closes the suggestions does not count.
+    { key: "Escape", run: (view) => { if (!suggesting(view)) escapedFromTab = true; return false; } },
+    {
+      key: "Tab",
+      run: (view) => (suggesting(view) ? acceptCompletion(view)
+        : escapedFromTab ? (escapedFromTab = false, false) : indentMore(view)),
+    },
     { key: "Shift-Tab", run: (view) => (escapedFromTab ? (escapedFromTab = false, false) : indentLess(view)) },
   ]));
 
@@ -152,7 +183,7 @@ export function createEditor(parent, { onChange, onSelection, onSave }) {
       lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(), history(), foldGutter(),
       drawSelection(), dropCursor(), EditorState.allowMultipleSelections.of(true),
       indentOnInput(), bracketMatching(), closeBrackets(), rectangularSelection(), crosshairCursor(),
-      highlightActiveLine(), highlightSelectionMatches(),
+      highlightActiveLine(), highlightSelectionMatches(), suggestions,
       indentUnit.of("    "), EditorState.tabSize.of(4),
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap]),
       theme, syntaxHighlighting(colours),

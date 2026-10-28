@@ -4,6 +4,7 @@ import { recallHandle } from "./local-folder.js";
 import { restoreFile } from "./sections.js";
 import { openFolder, openLocalFolder, showFolderDialog } from "./folder-view.js";
 import { saveOpenFile } from "./file-actions.js";
+import { renderMarkdown } from "./markdown.js";
 
 // Files section. The helper reads and writes the folder; the page only
 // shows one file at a time. The file on disk is the only copy of the text.
@@ -41,6 +42,22 @@ export function loadEditor() {
   return editorLoading;
 }
 export const editorText = () => (editor ? editor.getValue() : "");
+
+// A Markdown file can be shown drawn, the way a reply is, instead of as text.
+// The preview is of the text in the editor, saved or not, and cannot be edited.
+const preview = document.querySelector("#file-preview");
+export const previewButton = document.querySelector("#preview-file");
+const isMarkdown = (path) => /\.(md|markdown|rmd)$/i.test(path || "");
+export const previewShown = () => !preview.hidden;
+export function showPreview(on) {
+  const shown = on && isMarkdown(state.openPath);
+  if (shown) renderMarkdown(preview, editorText());
+  else preview.replaceChildren();
+  preview.hidden = !shown;
+  fileHost.hidden = shown;
+  previewButton.textContent = shown ? "Raw" : "Preview";
+  previewButton.setAttribute("aria-pressed", String(shown));
+}
 export const askFile = document.querySelector("#ask-file");
 export const askSelection = document.querySelector("#ask-selection");
 export const saveFile = document.querySelector("#save-file");
@@ -96,6 +113,7 @@ export function refreshFileButtons() {
   fileTitle.textContent = open ? state.openPath + (hasEdits() ? " ●" : "") : "No file open";
   saveFile.disabled = !open || state.saving || !hasEdits();
   diskNote.hidden = !open;
+  previewButton.hidden = !isMarkdown(state.openPath);
   newFile.disabled = !state.source || state.saving;
   deleteFile.disabled = !open || state.saving;
   askFile.disabled = !open || Boolean(state.activeRequest);

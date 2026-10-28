@@ -8,7 +8,7 @@ import { codeRank, fillModels, modelsForView } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 import {
   askFile, askSelection, conflictBox, deleteFile, discardOk, editor, editorText, fileList,
-  fileNote, hasEdits, loadEditor, newFile, refreshFileButtons, saveFile,
+  fileNote, hasEdits, loadEditor, newFile, previewButton, previewShown, refreshFileButtons, saveFile, showPreview,
 } from "./files.js";
 import { FILE_KEY } from "./sections.js";
 import { closeFile, renderFiles } from "./folder-view.js";
@@ -28,6 +28,7 @@ export async function openFileAt(path, force = false) {
     state.openVersion = body.version;
     state.savedText = body.text;
     ed.open(body.text, state.openPath);
+    showPreview(false);
     fileNote.textContent = "";
     localStorage.setItem(FILE_KEY, JSON.stringify({
       kind: state.source.kind,
@@ -84,6 +85,7 @@ export function applyBlock(code) {
     fileNote.textContent = "Open a file first, then apply the code.";
     return;
   }
+  if (previewShown()) showPreview(false);
   const { from, to } = editor.getSelection();
   const current = editorText();
   const leftover = lastApplied && lastApplied.path === state.openPath && lastApplied.from === from &&
@@ -208,6 +210,10 @@ export function start() {
   newFile.addEventListener("click", createNewFile);
   deleteFile.addEventListener("click", deleteOpenFile);
   saveFile.addEventListener("click", saveOpenFile);
+  previewButton.addEventListener("click", () => {
+    showPreview(!previewShown());
+    if (!previewShown() && editor) editor.focus();
+  });
   askFile.addEventListener("click", () => askAbout(false));
   askSelection.addEventListener("click", () => askAbout(true));
   document.querySelector("#conflict-keep").addEventListener("click", () => { conflictBox.hidden = true; });

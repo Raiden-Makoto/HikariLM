@@ -78,6 +78,7 @@
             <span id="file-title">No file open</span>
             <button class="choice" id="ask-file" type="button" disabled>Ask about this file</button>
             <button class="choice" id="ask-selection" type="button" disabled>Ask about selection</button>
+            <button class="choice" id="preview-file" type="button" aria-pressed="false" hidden>Preview</button>
             <button class="choice" id="save-file" type="button" disabled>Save</button>
             <button class="choice" id="new-file" type="button" disabled>New file</button>
             <button class="choice" id="delete-file" type="button" disabled>Delete file</button>
@@ -90,6 +91,7 @@
           </div>
           <p class="note" id="file-note" role="status"></p>
           <div id="file-text" role="group" aria-label="File text"></div>
+          <div id="file-preview" role="document" aria-label="Preview of the file" hidden></div>
         </div>
       </div>
     </section>

@@ -4,7 +4,7 @@ import { plainError } from "./core.js";
 import {
   conflictBox, discardOk, editor, fileFilter, fileList, fileNote,
   filesApi, FOLDER_KEY, folderLabel, folderNote, helperSource, KIND_KEY,
-  refreshFileButtons,
+  refreshFileButtons, showPreview,
 } from "./files.js";
 import { localSource, recallHandle, rememberHandle } from "./local-folder.js";
 import { openFileAt } from "./file-actions.js";
@@ -15,6 +15,7 @@ export function closeFile() {
   state.openVersion = "";
   state.savedText = "";
   if (editor) editor.close();
+  showPreview(false);
   conflictBox.hidden = true;
   fileNote.textContent = "";
   refreshFileButtons();
