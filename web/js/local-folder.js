@@ -205,9 +205,9 @@ export function localSource(root) {
 
 // The browser keeps a picked folder in its own storage, so it can be
 // offered again after a reload. It still asks the user's permission first.
-function handleStore(mode, run) {
+function handleStore(mode, run, name = "hikarilm") {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("lightusagi", 1);
+    const request = indexedDB.open(name, 1);
     request.onupgradeneeded = () => request.result.createObjectStore("handles");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
@@ -220,4 +220,13 @@ function handleStore(mode, run) {
   });
 }
 export const rememberHandle = (handle) => handleStore("readwrite", (store) => store.put(handle, "last")).catch(() => {});
-export const recallHandle = () => handleStore("readonly", (store) => store.get("last")).catch(() => undefined);
+const recallFrom = (name) => handleStore("readonly", (store) => store.get("last"), name).catch(() => undefined);
+// A folder picked when the app was called LightUsagi is in the old store; move it over once.
+export async function recallHandle() {
+  const handle = await recallFrom("hikarilm");
+  if (handle) return handle;
+  const old = await recallFrom("lightusagi");
+  indexedDB.deleteDatabase("lightusagi");
+  if (old) await rememberHandle(old);
+  return old;
+}

@@ -30,7 +30,7 @@ def chat(turns, chars=400):
 
 class BudgetTest(unittest.TestCase):
     def setUp(self):
-        for name in ("OLLAMA_KV_CACHE_TYPE", "OLLAMA_NUM_PARALLEL", "OLLAMA_CONTEXT_LENGTH", "LIGHTUSAGI_MEMORY_GB",
+        for name in ("OLLAMA_KV_CACHE_TYPE", "OLLAMA_NUM_PARALLEL", "OLLAMA_CONTEXT_LENGTH", "HIKARILM_MEMORY_GB",
                      "OLLAMA_HOST"):
             old = os.environ.pop(name, None)
             if old is not None:
@@ -100,7 +100,7 @@ class BudgetTest(unittest.TestCase):
         mem = budget.memory()
         self.assertIsNotNone(mem)
         self.assertGreater(mem[0], 0)
-        os.environ["LIGHTUSAGI_MEMORY_GB"] = "8"
+        os.environ["HIKARILM_MEMORY_GB"] = "8"
         self.assertEqual(budget.memory(), (8 * GIB, None))
 
     def test_parallel_slots_multiply_the_cache(self):
@@ -168,10 +168,10 @@ class CompactionTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        old = os.environ.get("LIGHTUSAGI_HOME")
-        os.environ["LIGHTUSAGI_HOME"] = self._tmp.name
-        self.addCleanup(lambda: os.environ.pop("LIGHTUSAGI_HOME") if old is None
-                        else os.environ.__setitem__("LIGHTUSAGI_HOME", old))
+        old = os.environ.get("HIKARILM_HOME")
+        os.environ["HIKARILM_HOME"] = self._tmp.name
+        self.addCleanup(lambda: os.environ.pop("HIKARILM_HOME") if old is None
+                        else os.environ.__setitem__("HIKARILM_HOME", old))
         self.settings = context.load_settings()
 
     def test_retention_is_clamped_like_open_webui(self):

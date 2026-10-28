@@ -68,7 +68,7 @@ class PictureSetupTest(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.home = Path(self._tmp.name)
-        self.patch(mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": str(self.home)}))
+        self.patch(mock.patch.dict(os.environ, {"HIKARILM_HOME": str(self.home)}))
         self.patch(mock.patch("shutil.which", return_value=None))
         self.patch(mock.patch.object(picsetup, "KLEIN_BYTES", 0))
 

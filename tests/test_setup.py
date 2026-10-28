@@ -39,7 +39,7 @@ class KleinSetupTest(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.home = Path(self._tmp.name) / "my home"
-        patcher = mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": str(self.home)})
+        patcher = mock.patch.dict(os.environ, {"HIKARILM_HOME": str(self.home)})
         patcher.start()
         self.addCleanup(patcher.stop)
 

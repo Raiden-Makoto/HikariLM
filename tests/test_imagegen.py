@@ -12,10 +12,10 @@ PNG = imagegen.PNG + b"rest of a picture"
 
 class SupportTest(unittest.TestCase):
     def setUp(self):
-        old = os.environ.pop("LIGHTUSAGI_IMAGES", None)
+        old = os.environ.pop("HIKARILM_IMAGES", None)
         if old is not None:
-            self.addCleanup(os.environ.__setitem__, "LIGHTUSAGI_IMAGES", old)
-        self.addCleanup(os.environ.pop, "LIGHTUSAGI_IMAGES", None)
+            self.addCleanup(os.environ.__setitem__, "HIKARILM_IMAGES", old)
+        self.addCleanup(os.environ.pop, "HIKARILM_IMAGES", None)
 
     def test_only_apple_silicon_by_default(self):
         with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="x86_64"):
@@ -42,9 +42,9 @@ class SupportTest(unittest.TestCase):
         self.assertIn("an Intel Mac", got["reason"])
 
     def test_override(self):
-        os.environ["LIGHTUSAGI_IMAGES"] = "on"
+        os.environ["HIKARILM_IMAGES"] = "on"
         self.assertTrue(imagegen.support()["supported"])
-        os.environ["LIGHTUSAGI_IMAGES"] = "off"
+        os.environ["HIKARILM_IMAGES"] = "off"
         with mock.patch("platform.system", return_value="Darwin"), mock.patch("platform.machine", return_value="arm64"):
             self.assertFalse(imagegen.support()["supported"])
 
@@ -89,7 +89,7 @@ class FolderTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        patcher = mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": self._tmp.name})
+        patcher = mock.patch.dict(os.environ, {"HIKARILM_HOME": self._tmp.name})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -147,7 +147,7 @@ class SdServerTest(unittest.TestCase):
     def test_picker_lists_every_source(self):
         settings = {"pictures": {"program": "", "models": "flux: -m /x.gguf", "address": ""}}
         with mock.patch.object(sdserver, "find_program", return_value="/bin/sd-server"), \
-                mock.patch.dict(os.environ, {"LIGHTUSAGI_IMAGES": "off"}):
+                mock.patch.dict(os.environ, {"HIKARILM_IMAGES": "off"}):
             found, notes = imagegen.picture_models(settings, ["x/flux2-klein"])
         self.assertEqual([item["id"] for item in found], ["sd:flux"])
         self.assertTrue(any("hidden" in note for note in notes))
@@ -163,8 +163,8 @@ class OllamaRefusesTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        for patcher in (mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": self._tmp.name + "/home",
-                                                     "LIGHTUSAGI_IMAGES": "on"}),
+        for patcher in (mock.patch.dict(os.environ, {"HIKARILM_HOME": self._tmp.name + "/home",
+                                                     "HIKARILM_IMAGES": "on"}),
                         mock.patch("helper.ollama.version", side_effect=lambda: self.version)):
             patcher.start()
             self.addCleanup(patcher.stop)

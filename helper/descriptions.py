@@ -1,7 +1,7 @@
 """Text that a vision model wrote for a picture, kept so it is only written once.
 
 Qwen and R1 cannot see pictures. Gemma writes the picture down as text, and the
-text is saved in ~/.lightusagi/descriptions/. It is named after a hash of the
+text is saved in ~/.hikarilm/descriptions/. It is named after a hash of the
 picture's bytes, so the same picture finds its description again, and a changed
 picture does not.
 """

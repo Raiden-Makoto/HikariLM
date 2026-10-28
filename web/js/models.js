@@ -82,7 +82,7 @@ export function updatePictureMode() {
 // no pictures or PDFs to read.
 let allModels = [];
 let modelProblem = "";
-export const CODE_MODEL_KEY = "lightusagi-model-code";
+export const CODE_MODEL_KEY = "hikarilm-model-code";
 export const inCodeView = () => document.body.classList.contains("view-files");
 const looksVision = (name) =>
   /gemma3|llava|vision|minicpm-v|moondream|pixtral|mllama|qwen[\d.]*-?vl|[-_.:]vl\b/i.test(name);
@@ -119,7 +119,7 @@ export function fillModels(problem = modelProblem) {
     updatePictureMode();
     return;
   }
-  const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model");
+  const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model");
   const group = (label) => {
     const element = document.createElement("optgroup");
     element.label = label;

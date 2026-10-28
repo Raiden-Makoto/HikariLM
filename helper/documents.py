@@ -14,7 +14,7 @@ works out the room left for documents and then:
   nomic-embed-text (or by shared words when nomic is not installed), as many as
   fit, in the order they appear.
 
-Pieces and their vectors are kept in ~/.lightusagi/documents/, named after a
+Pieces and their vectors are kept in ~/.hikarilm/documents/, named after a
 hash of the text, so the same file in another chat is not split or embedded
 again.
 """

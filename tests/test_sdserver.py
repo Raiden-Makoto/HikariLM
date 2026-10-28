@@ -20,7 +20,7 @@ def model(name, *extra):
 class ManagedTest(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.TemporaryDirectory()
-        patch = mock.patch.dict(os.environ, {"LIGHTUSAGI_HOME": self.home.name})
+        patch = mock.patch.dict(os.environ, {"HIKARILM_HOME": self.home.name})
         patch.start()
         self.addCleanup(patch.stop)
         self.managed = sdserver.Managed("5m")

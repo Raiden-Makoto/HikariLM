@@ -45,7 +45,7 @@ PNG = b"\x89PNG\r\n\x1a\n"
 # models are not currently supported" (ollama/ollama#14306).
 REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
 REFUSED_FILE = "ollama-pictures.json"
-SD_ALTERNATIVE = ("LightUsagi can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
+SD_ALTERNATIVE = ("HikariLM can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
                   "on macOS and Linux: pick \"Set up picture making…\" in the model list, which downloads "
                   "and sets it up once.")
 
@@ -81,12 +81,12 @@ def _machine() -> str:
 
 
 def support() -> dict:
-    """{"supported": bool, "reason": str}. LIGHTUSAGI_IMAGES=on or off wins over the test."""
-    forced = os.environ.get("LIGHTUSAGI_IMAGES", "").strip().lower()
+    """{"supported": bool, "reason": str}. HIKARILM_IMAGES=on or off wins over the test."""
+    forced = os.environ.get("HIKARILM_IMAGES", "").strip().lower()
     if forced == "on":
         return {"supported": True, "reason": ""}
     if forced == "off":
-        return {"supported": False, "reason": "Image generation is turned off (LIGHTUSAGI_IMAGES=off)."}
+        return {"supported": False, "reason": "Image generation is turned off (HIKARILM_IMAGES=off)."}
     if _apple_silicon():
         return {"supported": True, "reason": ""}
     return {"supported": False,

@@ -23,10 +23,10 @@ class DocumentsTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        old = os.environ.get("LIGHTUSAGI_HOME")
-        os.environ["LIGHTUSAGI_HOME"] = self._tmp.name
-        self.addCleanup(lambda: os.environ.__setitem__("LIGHTUSAGI_HOME", old) if old is not None
-                        else os.environ.pop("LIGHTUSAGI_HOME", None))
+        old = os.environ.get("HIKARILM_HOME")
+        os.environ["HIKARILM_HOME"] = self._tmp.name
+        self.addCleanup(lambda: os.environ.__setitem__("HIKARILM_HOME", old) if old is not None
+                        else os.environ.pop("HIKARILM_HOME", None))
         text = paper()
         self.doc = documents.gather([{"role": "user", "content": "hi", "files": [{"name": "paper.pdf", "text": text}]}])[0]
 

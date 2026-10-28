@@ -17,7 +17,7 @@ export function plainError(message) {
   if (message.includes("not reachable")) return "Ollama is not running.";
   // What Chrome, Safari and Firefox say when the helper closed the connection or is not running.
   if (/^(Failed to fetch|Load failed|NetworkError|network error)/i.test(message)) {
-    return "The connection to the LightUsagi helper was lost. If its window is closed, start it again; " +
+    return "The connection to the HikariLM helper was lost. If its window is closed, start it again; " +
       "if it is open, the last lines there say what went wrong.";
   }
   return message;

@@ -89,7 +89,7 @@ export function renderChats() {
   }
 }
 
-const FOLDERS_CLOSED = "lightusagi-folders-closed";
+const FOLDERS_CLOSED = "hikarilm-folders-closed";
 const foldersClosed = new Set(JSON.parse(localStorage.getItem(FOLDERS_CLOSED) || "[]"));
 const PIN_ICON = '<svg class="pin-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 3l7 7-2 1-3 3 .5 5-2 .5-3.5-3.5L6 21l-1-1 5.5-5.5L7 11l.5-2 5 .5 3-3z"/></svg>';
 

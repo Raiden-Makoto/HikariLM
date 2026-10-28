@@ -1,4 +1,4 @@
-"""Start LightUsagi: check the basics, run the helper, open the page.
+"""Start HikariLM: check the basics, run the helper, open the page.
 
     python3 start.py              start and open the browser
     python3 start.py --no-browser start without opening a browser
@@ -30,19 +30,19 @@ def say(text: str = "") -> None:
 
 def check_python() -> None:
     if sys.platform == "win32":
-        sys.exit("LightUsagi runs on macOS and Linux only.")
+        sys.exit("HikariLM runs on macOS and Linux only.")
     if sys.version_info < (3, 9):
-        sys.exit(f"LightUsagi needs Python 3.9 or newer. This is Python {sys.version.split()[0]}.")
+        sys.exit(f"HikariLM needs Python 3.9 or newer. This is Python {sys.version.split()[0]}.")
 
 
 def check_files() -> None:
     missing = [name for name in ("helper/server.py", "web/index.html") if not (ROOT / name).is_file()]
     if missing:
-        sys.exit("These files are missing, so this folder is not a full copy of LightUsagi: " + ", ".join(missing))
+        sys.exit("These files are missing, so this folder is not a full copy of HikariLM: " + ", ".join(missing))
 
 
 def running_state(host: str, port: int) -> dict | None:
-    """What a LightUsagi on this port says about itself, or None if it is not one."""
+    """What a HikariLM on this port says about itself, or None if it is not one."""
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/api/state", timeout=2) as response:
             state = json.loads(response.read().decode())
@@ -83,9 +83,9 @@ def report_ollama() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Start LightUsagi.")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("LIGHTUSAGI_PORT", "8787")))
-    parser.add_argument("--host", default=os.environ.get("LIGHTUSAGI_HOST", "127.0.0.1"))
+    parser = argparse.ArgumentParser(description="Start HikariLM.")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("HIKARILM_PORT", "8787")))
+    parser.add_argument("--host", default=os.environ.get("HIKARILM_HOST", "127.0.0.1"))
     parser.add_argument("--no-browser", action="store_true", help="do not open the page")
     args = parser.parse_args()
 
@@ -102,23 +102,23 @@ def main() -> None:
                 # A copy started before the files changed keeps running its old
                 # code, so pages added since would show "not found".
                 sys.exit(
-                    f"An older copy of LightUsagi is still running at {url}, started before the files were updated.\n"
+                    f"An older copy of HikariLM is still running at {url}, started before the files were updated.\n"
                     "Stop it (Ctrl+C in the window where it runs, or close that window) and run this again."
                 )
-            say(f"LightUsagi is already running at {url}")
+            say(f"HikariLM is already running at {url}")
             if not args.no_browser:
                 webbrowser.open(url)
             return
         sys.exit(f"Port {args.port} is used by another program. Try:  python3 start.py --port {args.port + 1}")
 
     # The helper reads these when it is imported, so set them first.
-    os.environ["LIGHTUSAGI_HOST"] = args.host
-    os.environ["LIGHTUSAGI_PORT"] = str(args.port)
+    os.environ["HIKARILM_HOST"] = args.host
+    os.environ["HIKARILM_PORT"] = str(args.port)
 
     from helper import store
     from helper.server import main as serve
 
-    say("LightUsagi")
+    say("HikariLM")
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
     report_ollama()

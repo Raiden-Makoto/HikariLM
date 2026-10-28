@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebuilds web/vendor/codemirror.js from entry.js.
 #
-# Only needed to upgrade CodeMirror or change the languages. Running LightUsagi
+# Only needed to upgrade CodeMirror or change the languages. Running HikariLM
 # never needs Node: the finished file is committed. If there is no Node here,
 # a temporary copy is downloaded and thrown away afterwards.
 set -euo pipefail

@@ -3,10 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LightUsagi</title>
+  <title>HikariLM</title>
   <script>
+    // The app was called LightUsagi. Its choices kept in the browser move to the new names once.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith("lightusagi-")) continue;
+        const renamed = "hikarilm-" + key.slice("lightusagi-".length);
+        if (localStorage.getItem(renamed) === null) localStorage.setItem(renamed, localStorage.getItem(key));
+        localStorage.removeItem(key);
+      }
+    } catch (error) {}
     // Set the theme before the page paints so a reload does not flash the wrong one.
-    try { document.documentElement.dataset.theme = localStorage.getItem("lightusagi-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
+    try { document.documentElement.dataset.theme = localStorage.getItem("hikarilm-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
   </script>
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/sidebar.css">
@@ -39,7 +48,7 @@
           </svg>
         </button>
         <div>
-          <h1>LightUsagi</h1>
+          <h1>HikariLM</h1>
           <p id="status" role="status">Checking Ollama…</p>
         </div>
       </div>
@@ -152,7 +161,7 @@
       </div>
       <p class="note" id="local-note"></p>
       <hr class="rule">
-      <p class="note" id="browse-lead">Or look through the folders on the computer that runs the LightUsagi helper:</p>
+      <p class="note" id="browse-lead">Or look through the folders on the computer that runs the HikariLM helper:</p>
       <input id="browse-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search folders, or type a path and press Enter" aria-label="Search folders or type a path">
       <p id="browse-path" class="browse-path"></p>
       <ul id="browse-list" aria-label="Folders"></ul>
@@ -273,7 +282,7 @@
             <span>Address</span>
             <input id="pic-address" type="text" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:7860">
           </label>
-          <p class="note">AUTOMATIC1111, Forge, Draw Things or your own sd-server. LightUsagi cannot free its memory, so it keeps its model loaded next to the chat model.</p>
+          <p class="note">AUTOMATIC1111, Forge, Draw Things or your own sd-server. HikariLM cannot free its memory, so it keeps its model loaded next to the chat model.</p>
         </details>
         <p class="note" id="picture-note" role="status"></p>
       </div>
@@ -299,7 +308,7 @@
       </button>
     </div>
     <div class="dialog-body">
-      <p>Ollama no longer draws pictures. LightUsagi draws them with <strong>FLUX.2 klein</strong>, a free picture model, run by <strong>sd-server</strong>, a small free program. This downloads both once, about 5 GB, into <code id="setup-folder"></code>. Nothing else on the computer changes, and no account is needed.</p>
+      <p>Ollama no longer draws pictures. HikariLM draws them with <strong>FLUX.2 klein</strong>, a free picture model, run by <strong>sd-server</strong>, a small free program. This downloads both once, about 5 GB, into <code id="setup-folder"></code>. Nothing else on the computer changes, and no account is needed.</p>
       <ul class="setup-list" id="setup-list"></ul>
       <div class="setup-bar" id="setup-bar" hidden><div></div></div>
       <p class="note" id="setup-note" role="status"></p>

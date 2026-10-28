@@ -22,8 +22,8 @@ from helper.ollama import version as ollama_version
 from helper.router import ModelRouter, Work, chat_models, is_nomic
 from helper.version import code_stamp
 
-HOST = os.environ.get("LIGHTUSAGI_HOST", "127.0.0.1")
-PORT = int(os.environ.get("LIGHTUSAGI_PORT", "8787"))
+HOST = os.environ.get("HIKARILM_HOST", "127.0.0.1")
+PORT = int(os.environ.get("HIKARILM_PORT", "8787"))
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 MAX_BODY = 48_000_000
 MAX_TRANSCRIPT = 20_000_000
@@ -67,7 +67,7 @@ def _guarded(method):
         except Exception as error:
             traceback.print_exc()
             message = (f"The helper hit a bug: {type(error).__name__}: {error}. The details are in the "
-                       "window where LightUsagi runs.")
+                       "window where HikariLM runs.")
             if getattr(self, "_streaming", False):
                 self._stream_line({"error": message})
             elif not getattr(self, "_answered", False):
@@ -359,11 +359,11 @@ class Handler(BaseHTTPRequestHandler):
         summary = decision["summary"]
         self._stream_start()
         started = True
-        self._stream_line({"lightusagi": "context", **room, "tokens": decision["tokens"],
+        self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"],
                            "threshold": decision["threshold"]})
         if decision["cut"] is not None:
             # Like Open WebUI: summarize the older part with the same model, keep the rest.
-            self._stream_line({"lightusagi": "compaction", "done": False})
+            self._stream_line({"hikarilm": "compaction", "done": False})
             cut = decision["cut"]
             compacted = messages[decision["start"]:cut]
             recent = messages[cut:]
@@ -380,11 +380,11 @@ class Handler(BaseHTTPRequestHandler):
                 summary = written.strip() or context.fallback_summary(summary, compacted)
                 active = system + recent
                 first = cut
-                self._stream_line({"lightusagi": "compaction", "done": True, "checkpoint": cut,
+                self._stream_line({"hikarilm": "compaction", "done": True, "checkpoint": cut,
                                    "summary": summary, "dropped": len(compacted), "kept": len(recent)})
             except OllamaError as error:
                 # Like Open WebUI: a failed compaction sends the whole active window instead.
-                self._stream_line({"lightusagi": "compaction", "done": True, "error": str(error)})
+                self._stream_line({"hikarilm": "compaction", "done": True, "error": str(error)})
         if getattr(self, "_gone", False):
             return
         sent = context.with_summary(active, summary)
@@ -415,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         # Thinking reached the limit before any answer: ask again with thinking off and
         # the reasoning so far, so the model answers now.
-        self._stream_line({"lightusagi": "thinking_cut", "budget": budget_tokens})
+        self._stream_line({"hikarilm": "thinking_cut", "budget": budget_tokens})
         # The reasoning goes back in as prompt, so keep only what leaves room for the answer.
         keep = max(1000, (num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)) * 4)
         if len(thought) > keep:
@@ -428,7 +428,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._stream_reply(response, budget_tokens) is not None:
             # It kept thinking even when told not to; end the reply here.
-            self._stream_line({"lightusagi": "thinking_cut", "budget": budget_tokens, "final": True})
+            self._stream_line({"hikarilm": "thinking_cut", "budget": budget_tokens, "final": True})
             self._stream_line({"message": {"role": "assistant", "content": ""}, "done": True})
 
     def _stream_reply(self, response, budget_tokens: int | None) -> str | None:
@@ -456,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
                     if taken_back:
                         thought += taken_back
                         answered = False
-                        if not self._stream_line({"lightusagi": "answer_was_thinking"}):
+                        if not self._stream_line({"hikarilm": "answer_was_thinking"}):
                             return None
                     reasoning = str(message.get("thinking") or "") + inline
                     event["message"] = {**message, "content": content, "thinking": reasoning}
@@ -520,12 +520,12 @@ class Handler(BaseHTTPRequestHandler):
                 return written
 
             def progress(name: str, part: int, parts: int) -> bool:
-                return self._stream_line({"lightusagi": "reading", "name": name, "part": part, "parts": parts})
+                return self._stream_line({"hikarilm": "reading", "name": name, "part": part, "parts": parts})
 
             try:
                 got = documents.notes(docs, model, num_ctx, room, ask, progress)
             except OllamaError as error:
-                self._stream_line({"lightusagi": "reading", "error": str(error)})
+                self._stream_line({"hikarilm": "reading", "error": str(error)})
                 got = ()
             if got is None or getattr(self, "_gone", False):
                 return None
@@ -533,7 +533,7 @@ class Handler(BaseHTTPRequestHandler):
                 text, info = got
         if text is None:
             text, info = documents.excerpts(self._question, docs, room, embed)
-        self._stream_line({"lightusagi": "documents", **info})
+        self._stream_line({"hikarilm": "documents", **info})
         sent[last] = {**sent[last], "content": text + "\n\n" + sent[last]["content"]}
         return sent
 
@@ -618,7 +618,7 @@ class Handler(BaseHTTPRequestHandler):
             response.close()
 
     def _generate(self) -> None:
-        """Make one picture. Streams {"lightusagi":"loading"}, then {"progress", "total"} lines,
+        """Make one picture. Streams {"hikarilm":"loading"}, then {"progress", "total"} lines,
         then {"image": notes} once it is saved. Stop (the page going away) saves nothing.
 
         The model id says where the picture is made: "sd:<name>" is an sd-server the
@@ -677,7 +677,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             self._stream_start()
-            self._stream_line({"lightusagi": "loading", "model": model, "unloading": router.large
+            self._stream_line({"hikarilm": "loading", "model": model, "unloading": router.large
                                if router.large and router.large != model else None})
             if spec is not None or model.startswith(imagegen.REMOTE_PREFIX):
                 self._picture_from_server(request, spec, program, pictures["address"])
@@ -1013,11 +1013,14 @@ def _stop_on_signal(*_args) -> None:
 def main() -> None:
     # A helper that is told to stop must not leave sd-server holding its model in memory.
     signal.signal(signal.SIGTERM, _stop_on_signal)
+    moved = store.move_old_home()
+    if moved:
+        print(moved, flush=True)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     stopping = threading.Event()
     KEEPER.watch(running, unload, stopping, on_unload=router.forget)
     indexer.everything()
-    print(f"LightUsagi at http://{HOST}:{PORT}", flush=True)
+    print(f"HikariLM at http://{HOST}:{PORT}", flush=True)
     print(f"Ollama at {os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')}", flush=True)
     try:
         server.serve_forever()

@@ -203,14 +203,14 @@ async function send() {
         if (!line.trim()) continue;
         const event = JSON.parse(line);
         if (event.error) throw new Error(event.error);
-        if (event.lightusagi === "context") {
+        if (event.hikarilm === "context") {
           state.lastContext = event;
           if (event.clamped) {
             notify("Context cut to " + event.num_ctx.toLocaleString() + " tokens so " + model + " fits in this computer's memory.");
           }
           continue;
         }
-        if (event.lightusagi === "compaction") {
+        if (event.hikarilm === "compaction") {
           if (!event.done) status.textContent = "Compacting context…";
           else if (event.error) status.textContent = "Context compaction failed, so the chat is sent as it is: " + plainError(event.error);
           else {
@@ -220,13 +220,13 @@ async function send() {
           }
           continue;
         }
-        if (event.lightusagi === "reading") {
+        if (event.hikarilm === "reading") {
           status.textContent = event.error
             ? "Reading the document failed, so the closest passages are sent instead: " + plainError(event.error)
             : "Reading " + event.name + ", part " + event.part + " of " + event.parts + "…";
           continue;
         }
-        if (event.lightusagi === "documents") {
+        if (event.hikarilm === "documents") {
           const used = document.createElement("div");
           used.className = "used-notes";
           used.textContent = event.mode === "notes"
@@ -239,7 +239,7 @@ async function send() {
           scrollLog();
           continue;
         }
-        if (event.lightusagi === "answer_was_thinking") {
+        if (event.hikarilm === "answer_was_thinking") {
           // A </think> arrived, so what streamed as the answer was the model's reasoning.
           thought += answer;
           answer = "";
@@ -249,7 +249,7 @@ async function send() {
           drawThought();
           continue;
         }
-        if (event.lightusagi === "thinking_cut") {
+        if (event.hikarilm === "thinking_cut") {
           thinkingCut = true;
           if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + model + " is answering now…";
           drawThought();
@@ -355,7 +355,7 @@ async function makePicture(payload, signal, show) {
       const event = JSON.parse(line);
       if (event.error) throw new Error(event.error);
       if (event.image) return event.image;
-      if (event.lightusagi === "loading") {
+      if (event.hikarilm === "loading") {
         show("Loading " + label + (event.unloading ? ", after unloading " + event.unloading : "") + "…");
       } else if (event.progress < 0) show("Saving the picture…");
       else if (event.total) show("Drawing… step " + event.progress + " of " + event.total);

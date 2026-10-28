@@ -2,7 +2,7 @@
 import { modKeys } from "./core.js";
 
 // Ctrl+B (Cmd+B on a Mac) hides and shows the file list, as in Cursor.
-const FILES_HIDDEN_KEY = "lightusagi-files-hidden";
+const FILES_HIDDEN_KEY = "hikarilm-files-hidden";
 const toggleFiles = document.querySelector("#toggle-files");
 
 export function setFilesHidden(hidden) {
@@ -15,7 +15,7 @@ export function setFilesHidden(hidden) {
 
 // The chat pane's left edge can be dragged (or moved with the arrow keys
 // while it has focus). Double-click puts it back. The width is remembered.
-const PANE_KEY = "lightusagi-pane";
+const PANE_KEY = "hikarilm-pane";
 const paneResize = document.querySelector("#pane-resize");
 const chatPane = document.querySelector("#chat-pane");
 const clampPane = (width) => Math.max(320, Math.min(width, window.innerWidth * 0.75, window.innerWidth - 360));

@@ -15,14 +15,14 @@ export function setSidebar(open) {
   const toggle = document.querySelector("#toggle-sidebar");
   toggle.setAttribute("aria-expanded", String(open));
   toggle.setAttribute("aria-label", open ? "Hide chats" : "Show chats");
-  if (!narrow.matches) localStorage.setItem("lightusagi-sidebar", open ? "open" : "closed");
+  if (!narrow.matches) localStorage.setItem("hikarilm-sidebar", open ? "open" : "closed");
 }
 
 // Notifications. Only when you are away from the page (another tab or
 // window): the tab title changes, and the browser shows a notification if
 // it was allowed. Clicking the notification brings you back to that chat.
-const NOTIFY_KEY = "lightusagi-notify";
-const BASE_TITLE = "LightUsagi";
+const NOTIFY_KEY = "hikarilm-notify";
+const BASE_TITLE = "HikariLM";
 const notifyNote = document.querySelector("#notify-note");
 const canNotify = "Notification" in window;
 const notifyOn = () => localStorage.getItem(NOTIFY_KEY) !== "off";
@@ -49,7 +49,7 @@ export function announce(heading, chatName, detail, id) {
   try {
     const note = new Notification(heading, {
       body: (chatName ? chatName + "\n" : "") + detail.replace(/\s+/g, " ").trim().slice(0, 120),
-      tag: "lightusagi-reply",
+      tag: "hikarilm-reply",
     });
     note.onclick = () => {
       window.focus();
@@ -68,7 +68,7 @@ function clearAnnouncement() {
 
 export function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("lightusagi-theme", theme);
+  localStorage.setItem("hikarilm-theme", theme);
   document.querySelector("#dark-toggle").checked = theme === "dark";
 }
 
@@ -114,12 +114,12 @@ export function start() {
   });
   modelSelect.addEventListener("change", () => {
     if (modelSelect.value === SETUP_PICTURES) {
-      const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model");
+      const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model");
       modelSelect.value = [...modelSelect.options].some((option) => option.value === saved) ? saved : modelSelect.options[0].value;
       openPictureSetup();
       return;
     }
-    localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", modelSelect.value);
+    localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model", modelSelect.value);
     updatePictureMode();
   });
   window.addEventListener("focus", () => {

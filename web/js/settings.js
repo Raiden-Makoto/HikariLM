@@ -6,7 +6,7 @@ import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
 // answered and read, and a few close to a new question go along with it.
-const NOTES_KEY = "lightusagi-notes";
+const NOTES_KEY = "hikarilm-notes";
 export const notesOn = () => localStorage.getItem(NOTES_KEY) !== "off";
 
 async function showNotesSetting() {
@@ -102,7 +102,7 @@ async function refreshSetup() {
   try {
     body = await (await fetch("/api/pictures/setup")).json();
   } catch (error) {
-    note.textContent = "Could not reach the LightUsagi helper.";
+    note.textContent = "Could not reach the HikariLM helper.";
     return;
   }
   document.querySelector("#setup-folder").textContent = body.klein.folder.replace(/[\\/]models$/, "");
@@ -210,7 +210,7 @@ async function showMemory() {
         (body.memory.available ? ", " + gigabytes(body.memory.available) + " free." : "."));
     } else {
       parts.push("Memory is not checked, because Ollama runs on another computer or its memory could not be read. " +
-        "Set LIGHTUSAGI_MEMORY_GB to that computer's memory to turn the check on.");
+        "Set HIKARILM_MEMORY_GB to that computer's memory to turn the check on.");
     }
     if (body.default) {
       const from = { model: "set by the model", OLLAMA_CONTEXT_LENGTH: "from OLLAMA_CONTEXT_LENGTH", ollama: "Ollama's built-in" }[body.default_from];
@@ -324,7 +324,7 @@ export function start() {
       const url = String(reader.result);
       bgNote.textContent = "";
       try {
-        localStorage.setItem("lightusagi-bg", url);
+        localStorage.setItem("hikarilm-bg", url);
       } catch (error) {
         bgNote.textContent = "That image is too large to keep after a refresh.";
       }
@@ -333,7 +333,7 @@ export function start() {
     reader.readAsDataURL(file);
   });
   document.querySelector("#clear-bg").addEventListener("click", () => {
-    localStorage.removeItem("lightusagi-bg");
+    localStorage.removeItem("hikarilm-bg");
     document.querySelector("#bg-file").value = "";
     bgNote.textContent = "";
     applyBackground("");

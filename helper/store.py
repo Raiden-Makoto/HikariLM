@@ -1,6 +1,6 @@
 """Chat transcripts on disk, one JSON file per conversation.
 
-Files live in ~/.lightusagi/transcripts. Nothing here keeps a chat in memory:
+Files live in ~/.hikarilm/transcripts. Nothing here keeps a chat in memory:
 each call reads or writes one file and lets go.
 """
 
@@ -18,7 +18,27 @@ TITLE_LENGTH = 60
 
 
 def home() -> Path:
-    return Path(os.environ.get("LIGHTUSAGI_HOME") or Path.home() / ".lightusagi")
+    return Path(os.environ.get("HIKARILM_HOME") or Path.home() / ".hikarilm")
+
+
+def move_old_home() -> str:
+    """Before it was HikariLM the app was LightUsagi, with its folder at ~/.lightusagi.
+    Move that folder here once, and fix the paths into it that settings.json keeps
+    (the picture models set up there). Returns what happened, or "" if nothing did."""
+    old, new = Path.home() / ".lightusagi", home()
+    if os.environ.get("HIKARILM_HOME") or new.exists() or not old.is_dir():
+        return ""
+    try:
+        old.rename(new)
+    except OSError as error:
+        return f"Could not move {old} to {new} ({error}). Move it by hand to keep your chats."
+    settings = new / "settings.json"
+    try:
+        text = settings.read_text(encoding="utf-8")
+        settings.write_text(text.replace(str(old) + os.sep, str(new) + os.sep), encoding="utf-8")
+    except OSError:
+        pass
+    return f"Moved your chats and settings from {old} to {new}."
 
 
 def transcripts_dir() -> Path:
@@ -360,7 +380,7 @@ def delete(chat_id: str) -> bool:
 
 
 # Drafts: what is typed and attached in the message box but not sent yet.
-# One file per chat in ~/.lightusagi/drafts, named by chat id ("new" is the
+# One file per chat in ~/.hikarilm/drafts, named by chat id ("new" is the
 # draft for a chat that has not been started). Deleted when the message is sent.
 def drafts_dir() -> Path:
     return home() / "drafts"

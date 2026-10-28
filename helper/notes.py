@@ -1,10 +1,10 @@
 """Remember what was answered and what was read, so a later question can find it.
 
-What is indexed is text LightUsagi already saved: the questions and answers in
+What is indexed is text HikariLM already saved: the questions and answers in
 each chat, and the text Gemma wrote for each picture. Files in a workspace are
 not indexed; a small folder is sent whole. Vectors come from nomic-embed-text
 (through Ollama, passed in as `embed`), one small file per chat or picture in
-~/.lightusagi/index/, so deleting a chat removes its notes and nothing else.
+~/.hikarilm/index/, so deleting a chat removes its notes and nothing else.
 """
 
 from __future__ import annotations

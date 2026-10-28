@@ -7,18 +7,18 @@ import { CODE_MODEL_KEY, inCodeView, updatePictureMode } from "./models.js";
 import { closeSidebarIfNarrow, refreshChats, renderChats } from "./chat-list.js";
 
 // Drafts. What is typed and attached but not sent is kept by the helper in
-// ~/.lightusagi/drafts, one per chat ("new" before a chat has started), so
+// ~/.hikarilm/drafts, one per chat ("new" before a chat has started), so
 // a reload or a switch to another chat does not lose it. Requests go
 // through one queue so they land in the order they were made.
 const DRAFT_NEW = "new";
-const LAST_CHAT = "lightusagi-chat";
+const LAST_CHAT = "hikarilm-chat";
 let draftTimer = null;
 let draftQueue = Promise.resolve();
 // The code editor has its own conversations, apart from the Chat page's.
 // Their ids start with "editor-", so they and their drafts never mix with
 // the Chat page's, and the chat list leaves them out.
 export const isEditorId = (id) => typeof id === "string" && id.startsWith("editor-");
-export const lastChatKey = () => (inCodeView() ? "lightusagi-chat-editor" : LAST_CHAT);
+export const lastChatKey = () => (inCodeView() ? "hikarilm-chat-editor" : LAST_CHAT);
 export const draftKey = () => state.chatId || (inCodeView() ? "editor-new" : DRAFT_NEW);
 
 export function saveDraft(key = draftKey(), withFiles = false, keepalive = false) {
@@ -120,7 +120,7 @@ export async function openChat(id) {
   loadDraft(id);
   if ([...modelSelect.options].some((option) => option.value === chat.model)) {
     modelSelect.value = chat.model;
-    localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", chat.model);
+    localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model", chat.model);
     updatePictureMode();
   }
   renderLog();

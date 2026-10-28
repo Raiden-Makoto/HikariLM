@@ -1,5 +1,5 @@
 {
-  "name": "lightusagi-editor-bundle",
+  "name": "hikarilm-editor-bundle",
   "private": true,
   "description": "Builds web/vendor/codemirror.js. Only needed to upgrade CodeMirror or change languages.",
   "type": "module",

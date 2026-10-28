@@ -29,9 +29,9 @@ startFileActions();
 startLayout();
 startShortcuts();
 
-applyTheme(localStorage.getItem("lightusagi-theme") || "light");
-applyBackground(localStorage.getItem("lightusagi-bg") || "");
-setSidebar(narrow.matches ? false : localStorage.getItem("lightusagi-sidebar") !== "closed");
+applyTheme(localStorage.getItem("hikarilm-theme") || "light");
+applyBackground(localStorage.getItem("hikarilm-bg") || "");
+setSidebar(narrow.matches ? false : localStorage.getItem("hikarilm-sidebar") !== "closed");
 showEmpty();
 messageBox.focus();
 setSection(sectionToOpen(), "replace");

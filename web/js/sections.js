@@ -15,8 +15,8 @@ import { openFileAt } from "./file-actions.js";
 // to the same section: /chat and /editor. Returns false if the user chose
 // to stay because of unsaved edits.
 const SECTION_PATHS = { chat: "/chat", files: "/editor" };
-const SECTION_KEY = "lightusagi-section";
-export const FILE_KEY = "lightusagi-file";
+const SECTION_KEY = "hikarilm-section";
+export const FILE_KEY = "hikarilm-file";
 const sectionFromPath = () => (/^\/editor\/?$/.test(location.pathname) ? "files" : "chat");
 // A plain "/" has no section in it, so it opens the one used last.
 export const sectionToOpen = () =>

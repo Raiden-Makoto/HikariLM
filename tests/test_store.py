@@ -1,7 +1,10 @@
+import json
 import os
 import tempfile
 import time
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from helper import store
 
@@ -10,16 +13,16 @@ class StoreTest(unittest.TestCase):
     def setUp(self) -> None:
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
-        previous = os.environ.get("LIGHTUSAGI_HOME")
-        os.environ["LIGHTUSAGI_HOME"] = self.folder.name
+        previous = os.environ.get("HIKARILM_HOME")
+        os.environ["HIKARILM_HOME"] = self.folder.name
         self.addCleanup(self._restore, previous)
 
     @staticmethod
     def _restore(previous) -> None:
         if previous is None:
-            os.environ.pop("LIGHTUSAGI_HOME", None)
+            os.environ.pop("HIKARILM_HOME", None)
         else:
-            os.environ["LIGHTUSAGI_HOME"] = previous
+            os.environ["HIKARILM_HOME"] = previous
 
     def messages(self, text: str = "How does an AVL tree stay balanced?"):
         return [
@@ -222,6 +225,48 @@ class StoreTest(unittest.TestCase):
     def test_no_temp_files_are_left_behind(self) -> None:
         store.save("tidy", "gemma3", self.messages())
         self.assertEqual([p.name for p in store.transcripts_dir().iterdir()], ["tidy.json"])
+
+
+class OldHomeTest(unittest.TestCase):
+    """~/.lightusagi, from before the rename, moves to ~/.hikarilm once."""
+
+    def setUp(self) -> None:
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.home = Path(folder.name)
+        patcher = mock.patch.object(Path, "home", return_value=self.home)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        saved = os.environ.pop("HIKARILM_HOME", None)
+        if saved is not None:
+            self.addCleanup(os.environ.__setitem__, "HIKARILM_HOME", saved)
+
+    def make_old(self) -> Path:
+        old = self.home / ".lightusagi"
+        (old / "transcripts").mkdir(parents=True)
+        (old / "transcripts" / "a.json").write_text("{}")
+        (old / "settings.json").write_text(json.dumps({"pictures": {"models": f"flux2-klein: --diffusion-model {old}/models/k.gguf"}}))
+        return old
+
+    def test_moves_the_folder_and_fixes_saved_paths(self) -> None:
+        old = self.make_old()
+        self.assertIn("Moved", store.move_old_home())
+        new = self.home / ".hikarilm"
+        self.assertFalse(old.exists())
+        self.assertTrue((new / "transcripts" / "a.json").is_file())
+        models = json.loads((new / "settings.json").read_text())["pictures"]["models"]
+        self.assertEqual(models, f"flux2-klein: --diffusion-model {new}/models/k.gguf")
+        self.assertEqual(store.move_old_home(), "")
+
+    def test_leaves_both_alone_when_the_new_one_exists(self) -> None:
+        old = self.make_old()
+        (self.home / ".hikarilm").mkdir()
+        self.assertEqual(store.move_old_home(), "")
+        self.assertTrue(old.is_dir())
+
+    def test_nothing_to_move(self) -> None:
+        self.assertEqual(store.move_old_home(), "")
+        self.assertFalse((self.home / ".hikarilm").exists())
 
 
 if __name__ == "__main__":

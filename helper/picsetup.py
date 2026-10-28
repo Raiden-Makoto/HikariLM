@@ -106,7 +106,7 @@ class Setup:
         folder = imagegen.models_dir()
         asset = None
         if need_program:
-            with urllib.request.urlopen(urllib.request.Request(RELEASES, headers={"User-Agent": "LightUsagi"}),
+            with urllib.request.urlopen(urllib.request.Request(RELEASES, headers={"User-Agent": "HikariLM"}),
                                         timeout=30) as response:
                 asset = _release_asset(json.loads(response.read().decode()).get("assets") or [])
         needed = (asset["size"] if asset else 0) + (KLEIN_BYTES if files else 0) + SPARE
@@ -131,7 +131,7 @@ class Setup:
     def _download(self, url: str, path: Path, label: str) -> bool:
         """Stream url to path. False if stopped. A half-finished file is never left under its real name."""
         partial = path.with_name(path.name + ".part")
-        request = urllib.request.Request(url, headers={"User-Agent": "LightUsagi"})
+        request = urllib.request.Request(url, headers={"User-Agent": "HikariLM"})
         with urllib.request.urlopen(request, timeout=60) as response, open(partial, "wb") as handle:
             total = int(response.headers.get("Content-Length") or 0)
             self._set(file=label, done=0, total=total)

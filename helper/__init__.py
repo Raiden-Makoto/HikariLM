@@ -1,1 +1,1 @@
-"""Local helper for LightUsagi. Standard library only."""
+"""Local helper for HikariLM. Standard library only."""

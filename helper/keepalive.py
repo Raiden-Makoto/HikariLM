@@ -6,8 +6,8 @@ runs out. It does not always: a model can stay after a reply was cut off midway
 left in memory takes the room the next one needs, so the helper checks Ollama's
 list of loaded models every half minute and unloads one that has outstayed:
 
-- a model LightUsagi used, once its own keepalive has passed since the last
-  request ended and nothing of LightUsagi's is using it;
+- a model HikariLM used, once its own keepalive has passed since the last
+  request ended and nothing of HikariLM's is using it;
 - any model Ollama itself says should have gone (its expiry is past), since
   Ollama has evidently missed it.
 
@@ -80,7 +80,7 @@ class Keeper:
 
     @contextmanager
     def using(self, model: str, keep_alive=None):
-        """Around every request LightUsagi makes with a model, with the keepalive it sent."""
+        """Around every request HikariLM makes with a model, with the keepalive it sent."""
         model = key(model)
         keep = self.keep_alive if keep_alive is None else seconds(keep_alive, self.keep_alive)
         with self._lock:

@@ -10,10 +10,10 @@ class DescriptionsTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        old = os.environ.get("LIGHTUSAGI_HOME")
-        os.environ["LIGHTUSAGI_HOME"] = self._tmp.name
-        self.addCleanup(lambda: os.environ.pop("LIGHTUSAGI_HOME") if old is None
-                        else os.environ.__setitem__("LIGHTUSAGI_HOME", old))
+        old = os.environ.get("HIKARILM_HOME")
+        os.environ["HIKARILM_HOME"] = self._tmp.name
+        self.addCleanup(lambda: os.environ.pop("HIKARILM_HOME") if old is None
+                        else os.environ.__setitem__("HIKARILM_HOME", old))
 
     @staticmethod
     def pic(data: bytes) -> str:

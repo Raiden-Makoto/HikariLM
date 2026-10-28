@@ -8,8 +8,8 @@ import { renderMarkdown } from "./markdown.js";
 
 // Files section. The helper reads and writes the folder; the page only
 // shows one file at a time. The file on disk is the only copy of the text.
-export const FOLDER_KEY = "lightusagi-folder";
-export const KIND_KEY = "lightusagi-folder-kind";
+export const FOLDER_KEY = "hikarilm-folder";
+export const KIND_KEY = "hikarilm-folder-kind";
 export const folderLabel = document.querySelector("#folder-label");
 export const fileFilter = document.querySelector("#file-filter");
 export const folderNote = document.querySelector("#folder-note");

@@ -198,7 +198,7 @@ export function start() {
     else browseNote.textContent = folderNote.textContent;
   });
 
-  pickLocal.addEventListener("click", () => useLocalHandle(() => window.showDirectoryPicker({ id: "lightusagi", mode: "readwrite" })));
+  pickLocal.addEventListener("click", () => useLocalHandle(() => window.showDirectoryPicker({ id: "hikarilm", mode: "readwrite" })));
   reopenLocal.addEventListener("click", () => useLocalHandle(async () => {
     const handle = await recallHandle();
     if (!handle) return null;

@@ -10,8 +10,8 @@ import urllib.request
 from helper import keepalive
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
-KEEP_ALIVE = os.environ.get("LIGHTUSAGI_KEEP_ALIVE", "5m")
-# Every request LightUsagi makes with a model runs inside KEEPER.using(model).
+KEEP_ALIVE = os.environ.get("HIKARILM_KEEP_ALIVE", "5m")
+# Every request HikariLM makes with a model runs inside KEEPER.using(model).
 KEEPER = keepalive.Keeper(keepalive.seconds(KEEP_ALIVE))
 
 

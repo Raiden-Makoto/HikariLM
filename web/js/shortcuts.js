@@ -10,7 +10,7 @@ import { askAbout } from "./file-actions.js";
 //   B hides and shows the side list: the chats in Chat, the files in the code editor.
 //   K adds the open file to the message, L its highlighted lines (code editor only).
 // New chat is Ctrl+Option+N (Ctrl+Alt+N) unless the user picks another in Settings.
-const NEW_CHAT_KEY = "lightusagi-new-chat-keys";
+const NEW_CHAT_KEY = "hikarilm-new-chat-keys";
 const DEFAULT_NEW_CHAT = { ctrl: true, alt: true, shift: false, meta: false, code: "KeyN" };
 const keysButton = document.querySelector("#new-chat-keys");
 const resetButton = document.querySelector("#reset-new-chat-keys");

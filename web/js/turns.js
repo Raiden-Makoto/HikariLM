@@ -119,7 +119,7 @@ export function pictureFigure(message) {
   const download = document.createElement("a");
   download.className = "choice";
   download.href = img.src;
-  download.download = "lightusagi-" + record.id + ".png";
+  download.download = "hikarilm-" + record.id + ".png";
   download.textContent = "Download";
   const vary = document.createElement("button");
   vary.type = "button";
