@@ -2671,6 +2671,9 @@
         if (body.memory) {
           parts.push("This computer: " + gigabytes(body.memory.total) +
             (body.memory.available ? ", " + gigabytes(body.memory.available) + " free." : "."));
+        } else {
+          parts.push("Memory is not checked, because Ollama runs on another computer or its memory could not be read. " +
+            "Set LIGHTUSAGI_MEMORY_GB to that computer's memory to turn the check on.");
         }
         if (body.error) parts.push(plainError(body.error));
         else if (model) {

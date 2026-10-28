@@ -30,7 +30,8 @@ def chat(turns, chars=400):
 
 class BudgetTest(unittest.TestCase):
     def setUp(self):
-        for name in ("OLLAMA_KV_CACHE_TYPE", "OLLAMA_NUM_PARALLEL", "OLLAMA_CONTEXT_LENGTH", "LIGHTUSAGI_MEMORY_GB"):
+        for name in ("OLLAMA_KV_CACHE_TYPE", "OLLAMA_NUM_PARALLEL", "OLLAMA_CONTEXT_LENGTH", "LIGHTUSAGI_MEMORY_GB",
+                     "OLLAMA_HOST"):
             old = os.environ.pop(name, None)
             if old is not None:
                 self.addCleanup(os.environ.__setitem__, name, old)
@@ -76,6 +77,19 @@ class BudgetTest(unittest.TestCase):
             budget.plan("qwen", 8192, QWEN, 5 * GIB, [], (16 * GIB, 2 * GIB))
         plan = budget.plan("qwen", 8192, QWEN, 5 * GIB, loaded, (16 * GIB, 2 * GIB))
         self.assertEqual(plan["num_ctx"], 8192)
+
+    def test_memory_is_only_read_when_ollama_is_here(self):
+        for host in ("", "127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434", "0.0.0.0"):
+            self.assertTrue(budget.ollama_is_local(host), host)
+        self.assertFalse(budget.ollama_is_local("http://192.168.1.20:11434"))
+        self.assertFalse(budget.ollama_is_local("gpu-box:11434"))
+
+    def test_this_computers_memory_can_be_read(self):
+        mem = budget.memory()
+        self.assertIsNotNone(mem)
+        self.assertGreater(mem[0], 0)
+        os.environ["LIGHTUSAGI_MEMORY_GB"] = "8"
+        self.assertEqual(budget.memory(), (8 * GIB, None))
 
     def test_parallel_slots_multiply_the_cache(self):
         os.environ["OLLAMA_NUM_PARALLEL"] = "4"

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 GIB = 1024 ** 3
 SHARE = 0.75            # at most this much of all memory for Ollama's model and cache
@@ -34,37 +36,91 @@ def _gb(value: float) -> str:
     return f"{value / GIB:.1f} GB"
 
 
+LOCAL_HOSTS = {"", "localhost", "127.0.0.1", "::1", "0.0.0.0", "::"}
+
+
+def ollama_is_local(host: str | None = None) -> bool:
+    """Whether Ollama runs on this computer, so this computer's memory is the one that counts."""
+    host = host if host is not None else os.environ.get("OLLAMA_HOST", "")
+    if host and "://" not in host:
+        host = "http://" + host
+    name = (urlparse(host).hostname or "").lower()
+    return name in LOCAL_HOSTS or name.startswith("127.") or name == socket.gethostname().lower()
+
+
+def _proc() -> tuple[int, int | None]:
+    with open("/proc/meminfo", encoding="ascii") as handle:
+        values = {}
+        for line in handle:
+            name, _, rest = line.partition(":")
+            values[name] = int(rest.split()[0]) * 1024
+    return values["MemTotal"], values.get("MemAvailable")
+
+
+def _mac() -> tuple[int, int | None]:
+    total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
+                               timeout=5).stdout.strip())
+    stats = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=5).stdout
+    page = int(re.search(r"page size of (\d+)", stats).group(1))
+    free = 0
+    for label in ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable"):
+        found = re.search(label + r":\s+(\d+)", stats)
+        if found:
+            free += int(found.group(1)) * page
+    return total, free
+
+
+def _windows() -> tuple[int, int | None]:
+    import ctypes
+
+    class Status(ctypes.Structure):
+        _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong),
+                    ("total", ctypes.c_ulonglong), ("available", ctypes.c_ulonglong),
+                    ("page_total", ctypes.c_ulonglong), ("page_available", ctypes.c_ulonglong),
+                    ("virtual_total", ctypes.c_ulonglong), ("virtual_available", ctypes.c_ulonglong),
+                    ("extended", ctypes.c_ulonglong)]
+
+    status = Status()
+    status.length = ctypes.sizeof(Status)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        raise OSError("GlobalMemoryStatusEx failed")
+    return status.total, status.available
+
+
+def _sysconf() -> tuple[int, int | None]:
+    page = os.sysconf("SC_PAGE_SIZE")
+    total = os.sysconf("SC_PHYS_PAGES") * page
+    try:
+        available = os.sysconf("SC_AVPHYS_PAGES") * page
+    except (ValueError, OSError):
+        available = None
+    return total, available
+
+
 def memory() -> tuple[int, int | None] | None:
-    """(total, available) in bytes. Available is None if it cannot be told."""
+    """(total, available) in bytes for the computer Ollama runs on. Available is None if it
+    cannot be told. None if the memory cannot be known, so nothing is checked."""
     forced = os.environ.get("LIGHTUSAGI_MEMORY_GB")
     if forced:
         try:
             return int(float(forced) * GIB), None
         except ValueError:
             pass
-    try:
-        with open("/proc/meminfo", encoding="ascii") as handle:
-            values = {}
-            for line in handle:
-                name, _, rest = line.partition(":")
-                values[name] = int(rest.split()[0]) * 1024
-        return values["MemTotal"], values.get("MemAvailable")
-    except (OSError, KeyError, ValueError, IndexError):
-        pass
-    if sys.platform == "darwin":
+    if not ollama_is_local():
+        return None
+    if sys.platform == "win32":
+        readers = (_windows,)
+    elif sys.platform == "darwin":
+        readers = (_mac, _sysconf)
+    else:
+        readers = (_proc, _sysconf)
+    for reader in readers:
         try:
-            total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
-                                       timeout=5).stdout.strip())
-            stats = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=5).stdout
-            page = int(re.search(r"page size of (\d+)", stats).group(1))
-            free = 0
-            for label in ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable"):
-                found = re.search(label + r":\s+(\d+)", stats)
-                if found:
-                    free += int(found.group(1)) * page
-            return total, free
-        except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
-            return None
+            total, available = reader()
+            if total > 0:
+                return total, available
+        except (OSError, KeyError, ValueError, IndexError, AttributeError, subprocess.SubprocessError):
+            continue
     return None
 
 
