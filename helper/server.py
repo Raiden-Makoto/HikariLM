@@ -8,8 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import descriptions, store, workspace
-from helper.ollama import KEEP_ALIVE, OllamaError, open_chat, tags, unload
+from helper import descriptions, notes, store, workspace
+from helper.ollama import KEEP_ALIVE, OllamaError, embed, open_chat, tags, unload
 from helper.router import ModelRouter, chat_models
 from helper.version import code_stamp
 
@@ -26,6 +26,7 @@ PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js")
 
 router = ModelRouter(unload)
+indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
 
 
@@ -37,6 +38,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/state":
             self._send_json({"large_model": router.large, "code": STARTED_WITH})
+            return
+        if self.path == "/api/notes":
+            self._send_json({**notes.count(), "error": indexer.last_error})
             return
         if self.path == "/api/tags":
             try:
@@ -98,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not save: {error.strerror or error}"}, status=500)
             return
+        indexer.chat(summary["id"])
         self._send_json(summary)
 
     def do_PATCH(self) -> None:
@@ -118,6 +123,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             payload = self._body(MAX_BODY)
             self._send_json(store.patch(self._chat_id(), payload))
+            indexer.chat(self._chat_id())
         except FileNotFoundError:
             self._send_json({"error": "chat not found"}, status=404)
         except ValueError as error:
@@ -143,6 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not delete: {error.strerror or error}"}, status=500)
             return
+        indexer.forget_chat(self._chat_id())
         self._send_json({"deleted": removed}, status=200 if removed else 404)
 
     def do_POST(self) -> None:
@@ -150,6 +157,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/describe":
             self._describe()
+            return
+        if self.path == "/api/search":
+            self._search()
             return
         if self.path != "/api/chat":
             self._send_json({"error": "not found"}, status=404)
@@ -224,6 +234,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": "The model sent no description of the picture."})
                 return
             descriptions.save(key, text, model, name)
+            indexer.picture(key)
             self._stream_line({"description": text[:descriptions.MAX_TEXT], "cached": False, "model": model})
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -231,6 +242,25 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"error": f"The description could not be saved: {error.strerror or error}"})
         finally:
             response.close()
+
+    def _search(self) -> None:
+        """A few earlier notes close to a question. Never an error: a send must not wait on this."""
+        try:
+            payload = self._body(MAX_BODY)
+            query = payload.get("query")
+            exclude = payload.get("exclude")
+            if not isinstance(query, str):
+                raise ValueError("query is required")
+            source = notes.chat_source(exclude) if isinstance(exclude, str) and exclude else ""
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        try:
+            found = notes.search(query, embed, exclude=source)
+        except (OllamaError, ValueError, OSError) as error:
+            self._send_json({"notes": [], "error": str(error)})
+            return
+        self._send_json({"notes": found})
 
     def _stream_start(self) -> None:
         self.send_response(200)
@@ -380,6 +410,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
+    indexer.everything()
     print(f"LightUsagi at http://{HOST}:{PORT}", flush=True)
     print(f"Ollama at {os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')}", flush=True)
     try:

@@ -471,6 +471,7 @@
     #chat-pane { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     #pane-resize { display: none; }
     #pane-head { display: none; }
+    .used-notes { margin-top: 0.4rem; font-size: 0.8rem; color: var(--muted, inherit); opacity: 0.75; }
     .apply-row { display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
     body.view-files .apply-row { display: flex; }
     .apply-row .choice { padding: 0.3rem 0.8rem; }
@@ -864,6 +865,13 @@
           <input class="switch" id="notify-toggle" type="checkbox" role="switch">
         </label>
         <p class="note" id="notify-note" role="status"></p>
+      </div>
+      <div class="setting">
+        <label class="switch-row">
+          <span class="setting-label">Use earlier chats and pictures</span>
+          <input class="switch" id="notes-toggle" type="checkbox" role="switch">
+        </label>
+        <p class="note" id="notes-note" role="status"></p>
       </div>
       <div class="setting">
         <span class="setting-label" id="bg-label">Background image</span>
@@ -2167,6 +2175,23 @@
       throw new Error("The picture was not described.");
     }
 
+    async function findNotes(text, signal) {
+      if (!notesOn() || inCodeView() || text.length < 15) return [];
+      try {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text, exclude: chatId || "" }),
+          signal,
+        });
+        if (!response.ok) return [];
+        return (await response.json()).notes || [];
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+        return [];
+      }
+    }
+
     async function send() {
       const content = messageBox.value.trim();
       if (!content || activeRequest) return;
@@ -2212,6 +2237,18 @@
       let answer = "";
       let thought = "";
       try {
+        // A few earlier notes close to the question go along with it, just for
+        // this send. They are not saved into the chat.
+        let notesPrefix = "";
+        const found = await findNotes(content, activeRequest.signal);
+        if (found.length) {
+          notesPrefix = "Notes from earlier chats and pictures (use them only if they help):\n" +
+            found.map((note) => "[" + note.title + "]\n" + note.text.slice(0, 800)).join("\n\n") + "\n\nMy question:\n";
+          const used = document.createElement("div");
+          used.className = "used-notes";
+          used.textContent = "Used earlier notes: " + found.map((note) => note.title).join(" · ");
+          sent.block.append(used);
+        }
         if (describer) {
           const converted = [];
           for (const file of files) {
@@ -2240,7 +2277,10 @@
           body: JSON.stringify({
             model,
             messages: messages.map((message, index) => {
-              const out = { role: message.role, content: withFiles(message) };
+              const out = {
+                role: message.role,
+                content: (index === messages.length - 1 ? notesPrefix : "") + withFiles(message),
+              };
               const pictures = (message.files || []).filter((file) => file.image).map((file) => file.image);
               if (pictures.length && index === messages.length - 1) out.images = pictures;
               return out;
@@ -2475,7 +2515,35 @@
     document.querySelector("#dark-toggle").addEventListener("change", (event) => {
       applyTheme(event.target.checked ? "dark" : "light");
     });
-    document.querySelector("#open-settings").addEventListener("click", () => settings.showModal());
+    // Earlier chats and pictures: the helper keeps small notes of what was
+    // answered and read, and a few close to a new question go along with it.
+    const NOTES_KEY = "lightusagi-notes";
+    const notesOn = () => localStorage.getItem(NOTES_KEY) !== "off";
+
+    async function showNotesSetting() {
+      document.querySelector("#notes-toggle").checked = notesOn();
+      const note = document.querySelector("#notes-note");
+      note.textContent = notesOn()
+        ? "A few notes from earlier chats and pictures that match your question are sent along with it. Not used in the code editor."
+        : "Off. Each question is sent on its own.";
+      try {
+        const body = await (await fetch("/api/notes")).json();
+        note.textContent += " " + body.notes + (body.notes === 1 ? " note" : " notes") + " kept so far." +
+          (body.error ? " Not indexed yet: " + plainError(body.error) : "");
+      } catch (error) {
+        // The count is only a courtesy.
+      }
+    }
+
+    document.querySelector("#notes-toggle").addEventListener("change", (event) => {
+      localStorage.setItem(NOTES_KEY, event.target.checked ? "on" : "off");
+      showNotesSetting();
+    });
+
+    document.querySelector("#open-settings").addEventListener("click", () => {
+      showNotesSetting();
+      settings.showModal();
+    });
     document.querySelector("#close-settings").addEventListener("click", () => settings.close());
     settings.addEventListener("click", (event) => {
       if (event.target === settings) settings.close();

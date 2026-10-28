@@ -53,6 +53,24 @@ def tags() -> list[str]:
     return names
 
 
+EMBED_MODEL = "nomic-embed-text"
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    """Turn texts into vectors with nomic-embed-text.
+
+    nomic is small and sits beside the large model, so this never unloads it.
+    """
+    if not any(name.split(":", 1)[0] == EMBED_MODEL for name in tags()):
+        raise OllamaError(f"{EMBED_MODEL} is not installed in Ollama, so earlier chats cannot be searched.")
+    with _request("/api/embed", {"model": EMBED_MODEL, "input": texts, "keep_alive": KEEP_ALIVE}, timeout=120) as response:
+        body = json.loads(response.read().decode())
+    vectors = body.get("embeddings")
+    if not isinstance(vectors, list) or len(vectors) != len(texts):
+        raise OllamaError("Ollama sent back an unexpected answer for the embedding.")
+    return vectors
+
+
 def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE):
     """Open a streaming chat. The caller closes the response."""
     return _request(
