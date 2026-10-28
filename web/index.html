@@ -747,6 +747,11 @@
     .choice[aria-pressed="true"] { border-color: var(--you); background: var(--hover); }
     .choice:disabled { opacity: 0.4; cursor: default; }
     .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
+    .steps { padding-left: 1.3rem; }
+    .steps li { margin: 0.4rem 0; }
+    .steps ul { padding-left: 1rem; margin: 0.3rem 0; }
+    .steps code { word-break: break-all; }
+    #picture-howto summary { cursor: pointer; margin-top: 0.5rem; }
     #settings .dialog-body { max-height: 75vh; overflow-y: auto; }
     .field-row {
       display: flex;
@@ -1001,6 +1006,17 @@
       <div class="setting" id="picture-setting">
         <span class="setting-label">Making pictures</span>
         <p class="note">Pictures come from stable-diffusion.cpp's sd-server, which runs on Windows, macOS and Linux. LightUsagi starts it only to make a picture, after the chat model leaves memory, and stops it before the next chat. Its models then show under "Make pictures" in the model list.</p>
+        <details id="picture-howto">
+          <summary>Set up FLUX.2 klein, step by step (about 5 GB to download, no account needed)</summary>
+          <ol class="note steps">
+            <li>Download sd-server from <a href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer">stable-diffusion.cpp's releases</a>. For this computer: <span id="howto-system"></span>.</li>
+            <li>Unzip it into <code id="howto-program-dir"></code>, keeping its files together. LightUsagi finds it there, so "sd-server program" below can stay blank.</li>
+            <li>Download these three files into <code id="howto-folder"></code>:
+              <ul id="howto-files"></ul>
+            </li>
+            <li><button class="choice" type="button" id="howto-fill">Add FLUX.2 klein to the list</button> Then pick <strong>flux2-klein</strong> under "Make pictures" in the model list and describe a picture.</li>
+          </ol>
+        </details>
         <label class="field-row">
           <span>sd-server program</span>
           <input id="pic-program" type="text" spellcheck="false" autocomplete="off" placeholder="sd-server on the PATH">
@@ -1047,6 +1063,11 @@
 
     function plainError(message) {
       if (message.includes("not reachable")) return "Ollama is not running.";
+      // What Chrome, Safari and Firefox say when the helper closed the connection or is not running.
+      if (/^(Failed to fetch|Load failed|NetworkError|network error)/i.test(message)) {
+        return "The connection to the LightUsagi helper was lost. If its window is closed, start it again; " +
+          "if it is open, the last lines there say what went wrong.";
+      }
       return message;
     }
 
@@ -1961,6 +1982,7 @@
     // Models from LM Studio's llmster carry an lms: prefix; the picker shows their own name.
     const isLmsModel = (name) => name.startsWith("lms:");
     const modelLabel = (name) => (isLmsModel(name) ? name.slice(4) + " (LM Studio)" : name);
+    const SETUP_PICTURES = "__setup_pictures";
 
     function modelsForView() {
       if (!inCodeView()) return allModels;
@@ -1997,7 +2019,8 @@
       };
       const fromOllama = models.filter((name) => !isLmsModel(name));
       const fromLms = models.filter(isLmsModel);
-      const chatPlace = (pictures.length || fromLms.length) && fromOllama.length ? group(fromLms.length ? "Ollama" : "Chat") : modelSelect;
+      const grouped = pictures.length || fromLms.length || !inCodeView();
+      const chatPlace = grouped && fromOllama.length ? group(fromLms.length ? "Ollama" : "Chat") : modelSelect;
       for (const name of fromOllama) chatPlace.append(new Option(name, name));
       if (fromLms.length) {
         const lmsPlace = group("LM Studio");
@@ -2006,6 +2029,8 @@
       if (pictures.length) {
         const picturePlace = group("Make pictures");
         for (const item of pictures) picturePlace.append(new Option(item.label, item.id));
+      } else if (!inCodeView()) {
+        group("Make pictures").append(new Option("Set up picture making…", SETUP_PICTURES));
       }
       const values = [...models, ...pictures.map((item) => item.id)];
       modelSelect.value = values.includes(saved) ? saved : values[0];
@@ -3086,6 +3111,12 @@
       messageBox.focus();
     });
     modelSelect.addEventListener("change", () => {
+      if (modelSelect.value === SETUP_PICTURES) {
+        const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model");
+        modelSelect.value = [...modelSelect.options].some((option) => option.value === saved) ? saved : modelSelect.options[0].value;
+        openPictureSetup();
+        return;
+      }
       localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "lightusagi-model", modelSelect.value);
       updatePictureMode();
     });
@@ -3261,17 +3292,57 @@
       if (body.models.length) {
         parts.push(body.program
           ? "sd-server: " + body.program + ". Models: " + body.models.join(", ") + "."
-          : "sd-server was not found" + (serverSettings.pictures.program ? " at that path" : " on the PATH") +
-            ". Download it from github.com/leejet/stable-diffusion.cpp/releases.");
+          : "sd-server was not found" + (serverSettings.pictures.program ? " at that path" : " on the PATH or in " + body.program_dir) +
+            ". See the steps above.");
       } else if (!body.server) {
         parts.push("No picture model is set up yet.");
       }
       if (body.server) parts.push(body.server.error ? plainError(body.server.error) : "Picture server: " + body.server.model + ".");
       parts.push(...body.problems);
       // Said only when an Ollama image model is installed but cannot run here.
-      const hidden = pictureNotes.find((line) => line.endsWith("image models are hidden."));
+      const hidden = pictureNotes.find((line) => line.includes("picture models are hidden") || line.endsWith("image models are hidden."));
       if (hidden) parts.push(hidden);
       note.textContent = parts.join(" ");
+      showHowto(body);
+    }
+
+    let kleinLine = "";
+    function showHowto(body) {
+      const howto = document.querySelector("#picture-howto");
+      if (!body.models.length && !body.server) howto.open = true;
+      document.querySelector("#howto-system").textContent = body.system;
+      document.querySelector("#howto-program-dir").textContent = body.program_dir;
+      document.querySelector("#howto-folder").textContent = body.klein.folder;
+      const list = document.querySelector("#howto-files");
+      list.replaceChildren();
+      for (const file of body.klein.files) {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = file.url;
+        link.textContent = file.name;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        item.append(link, file.found ? " ✓ found" : "");
+        list.append(item);
+      }
+      kleinLine = body.klein.line;
+    }
+
+    document.querySelector("#howto-fill").addEventListener("click", () => {
+      const box = document.querySelector("#pic-models");
+      const others = box.value.split("\n").filter((line) => line.trim() && !/^\s*flux2-klein\s*:/i.test(line));
+      box.value = [...others, kleinLine].join("\n");
+      if (serverSettings) savePictureSetting();
+    });
+
+    // "Set up picture making…" in the model list opens these steps.
+    function openPictureSetup() {
+      showNotesSetting();
+      showContextSetting();
+      settings.showModal();
+      const howto = document.querySelector("#picture-howto");
+      howto.open = true;
+      howto.scrollIntoView({ block: "start" });
     }
 
     async function savePictureSetting() {

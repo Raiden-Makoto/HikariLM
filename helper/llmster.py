@@ -87,14 +87,16 @@ def catalog(quiet: bool = False) -> list[dict]:
     try:
         with _request("/api/v1/models", timeout=3 if quiet else 10) as response:
             body = json.loads(response.read().decode())
-    except LlmsterError:
+    except (LlmsterError, ValueError, OSError) as error:
         if quiet:
             _absent_until = now + ABSENT_FOR
             return []
-        raise
+        if isinstance(error, LlmsterError):
+            raise
+        raise LlmsterError(f"LM Studio sent a model list that could not be read: {error}") from error
     _absent_until = 0.0
-    models = body.get("models")
-    models = models if isinstance(models, list) else []
+    models = body.get("models") if isinstance(body, dict) else None
+    models = [item for item in models if isinstance(item, dict)] if isinstance(models, list) else []
     _cached = (now, models)
     return models
 

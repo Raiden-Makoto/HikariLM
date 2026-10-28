@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import signal
 import threading
+import traceback
 from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -48,6 +50,27 @@ router = ModelRouter(unload_any)
 work = Work()
 indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
+
+
+def _guarded(method):
+    """A bug in a request must reach the page as a message. Left alone, the connection
+    just closes and the browser says only "Failed to fetch"."""
+    @functools.wraps(method)
+    def run(self) -> None:
+        try:
+            method(self)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception as error:
+            traceback.print_exc()
+            message = (f"The helper hit a bug: {type(error).__name__}: {error}. The details are in the "
+                       "window where LightUsagi runs.")
+            if getattr(self, "_streaming", False):
+                self._stream_line({"error": message})
+            elif not getattr(self, "_answered", False):
+                self._send_json({"error": message}, status=500)
+            self.close_connection = True
+    return run
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -751,7 +774,8 @@ class Handler(BaseHTTPRequestHandler):
             except sdserver.PictureError as error:
                 server = {"error": str(error)}
         return {"program": program, "models": [model["name"] for model in models], "problems": problems + missing,
-                "server": server, "ollama": imagegen.support()}
+                "server": server, "ollama": imagegen.support(), "klein": imagegen.klein_setup(),
+                "system": sdserver.release_hint(), "program_dir": str(sdserver.program_dir())}
 
     def _search(self) -> None:
         """A few earlier notes close to a question. Never an error: a send must not wait on this."""
@@ -772,7 +796,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json({"notes": found})
 
+    def send_response(self, code: int, message: str | None = None) -> None:
+        self._answered = True
+        super().send_response(code, message)
+
     def _stream_start(self) -> None:
+        self._streaming = True
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -948,6 +977,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"{self.address_string()} {fmt % args}", flush=True)
+
+
+for _verb in ("GET", "PUT", "PATCH", "DELETE", "POST"):
+    setattr(Handler, "do_" + _verb, _guarded(getattr(Handler, "do_" + _verb)))
 
 
 def _stop_on_signal(*_args) -> None:

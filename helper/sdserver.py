@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -38,11 +40,56 @@ class PictureError(Exception):
 
 # --- settings ---------------------------------------------------------------------
 
+def program_dir() -> Path:
+    """Where the setup steps say to unzip sd-server, so no path has to be typed."""
+    return store.home() / "sd-server"
+
+
 def find_program(configured: str = "") -> str | None:
     if configured:
         path = Path(configured).expanduser()
         return str(path) if path.is_file() else None
-    return shutil.which(PROGRAM)
+    found = shutil.which(PROGRAM)
+    if found:
+        return found
+    name = PROGRAM + (".exe" if os.name == "nt" else "")
+    folder = program_dir()
+    # The zip may unpack straight into the folder or into one folder inside it.
+    for path in [folder / name, *sorted(folder.glob("*/" + name))]:
+        if path.is_file():
+            _let_run(path)
+            return str(path)
+    return None
+
+
+def _let_run(path: Path) -> None:
+    """A program unzipped from a download is marked by macOS, which then refuses to run it
+    (and the library beside it), and a zip can lose the run permission."""
+    if path in _let_run.done:
+        return
+    _let_run.done.add(path)
+    try:
+        if not os.access(path, os.X_OK):
+            path.chmod(path.stat().st_mode | 0o111)
+        if sys.platform == "darwin":
+            subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(path.parent)],
+                           capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+_let_run.done = set()
+
+
+def release_hint() -> str:
+    """Which file on stable-diffusion.cpp's releases page fits this computer."""
+    machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        return "the file with Darwin-macOS and arm64 in its name" if machine == "arm64" else \
+            "none: the releases are for Apple Silicon Macs, so on an Intel Mac sd-server has to be built from source"
+    if os.name == "nt":
+        return "win-vulkan-x64 (any graphics card), win-cuda12-x64 (NVIDIA), or win-cpu-x64 (no graphics card)"
+    return "Linux…x86_64-vulkan (any graphics card), …x86_64-rocm (AMD), or Linux…x86_64 (CPU only)"
 
 
 def parse_models(text: str) -> tuple[list[dict], list[str]]:
@@ -74,6 +121,8 @@ def parse_models(text: str) -> tuple[list[dict], list[str]]:
             problems.append(f"Line {number}: the name {name} is used twice.")
             continue
         seen.add(name)
+        # Windows splitting keeps the quotes around a path with spaces.
+        args = [arg[1:-1] if len(arg) > 1 and arg[0] == arg[-1] == '"' else arg for arg in args]
         models.append({"name": name, "args": [os.path.expanduser(arg) if arg.startswith("~") else arg for arg in args]})
     return models, problems
 

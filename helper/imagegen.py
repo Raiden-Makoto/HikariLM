@@ -45,9 +45,8 @@ PNG = b"\x89PNG\r\n\x1a\n"
 REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
 REFUSED_FILE = "ollama-pictures.json"
 SD_ALTERNATIVE = ("LightUsagi can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
-                  "on Windows, macOS and Linux: download sd-server from "
-                  "https://github.com/leejet/stable-diffusion.cpp/releases and the model files, then add a line for "
-                  "it in Settings under Pictures (the box shows a flux2-klein example).")
+                  "on Windows, macOS and Linux: open Settings, and under Making pictures follow "
+                  "\"Set up FLUX.2 klein, step by step\".")
 
 
 # --- where it works ---------------------------------------------------------
@@ -91,6 +90,38 @@ def support() -> dict:
         return {"supported": True, "reason": ""}
     return {"supported": False,
             "reason": f"Image generation needs a Mac with Apple Silicon. This computer is {_machine()}."}
+
+
+# FLUX.2 klein 4B for sd-server, as stable-diffusion.cpp's docs/flux2.md sets it up. None
+# of these needs a Hugging Face account (the small-decoder VAE stands in for FLUX.2-dev's,
+# which is behind a sign-in).
+KLEIN_FILES = (
+    ("--diffusion-model", "flux-2-klein-4b-Q4_0.gguf",
+     "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q4_0.gguf"),
+    ("--vae", "full_encoder_small_decoder.safetensors",
+     "https://huggingface.co/black-forest-labs/FLUX.2-small-decoder/resolve/main/full_encoder_small_decoder.safetensors"),
+    ("--llm", "Qwen3-4B-Q4_K_M.gguf",
+     "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"),
+)
+KLEIN_OPTIONS = "--cfg-scale 1.0 --steps 4"
+
+
+def models_dir() -> Path:
+    return store.home() / "models"
+
+
+def klein_setup() -> dict:
+    """The files FLUX.2 klein needs, whether each is in the models folder yet, and the line
+    for Settings that uses them."""
+    folder = models_dir()
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    quote = (lambda path: f'"{path}"' if " " in path else path)
+    files = [{"name": name, "url": url, "found": (folder / name).is_file()} for _, name, url in KLEIN_FILES]
+    line = "flux2-klein: " + " ".join(f"{flag} {quote(str(folder / name))}" for flag, name, _ in KLEIN_FILES)
+    return {"folder": str(folder), "files": files, "line": f"{line} {KLEIN_OPTIONS}"}
 
 
 def ollama_refuses() -> bool:
