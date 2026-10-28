@@ -253,7 +253,7 @@ Models are routing rules inside the helper, not folders. The page is one tab wit
 
 Each step is usable before the next one starts.
 
-1. **Helper talks to Ollama.** Stream a reply and leave the model loaded for follow-ups. Each request sets a keepalive so Ollama resets that timer. Force a large model out only when the next request uses a different large model.
+1. **Helper talks to Ollama.** Done. Stream a reply and leave the model loaded for follow-ups. Each request sets a keepalive so Ollama resets that timer. Force a large model out only when the next request uses a different large model.
 2. **Chat page.** Send a message, see the stream, save and reopen the chat from `transcripts/`. Sidebar, rename, attachments and drag-and-drop are part of this step. Done, except that it has only been tried against a fake Ollama.
 3. **Code editor.** Choose a folder by clicking through it, show one file, and ask Qwen what it does or where the bug is, in the chat beside it. Paste a fix back to that file, or press Apply on a code block in the reply. The header gets its Chat and Code editor switch here.
 4. **Image handoff.** Done, except that it has only been tried against a fake Ollama, and nomic indexing waits for step 5. Gemma writes the structure into `descriptions/`. Switching to Qwen forces Gemma out. Follow-ups stay on Qwen until the keepalive expires or the model changes. Skip Gemma when the description is already saved and the image has not changed.
