@@ -905,7 +905,7 @@
       title.textContent = welcomeLine();
       const hint = document.createElement("span");
       hint.className = "hint";
-      hint.textContent = "Ask a question, paste some code, or drop in a file, PDF, or picture.";
+      hint.textContent = welcomeHint();
       const keys = document.createElement("span");
       keys.className = "keys";
       keys.textContent = "Enter sends. Shift+Enter starts a new line.";
@@ -921,6 +921,13 @@
       if (hour >= 12 && hour < 17) return "Good afternoon";
       if (hour >= 17) return "Good evening";
       return "Late one";
+    }
+
+    // The code editor takes text and code only, so it does not offer PDFs or pictures.
+    function welcomeHint() {
+      return document.body.classList.contains("view-files")
+        ? "Ask about the open file, paste some code, or attach a text or code file."
+        : "Ask a question, paste some code, or drop in a file, PDF, or picture.";
     }
 
     function welcomeLine(now = new Date()) {
@@ -1956,7 +1963,8 @@
     const LAST_CHAT = "lightusagi-chat";
     let draftTimer = null;
     let draftQueue = Promise.resolve();
-    const draftKey = () => chatId || DRAFT_NEW;
+    // The code editor keeps its own unsent text, apart from the Chat page's.
+    const draftKey = () => (document.body.classList.contains("view-files") ? "editor-" : "") + (chatId || DRAFT_NEW);
 
     function saveDraft(key = draftKey(), withFiles = false, keepalive = false) {
       clearTimeout(draftTimer);
@@ -2772,13 +2780,26 @@
       if (saved.folder === folder && allFiles.includes(saved.path)) openFileAt(saved.path, true);
     }
 
+    let shownSection = null;
+
     function setSection(name, how = "push") {
       const files = name === "files";
       if (!files && !discardOk()) return false;
       if (how !== "url" && location.pathname !== SECTION_PATHS[name]) {
         history[how === "replace" ? "replaceState" : "pushState"](null, "", SECTION_PATHS[name]);
       }
+      // Unsent text stays with the section it was typed in: keep this one's
+      // draft, then show the other section's.
+      const swap = shownSection !== null && shownSection !== name;
+      if (swap) saveDraft(draftKey(), true);
       document.body.classList.toggle("view-files", files);
+      shownSection = name;
+      if (swap) {
+        clearComposer();
+        loadDraft(draftKey());
+      }
+      const emptyHint = document.querySelector("#empty .hint");
+      if (emptyHint) emptyHint.textContent = welcomeHint();
       localStorage.setItem(SECTION_KEY, name);
       fileInput.accept = files ? [...TEXT_EXTENSIONS].map((ext) => "." + ext).join(",") : "";
       attachButton.title = files ? "Attach text or code files" : "Attach text, code, PDF, Word, Excel or picture files";

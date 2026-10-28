@@ -293,8 +293,10 @@ def delete(chat_id: str) -> bool:
         path.unlink()
     except FileNotFoundError:
         delete_draft(chat_id)
+        delete_draft("editor-" + chat_id)
         return False
     delete_draft(chat_id)
+    delete_draft("editor-" + chat_id)
     return True
 
 
