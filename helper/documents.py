@@ -30,7 +30,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from helper import store
+from helper import store, thinking
 
 CHUNK = 1200            # characters in one passage
 BATCH = 16
@@ -275,8 +275,10 @@ def excerpts(question: str, docs: list[dict], room: int, embed: Embed | None) ->
             where = f"[page {chunk['page']}] " if chunk.get("page") else ""
             lines.append(where + chunk["text"])
             last = index
-        parts.append(f"Passages from {doc['name']}. It is too long to send whole, so these are the parts "
-                     f"closest to the question, in the order they appear ([…] marks a gap):\n\n" + "\n\n".join(lines))
+        parts.append(given(doc["name"], "passages", "\n\n".join(lines),
+                           "The file is too long to send whole, so below are the passages of it closest to the "
+                           "question, quoted exactly and in the order they appear ([…] marks a gap). These passages "
+                           "are the file's content"))
     return "\n\n".join(parts), {"mode": "excerpts", "search": how, "files": files}
 
 
@@ -307,7 +309,8 @@ def notes(docs: list[dict], model: str, num_ctx: int, room: int, ask: Ask,
     cap = max(NOTE_MIN, min(NOTE_MAX, part_size // 6))
     sections, files = [], []
     for doc, data, groups in split_up:
-        key = f"{model}|{part_size}|{cap}"
+        # v2: notes from before reasoning was taken out of them are not reused.
+        key = f"v2|{model}|{part_size}|{cap}"
         kept = data.setdefault("notes", {}).get(key)
         written = kept if isinstance(kept, list) and len(kept) == len(groups) else []
         for number, group in enumerate(groups, 1):
@@ -315,9 +318,10 @@ def notes(docs: list[dict], model: str, num_ctx: int, room: int, ask: Ask,
                 continue
             if not progress(doc["name"], number, len(groups)):
                 return None
+            part_text = "\n\n".join(chunk["text"] for chunk in group)
             prompt = NOTE_PROMPT.format(part=number, parts=len(groups), name=doc["name"], pages=_pages(group),
-                                        text="\n\n".join(chunk["text"] for chunk in group), words=cap * 3 // 4)
-            written.append(ask(prompt, cap + 64).strip() or "(nothing to note)")
+                                        text=part_text, words=cap * 3 // 4)
+            written.append(_note(ask(prompt, cap + 64), part_text, cap))
             data["notes"][key] = written
             save(doc, data)
         labelled = [f"Part {number} of {len(groups)}{_pages(group)}:\n{text}"
@@ -325,13 +329,21 @@ def notes(docs: list[dict], model: str, num_ctx: int, room: int, ask: Ask,
         labelled = _condense(doc["name"], labelled, room * tokens(doc["text"]) // max(1, sum(tokens(d["text"]) for d in docs)),
                              num_ctx, ask)
         files.append({"name": doc["name"], "parts": len(groups)})
-        sections.append(f"Notes on {doc['name']}, written by reading all of it in {len(groups)} "
-                        f"part{'s' if len(groups) != 1 else ''}, in order:\n\n" + "\n\n".join(labelled))
+        sections.append(given(doc["name"], "notes", "\n\n".join(labelled),
+                              f"The file is too long to send whole, so it was read in full beforehand, in "
+                              f"{len(groups)} part{'s' if len(groups) != 1 else ''}, and written down as the notes "
+                              f"below, in order. These notes are the file's content"))
     text = "\n\n".join(sections)
     limit = room * 32 // 10
     if len(text) > limit:
-        text = text[:limit].rsplit("\n", 1)[0] + "\n[the notes were cut here to fit]"
+        text = text[:limit].rsplit("\n", 1)[0] + "\n[the notes were cut here to fit]\n</document>"
     return text, {"mode": "notes", "files": files}
+
+
+def given(name: str, form: str, body: str, how: str) -> str:
+    """A document handed to the model in a form it cannot mistake for something missing."""
+    return (f"[The user attached the file {name}. {how}: use them as the document itself, and do not say "
+            f"the document was not provided.]\n<document name=\"{name}\" form=\"{form}\">\n{body}\n</document>")
 
 
 def _condense(name: str, labelled: list[str], room: int, num_ctx: int, ask: Ask) -> list[str]:
@@ -342,6 +354,20 @@ def _condense(name: str, labelled: list[str], room: int, num_ctx: int, ask: Ask)
             groups = [labelled[i:i + 2] for i in range(0, len(labelled), 2)]
             groups = [[{"text": text} for text in group] for group in groups]
         cap = max(NOTE_MIN, min(NOTE_MAX, room // len(groups) - 20))
-        labelled = [ask(CONDENSE_PROMPT.format(name=name, text="\n\n".join(item["text"] for item in group),
-                                               words=cap * 3 // 4), cap + 64).strip() for group in groups]
+        merged = []
+        for group in groups:
+            text = "\n\n".join(item["text"] for item in group)
+            merged.append(_note(ask(CONDENSE_PROMPT.format(name=name, text=text, words=cap * 3 // 4), cap + 64),
+                                text, cap))
+        labelled = merged
     return labelled
+
+
+def _note(written: str, source: str, cap: int) -> str:
+    """What the model wrote, without any reasoning it put first. A model that spent its
+    tokens thinking wrote nothing, so the start of the text itself stands in."""
+    written = thinking.without_thinking(written)
+    if written:
+        return written
+    limit = cap * 3
+    return source[:limit].rsplit(" ", 1)[0] + (" […]" if len(source) > limit else "")

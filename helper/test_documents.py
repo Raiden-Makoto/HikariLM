@@ -122,6 +122,39 @@ class DocumentsTest(unittest.TestCase):
         self.assertIsNone(got)
         self.assertEqual(len(calls), 1)
 
+    def test_reasoning_is_taken_out_of_notes(self):
+        # An R1 distill writes its reasoning into the answer; one call runs out of tokens while still thinking.
+        answers = iter(["<think>Okay, the user wants notes on part 1.</think>\n\n- Part one covers the introduction and motivation.",
+                        "<think>Okay, so I need to write notes but the user didn't give me the document"])
+
+        def ask(prompt, limit):
+            return next(answers, "- Later parts: method, experiments and results in detail.")
+
+        text, _ = documents.notes([self.doc], "deepseek-r1:8b", 2048, 1500, ask, lambda *a: True)
+        self.assertNotIn("<think>", text)
+        self.assertNotIn("the user", text)
+        self.assertIn("- Part one covers the introduction", text)
+        self.assertIn("Page 2 paragraph", text)    # the part's own text stands in for the empty note
+
+    def test_old_notes_are_not_reused(self):
+        data = documents.load(self.doc)
+        data["notes"] = {"deepseek-r1:8b|1348|224": ["<think>no document"] * 9}
+        documents.save(self.doc, data)
+        calls = []
+        documents.notes([self.doc], "deepseek-r1:8b", 2048, 1500,
+                        lambda p, n: calls.append(p) or "- a proper note about this part of the paper", lambda *a: True)
+        self.assertTrue(calls)
+
+    def test_the_model_is_told_the_document_is_there(self):
+        notes_text, _ = documents.notes([self.doc], "m", 2048, 1500, lambda p, n: "- a proper note about the paper here",
+                                        lambda *a: True)
+        passages, _ = documents.excerpts("imagenet", [self.doc], 900, None)
+        for text in (notes_text, passages):
+            self.assertIn("The user attached the file paper.pdf", text)
+            self.assertIn("do not say the document was not provided", text)
+            self.assertIn('<document name="paper.pdf"', text)
+            self.assertTrue(text.rstrip().endswith("</document>"))
+
     def test_rooms(self):
         self.assertEqual(documents.reply_room(4096), 819)
         self.assertEqual(documents.reply_room(2048), 768)

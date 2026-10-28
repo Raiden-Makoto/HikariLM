@@ -53,7 +53,7 @@ class SettingTest(unittest.TestCase):
                 {"role": "user", "content": "q2"}]
         again = thinking.answer_now(sent, " because ")
         self.assertEqual(again[:2], sent[:2])
-        self.assertTrue(again[2]["content"].startswith("q2\n\n[Your reasoning so far"))
+        self.assertTrue(again[2]["content"].startswith("q2\n\n[What follows is your own reasoning"))
         self.assertIn("because", again[2]["content"])
         self.assertEqual(sent[2]["content"], "q2")
 
@@ -62,6 +62,18 @@ class SettingTest(unittest.TestCase):
                                      {"role": "assistant", "content": "a", "thinking": "hm",
                                       "thoughtSeconds": 12.4, "thinkingCut": True}])[1]
         self.assertEqual((kept["thoughtSeconds"], kept["thinkingCut"]), (12, True))
+
+
+class WithoutThinkingTest(unittest.TestCase):
+    def test_strips_reasoning(self):
+        self.assertEqual(thinking.without_thinking("<think>hmm</think>\n\nThe answer."), "The answer.")
+        self.assertEqual(thinking.without_thinking("The answer."), "The answer.")
+        self.assertEqual(thinking.without_thinking("<think>still thinking when the tokens ran out"), "")
+
+    def test_answer_now_says_whose_reasoning_it_is(self):
+        sent = thinking.answer_now([{"role": "user", "content": "Summarize"}], "I think...")
+        self.assertIn("your own reasoning", sent[-1]["content"])
+        self.assertIn("not an earlier answer", sent[-1]["content"])
 
 
 if __name__ == "__main__":

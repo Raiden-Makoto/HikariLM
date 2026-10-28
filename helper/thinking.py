@@ -56,9 +56,19 @@ def answer_now(messages: list[dict], thought: str) -> list[dict]:
     """The same chat, with the cut-off reasoning given back on the last message."""
     last = dict(messages[-1])
     last["content"] = (last.get("content") or "") + (
-        "\n\n[Your reasoning so far, cut off at the thinking limit:]\n" + thought.strip() +
-        "\n[Stop reasoning now. Using the reasoning above, write the final answer.]")
+        "\n\n[What follows is your own reasoning about this request, not a message from the user and not an "
+        "earlier answer. It was cut off at the thinking limit:]\n" + thought.strip() +
+        "\n[Stop reasoning now. Using the reasoning above and everything given above it, write the final answer.]")
     return messages[:-1] + [last]
+
+
+def without_thinking(text: str) -> str:
+    """An answer with any leading <think>...</think> taken out. A reply that never got
+    past its thinking (it ran out of tokens first) has no answer at all."""
+    split = InlineThink()
+    _, answer = split.feed(text)
+    _, rest = split.flush()
+    return (answer + rest).strip()
 
 
 class InlineThink:
