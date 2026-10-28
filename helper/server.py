@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import budget, context, descriptions, imagegen, notes, sdserver, store, workspace
+from helper import budget, context, descriptions, imagegen, notes, sdserver, store, thinking, workspace
 from helper.ollama import (KEEP_ALIVE, OllamaError, complete, embed, open_chat, open_generate, running, show,
                            sizes, tags, unload)
 from helper.router import ModelRouter, Work, chat_models
@@ -25,7 +25,8 @@ DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
 # One page, three addresses: the page shows the section the address names.
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
-VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js")
+VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
+          "/vendor/katex.min.js")
 IMAGES = "/api/images"
 
 managed = sdserver.Managed(KEEP_ALIVE)
@@ -134,8 +135,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if self.path in VENDOR:
-            self._send_file(WEB_ROOT / "vendor" / self.path.rsplit("/", 1)[1], "text/javascript; charset=utf-8")
+        vendor = urlparse(self.path).path
+        if vendor in VENDOR:
+            self._send_file(WEB_ROOT / "vendor" / vendor.rsplit("/", 1)[1], "text/javascript; charset=utf-8")
             return
         self._send_json({"error": "not found"}, status=404)
 
@@ -299,6 +301,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": str(error)}, status=502)
             return
         num_ctx = room["num_ctx"]
+        think = thinking.think_value(model, show(model), settings["thinking"])
         decision = context.compaction_needed(messages, settings, num_ctx)
         system = [m for m in messages[:1] if m["role"] == "system"]
         active = system + messages[decision["start"]:]
@@ -318,8 +321,10 @@ class Handler(BaseHTTPRequestHandler):
                                             num_ctx - max_tokens - 256)
             try:
                 router.begin(model)
+                # Thinking would spend the summary's tokens before any summary is written.
                 written = complete(model, [{"role": "user", "content": prompt}],
-                                   {"num_ctx": num_ctx, "num_predict": max_tokens}, keep_alive)
+                                   {"num_ctx": num_ctx, "num_predict": max_tokens}, keep_alive,
+                                   think=None if think is None else thinking.off(model))
                 router.commit(model)
                 summary = written.strip() or context.fallback_summary(summary, compacted)
                 active = system + recent
@@ -330,15 +335,68 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"lightusagi": "compaction", "done": True, "error": str(error)})
         if getattr(self, "_gone", False):
             return
+        sent = context.with_summary(active, summary)
+        options = {"num_ctx": num_ctx}
         try:
             router.begin(model)
-            response = open_chat(model, context.with_summary(active, summary), keep_alive, {"num_ctx": num_ctx})
+            response = open_chat(model, sent, keep_alive, options, think)
         except OllamaError as error:
             if started:
                 self._stream_line({"error": str(error)})
             return
         router.commit(model)
-        self._stream(response, started=True)
+        budget_tokens = settings["thinking"]["budget"]
+        thought = self._stream_reply(response, budget_tokens)
+        if thought is None or getattr(self, "_gone", False):
+            return
+        # Thinking reached the limit before any answer: ask again with thinking off and
+        # the reasoning so far, so the model answers now.
+        self._stream_line({"lightusagi": "thinking_cut", "budget": budget_tokens})
+        try:
+            response = open_chat(model, thinking.answer_now(sent, thought), keep_alive, options,
+                                 None if think is None else thinking.off(model))
+        except OllamaError as error:
+            self._stream_line({"error": str(error)})
+            return
+        if self._stream_reply(response, budget_tokens) is not None:
+            # It kept thinking even when told not to; end the reply here.
+            self._stream_line({"lightusagi": "thinking_cut", "budget": budget_tokens, "final": True})
+            self._stream_line({"message": {"role": "assistant", "content": ""}, "done": True})
+
+    def _stream_reply(self, response, budget_tokens: int | None) -> str | None:
+        """Pass a chat stream to the page, with inline <think> text moved to `thinking`.
+        Returns the reasoning if thinking reached budget_tokens before any answer (the
+        stream is stopped there), otherwise None. Each streamed piece is about one token."""
+        split = thinking.InlineThink()
+        thought, pieces, answered = "", 0, False
+        try:
+            while True:
+                line = response.readline()
+                if not line:
+                    return None
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                message = event.get("message")
+                if isinstance(message, dict):
+                    inline, content = split.feed(str(message.get("content") or ""))
+                    if event.get("done"):
+                        more_thought, more_content = split.flush()
+                        inline, content = inline + more_thought, content + more_content
+                    reasoning = str(message.get("thinking") or "") + inline
+                    event["message"] = {**message, "content": content, "thinking": reasoning}
+                    if reasoning:
+                        pieces += 1
+                        thought += reasoning
+                    if content.strip():
+                        answered = True
+                if not self._stream_line(event):
+                    return None
+                if budget_tokens and not answered and pieces >= budget_tokens and not event.get("done"):
+                    return thought
+        finally:
+            response.close()
 
     def _room(self, model: str, settings: dict) -> dict:
         """How much context this model gets right now. Raises budget.NoRoom if it does not fit at all."""

@@ -97,10 +97,12 @@ def show(model: str) -> dict:
     return _shown[model]
 
 
-def complete(model: str, messages: list[dict], options: dict, keep_alive: str = KEEP_ALIVE) -> str:
+def complete(model: str, messages: list[dict], options: dict, keep_alive: str = KEEP_ALIVE, think=None) -> str:
     """One answer, not streamed. Used to write a compaction summary."""
-    with _request("/api/chat", {"model": model, "messages": messages, "stream": False,
-                                "keep_alive": keep_alive, "options": options}) as response:
+    payload = {"model": model, "messages": messages, "stream": False, "keep_alive": keep_alive, "options": options}
+    if think is not None:
+        payload["think"] = think
+    with _request("/api/chat", payload) as response:
         body = json.loads(response.read().decode())
     message = body.get("message") or {}
     return str(message.get("content") or "")
@@ -112,8 +114,10 @@ def open_generate(payload: dict):
     return _request("/api/generate", payload)
 
 
-def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None):
-    """Open a streaming chat. The caller closes the response."""
+def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None,
+              think=None):
+    """Open a streaming chat. The caller closes the response; closing it early stops the model.
+    think is left out when None, since a model that cannot think refuses it."""
     payload = {
         "model": model,
         "messages": messages,
@@ -122,4 +126,6 @@ def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, op
     }
     if options:
         payload["options"] = options
+    if think is not None:
+        payload["think"] = think
     return _request("/api/chat", payload)

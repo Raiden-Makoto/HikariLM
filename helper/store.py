@@ -61,6 +61,11 @@ def clean_messages(messages) -> list[dict]:
         thinking = message.get("thinking")
         if isinstance(thinking, str) and thinking:
             entry["thinking"] = thinking
+            seconds = message.get("thoughtSeconds")
+            if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) and 0 <= seconds < 86400:
+                entry["thoughtSeconds"] = round(seconds)
+            if message.get("thinkingCut") is True:
+                entry["thinkingCut"] = True
         model = message.get("model")
         if isinstance(model, str) and model:
             entry["model"] = model

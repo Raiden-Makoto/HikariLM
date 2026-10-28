@@ -331,6 +331,44 @@
       color: var(--muted);
       font-size: 0.92em;
     }
+    /* Thinking stays folded, like Cursor: one line that says how long, open to read it. */
+    .thought { margin-bottom: 0.6rem; color: var(--muted); font-size: 0.9em; white-space: normal; }
+    .thought[hidden] { display: none; }
+    .thought summary { width: fit-content; cursor: pointer; list-style: none; user-select: none; }
+    .thought summary::-webkit-details-marker { display: none; }
+    .thought summary::after { content: "\203A"; display: inline-block; margin-left: 0.4em; transition: transform 0.15s; }
+    .thought[open] summary::after { transform: rotate(90deg); }
+    .thought.live summary { animation: thinking-pulse 1.6s ease-in-out infinite; }
+    @keyframes thinking-pulse { 50% { opacity: 0.45; } }
+    @media (prefers-reduced-motion: reduce) { .thought.live summary { animation: none; } }
+    .thought-text { max-height: 22rem; overflow-y: auto; margin-top: 0.4rem; padding-left: 0.7rem; border-left: 2px solid var(--line); white-space: pre-wrap; }
+
+    /* Replies are Markdown. */
+    .turn .md { white-space: normal; overflow-wrap: anywhere; }
+    .md > :first-child { margin-top: 0; }
+    .md > :last-child { margin-bottom: 0; }
+    .md p, .md ul, .md ol, .md pre, .md blockquote, .md table, .md .math-block { margin: 0 0 0.75em; }
+    .md ul, .md ol { padding-left: 1.4em; }
+    .md li + li { margin-top: 0.2em; }
+    .md li > p { margin: 0; }
+    .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: 1.1em 0 0.5em; line-height: 1.3; }
+    .md h1 { font-size: 1.35em; }
+    .md h2 { font-size: 1.2em; }
+    .md h3 { font-size: 1.05em; }
+    .md h4, .md h5, .md h6 { font-size: 1em; }
+    .md code { padding: 0.1em 0.35em; border-radius: 5px; background: var(--hover); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
+    .md pre { overflow-x: auto; padding: 0.75em 0.9em; border-radius: 10px; background: var(--hover); white-space: pre; overflow-wrap: normal; }
+    .md pre code { padding: 0; background: none; font-size: 0.85em; }
+    .md blockquote { padding-left: 0.8em; border-left: 3px solid var(--line); color: var(--muted); }
+    .md table { display: block; overflow-x: auto; border-collapse: collapse; }
+    .md th, .md td { padding: 0.35em 0.7em; border: 1px solid var(--line); }
+    .md th { text-align: left; }
+    .md a { color: var(--you); }
+    .md hr { margin: 1em 0; border: 0; border-top: 1px solid var(--line); }
+    .md .math-block { overflow-x: auto; overflow-y: hidden; padding: 0.25em 0; text-align: center; }
+    .md math { font-size: 1.1em; }
+    .md .math-block math { font-size: 1.2em; }
+    .math-pending { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
     .who {
       display: block;
       margin-bottom: 0.2rem;
@@ -924,6 +962,17 @@
           <input id="ctx-model" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Same">
         </label>
         <p class="note" id="context-note" role="status"></p>
+      </div>
+      <div class="setting" id="thinking-setting">
+        <label class="switch-row">
+          <span class="setting-label">Let models think</span>
+          <input class="switch" id="think-toggle" type="checkbox" role="switch">
+        </label>
+        <label class="field-row">
+          <span>Thinking limit (tokens)</span>
+          <input id="think-limit" type="number" min="128" max="32768" step="128" placeholder="No limit">
+        </label>
+        <p class="note">For models that think before they answer, such as Qwen3, DeepSeek-R1 and gpt-oss. At the limit the thinking is stopped and the model answers from what it has worked out so far. Off asks for an answer straight away; gpt-oss always thinks a little.</p>
       </div>
       <div class="setting">
         <label class="switch-row">
@@ -1521,6 +1570,152 @@
       return blocks.join("\n\n") + "\n\n" + message.content;
     }
 
+    // Replies are Markdown, sometimes with LaTeX. Raw HTML from a model is shown
+    // as text, links go only to web and mail addresses, and pictures on other
+    // sites are never fetched. KaTeX writes the math as MathML, which the
+    // browser lays out itself, so it needs no fonts; it loads only once a reply
+    // has math in it.
+    let markdown = null;
+    let katexLoad = null;
+    const escapeHtml = (text) =>
+      String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    const safeHref = (href) => (/^(https?:|mailto:|#)/i.test(href || "") ? href : "");
+
+    function mathHtml(tex, display) {
+      if (window.katex) {
+        return window.katex.renderToString(tex, {
+          displayMode: display, output: "mathml", throwOnError: false, strict: "ignore", maxSize: 20, maxExpand: 500,
+        });
+      }
+      loadKatex();
+      return '<span class="math-pending" data-display="' + display + '">' + escapeHtml(tex) + "</span>";
+    }
+
+    function loadKatex() {
+      katexLoad ??= new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "/vendor/katex.min.js";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      }).then(() => {
+        for (const pending of document.querySelectorAll(".math-pending")) {
+          pending.outerHTML = mathHtml(pending.textContent, pending.dataset.display === "true");
+        }
+      }, () => {
+        // Without KaTeX the math stays as the model wrote it.
+      });
+    }
+
+    const blockMath = {
+      name: "blockMath",
+      level: "block",
+      start: (src) => {
+        const found = /(^|\n) {0,3}(\$\$|\\\[)/.exec(src);
+        return found ? found.index + found[1].length : undefined;
+      },
+      tokenizer(src) {
+        const found = /^ {0,3}(?:\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\])[ \t]*(?:\n+|$)/.exec(src);
+        if (found) return { type: "blockMath", raw: found[0], text: (found[1] ?? found[2]).trim() };
+      },
+      renderer: (token) => '<div class="math-block">' + mathHtml(token.text, true) + "</div>",
+    };
+    const inlineMath = {
+      name: "inlineMath",
+      level: "inline",
+      start: (src) => {
+        const index = src.search(/\$|\\[([]/);
+        return index < 0 ? undefined : index;
+      },
+      tokenizer(src) {
+        let found = /^\$\$([\s\S]+?)\$\$/.exec(src) || /^\\\[([\s\S]+?)\\\]/.exec(src);
+        if (found) return { type: "inlineMath", raw: found[0], text: found[1].trim(), display: true };
+        // $5 and $10 is money, not math: no space just inside the dollars, no digit after.
+        found = /^\\\(([\s\S]+?)\\\)/.exec(src) || /^\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\d)/.exec(src);
+        if (found) return { type: "inlineMath", raw: found[0], text: found[1], display: false };
+      },
+      renderer: (token) => mathHtml(token.text, token.display),
+    };
+
+    // A failed import is remembered by the browser for that address, so a retry asks for a new one.
+    const loadMarked = (attempt = 0) =>
+      import("/vendor/marked.esm.js" + (attempt ? "?try=" + attempt : "")).catch((error) => {
+        if (attempt >= 2) throw error;
+        return new Promise((resolve) => setTimeout(resolve, 1500)).then(() => loadMarked(attempt + 1));
+      });
+
+    loadMarked().then(({ Marked }) => {
+      markdown = new Marked({ gfm: true });
+      markdown.use({
+        extensions: [blockMath, inlineMath],
+        renderer: {
+          html: ({ text }) => escapeHtml(text),
+          link({ href, title, tokens }) {
+            const label = this.parser.parseInline(tokens);
+            const safe = safeHref(href);
+            if (!safe) return label;
+            return '<a href="' + escapeHtml(safe) + '"' + (title ? ' title="' + escapeHtml(title) + '"' : "") +
+              ' target="_blank" rel="noopener noreferrer">' + label + "</a>";
+          },
+          image({ href, text }) {
+            const safe = safeHref(href);
+            const label = escapeHtml(text || "picture");
+            return safe ? '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>" : label;
+          },
+        },
+      });
+      for (const waiting of document.querySelectorAll(".md-pending")) renderMarkdown(waiting, waiting.textContent);
+    }).catch(() => {
+      // Without marked, replies stay plain text.
+    });
+
+    function renderMarkdown(element, text) {
+      if (!markdown) {
+        element.textContent = text;
+        element.classList.add("md-pending");
+        return;
+      }
+      element.classList.remove("md-pending");
+      element.classList.add("md");
+      try {
+        element.innerHTML = markdown.parse(text);
+      } catch (error) {
+        element.textContent = text;
+      }
+    }
+
+    // While a reply streams, draw it at most every 80 ms rather than on every token.
+    function streamMarkdown(element, text) {
+      element.streamText = text;
+      element.streamTimer ??= setTimeout(() => {
+        element.streamTimer = null;
+        renderMarkdown(element, element.streamText);
+        scrollLog();
+      }, 80);
+    }
+
+    function finishMarkdown(element, text) {
+      clearTimeout(element.streamTimer);
+      element.streamTimer = null;
+      renderMarkdown(element, text);
+    }
+
+    // The folded thinking line: "Thinking for 4s" while it thinks, then "Thought
+    // for 12s". The text is only put in the page when the line is opened.
+    function showThought(view, text, { seconds = null, live = false, cut = false } = {}) {
+      view.full = text;
+      view.box.hidden = !text;
+      const shown = seconds === null ? "" : " for " + Math.max(1, Math.round(seconds)) + "s";
+      view.label.textContent = (live ? "Thinking" + (shown || "…") : "Thought" + shown) +
+        (cut ? " · stopped at the thinking limit" : "");
+      view.box.classList.toggle("live", live);
+      if (view.box.open) {
+        const atEnd = view.text.scrollHeight - view.text.scrollTop - view.text.clientHeight < 24;
+        view.text.textContent = text;
+        if (live && atEnd) view.text.scrollTop = view.text.scrollHeight;
+      }
+    }
+
     function addTurn(role, text, thought, files, message) {
       document.querySelector("#empty")?.remove();
       const block = document.createElement("article");
@@ -1528,14 +1723,24 @@
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = role === "user" ? "You" : "Model";
+      // Progress lines (reading a picture, drawing one) show here, apart from the model's thinking.
       const thinking = document.createElement("div");
       thinking.className = "thinking";
-      thinking.textContent = thought || "";
-      thinking.hidden = !thought;
+      thinking.hidden = true;
+      const box = document.createElement("details");
+      box.className = "thought";
+      const label = document.createElement("summary");
+      const thoughtText = document.createElement("div");
+      thoughtText.className = "thought-text";
+      box.append(label, thoughtText);
+      const view = { box, label, text: thoughtText, full: "" };
+      box.addEventListener("toggle", () => { if (box.open) thoughtText.textContent = view.full; });
+      showThought(view, thought || "", { seconds: message?.thoughtSeconds ?? null, cut: Boolean(message?.thinkingCut) });
       const answer = document.createElement("div");
-      answer.textContent = text;
+      if (role === "assistant" && text) renderMarkdown(answer, text);
+      else answer.textContent = text;
       if (message?.picture) answer.append(pictureFigure(message));
-      block.append(who, thinking, answer);
+      block.append(who, thinking, box, answer);
       if (files?.length) {
         const row = document.createElement("div");
         row.className = "chips";
@@ -1549,11 +1754,15 @@
         }
         who.after(row);
       }
-      if (role === "user") thinking.remove();
-      else if (text) updateApply(block, text);
+      if (role === "user") {
+        thinking.remove();
+        box.remove();
+      } else if (text) {
+        updateApply(block, text);
+      }
       log.append(block);
       scrollLog();
-      return { block, thinking, answer };
+      return { block, thinking, thought: view, answer };
     }
 
     // Complete code blocks (``` ... ```) in a reply. In the code editor each one
@@ -2427,6 +2636,14 @@
       let answer = "";
       let thought = "";
       let usage;
+      let thinkStart = 0;
+      let thinkEnd = 0;
+      let thinkingCut = false;
+      const thinkSeconds = () => (thinkStart ? ((thinkEnd || Date.now()) - thinkStart) / 1000 : null);
+      const drawThought = () => showThought(reply.thought, thought,
+        { seconds: thinkSeconds(), live: Boolean(thinkStart && !thinkEnd), cut: thinkingCut });
+      // The seconds keep counting while the model thinks, even between tokens.
+      const thinkClock = setInterval(() => { if (thinkStart && !thinkEnd) drawThought(); }, 1000);
       lastContext = null;
       try {
         // A few earlier notes close to the question go along with it, just for
@@ -2520,12 +2737,25 @@
               }
               continue;
             }
+            if (event.lightusagi === "thinking_cut") {
+              thinkingCut = true;
+              if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + model + " is answering now…";
+              drawThought();
+              continue;
+            }
             if (event.done) usage = { prompt_eval_count: event.prompt_eval_count || 0, eval_count: event.eval_count || 0 };
-            thought += event.message?.thinking || "";
-            answer += event.message?.content || "";
-            reply.thinking.textContent = thought;
-            reply.thinking.hidden = !thought;
-            reply.answer.textContent = answer;
+            const reasoning = event.message?.thinking || "";
+            const piece = event.message?.content || "";
+            if (reasoning) {
+              thinkStart ||= Date.now();
+              thought += reasoning;
+            }
+            if (piece) {
+              if (thinkStart && !thinkEnd && piece.trim()) thinkEnd = Date.now();
+              answer += piece;
+              streamMarkdown(reply.answer, answer);
+            }
+            if (reasoning || piece) drawThought();
             scrollLog();
           }
         }
@@ -2560,9 +2790,16 @@
         }
         if (!answer && !thought) messages.pop();
       } finally {
+        clearInterval(thinkClock);
+        if (thinkStart && !thinkEnd) thinkEnd = Date.now();
+        if (answer) finishMarkdown(reply.answer, answer);
+        if (thought) drawThought();
         if (answer || thought) {
           if (answer) updateApply(reply.block, answer);
-          messages.push({ role: "assistant", content: answer, thinking: thought || undefined, model, usage });
+          messages.push({
+            role: "assistant", content: answer, thinking: thought || undefined, model, usage,
+            thoughtSeconds: thought ? Math.round(thinkSeconds()) : undefined, thinkingCut: thinkingCut || undefined,
+          });
           if (usage && lastContext) lastContext.used = usage.prompt_eval_count + usage.eval_count;
           saved = true;
         }
@@ -2928,6 +3165,8 @@
       document.querySelector("#compact-max").value = compaction.max_tokens;
       document.querySelector("#compact-prompt").value = compaction.prompt;
       document.querySelector("#compact-note").textContent = "";
+      document.querySelector("#think-toggle").checked = serverSettings.thinking.enabled;
+      document.querySelector("#think-limit").value = serverSettings.thinking.budget ?? "";
       const pictures = serverSettings.pictures;
       document.querySelector("#pic-program").value = pictures.program;
       document.querySelector("#pic-models").value = pictures.models;
@@ -2966,6 +3205,7 @@
       const wanted = {
         context: serverSettings.context,
         compaction: serverSettings.compaction,
+        thinking: serverSettings.thinking,
         pictures: {
           program: document.querySelector("#pic-program").value,
           models: document.querySelector("#pic-models").value,
@@ -3057,6 +3297,10 @@
           max_tokens: numberOrNull(document.querySelector("#compact-max")) ?? 1000,
           prompt: document.querySelector("#compact-prompt").value,
         },
+        thinking: {
+          enabled: document.querySelector("#think-toggle").checked,
+          budget: numberOrNull(document.querySelector("#think-limit")),
+        },
         pictures: serverSettings.pictures,
       };
       const note = document.querySelector("#compact-note");
@@ -3073,6 +3317,7 @@
       serverSettings = body;
       note.textContent = "Saved.";
       document.querySelector("#compact-retention").value = body.compaction.retention;
+      document.querySelector("#think-limit").value = body.thinking.budget ?? "";
       await showMemory();
     }
 
