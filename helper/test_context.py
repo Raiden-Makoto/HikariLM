@@ -108,6 +108,62 @@ class BudgetTest(unittest.TestCase):
         self.assertEqual(budget.per_token(QWEN), 28 * 4 * 256 * 2 * 4)
 
 
+VM_STAT = """Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               20000.
+Pages active:                            300000.
+Pages inactive:                          290000.
+Pages speculative:                         5000.
+Pages throttled:                              0.
+Pages wired down:                        150000.
+Pages purgeable:                          10000.
+"Translation faults":                 123456789.
+Pages copy-on-write:                    1234567.
+Pages zero filled:                     98765432.
+Pages reactivated:                        12345.
+Pages purged:                              6789.
+File-backed pages:                       500000.
+Anonymous pages:                         350000.
+Pages stored in compressor:              120000.
+Pages occupied by compressor:             50000.
+Decompressions:                           11111.
+Compressions:                             22222.
+Pageins:                                  33333.
+Pageouts:                                     0.
+Swapins:                                      0.
+Swapouts:                                     0.
+"""
+
+
+class MacMemoryTest(unittest.TestCase):
+    TOTAL = 1048576 * 16384   # 16 GB
+
+    def test_cached_files_count_as_free(self):
+        held = 150000 + (350000 - 10000) + 50000
+        self.assertEqual(budget.mac_available(VM_STAT, self.TOTAL), self.TOTAL - held * 16384)
+        old = (20000 + 290000 + 5000 + 10000) * 16384
+        self.assertGreater(budget.mac_available(VM_STAT, self.TOTAL), old + 2 * budget.GIB)
+
+    def test_older_macos(self):
+        stats = "\n".join(line for line in VM_STAT.splitlines()
+                          if not line.startswith(("Anonymous", "File-backed")))
+        self.assertEqual(budget.mac_available(stats, self.TOTAL), (20000 + 290000 + 5000 + 10000) * 16384)
+
+    def test_never_past_total(self):
+        stats = VM_STAT.replace("150000.", "0.").replace("350000.", "0.").replace("Pages occupied by compressor:             50000.", "Pages occupied by compressor: 0.")
+        self.assertEqual(budget.mac_available(stats, self.TOTAL), self.TOTAL)
+
+    def test_fits_once_the_cache_counts(self):
+        # A 6 GB model with under 5 GB free or inactive, but plenty held only as cached files.
+        mem = (self.TOTAL, budget.mac_available(VM_STAT, self.TOTAL))
+        shown = {"model_info": {"general.architecture": "qwen2", "qwen2.block_count": 28,
+                                "qwen2.attention.head_count": 28, "qwen2.attention.head_count_kv": 4,
+                                "qwen2.embedding_length": 3584, "qwen2.context_length": 32768}}
+        result = budget.plan("big", 4096, shown, 6 * budget.GIB, [], mem)
+        self.assertEqual(result["num_ctx"], 4096)
+        with self.assertRaises(budget.NoRoom):
+            budget.plan("big", 4096, shown, 6 * budget.GIB, [], (self.TOTAL, (20000 + 290000 + 5000 + 10000) * 16384))
+
+
 class CompactionTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

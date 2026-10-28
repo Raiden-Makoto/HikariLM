@@ -57,17 +57,34 @@ def _proc() -> tuple[int, int | None]:
     return values["MemTotal"], values.get("MemAvailable")
 
 
+def mac_available(stats: str, total: int) -> int:
+    """What macOS can hand to a new program, from `vm_stat`.
+
+    Cached files (file-backed pages) count as free: macOS drops them the moment
+    memory is needed, and after a while they fill most of the RAM. So this is all
+    of the memory less what is really held, the way Activity Monitor's "Memory
+    Used" counts it: wired, app memory (anonymous pages less purgeable ones), and
+    what the compressor holds."""
+    page = int(re.search(r"page size of (\d+)", stats).group(1))
+
+    def pages(label: str) -> int | None:
+        found = re.search(re.escape(label) + r":\s+(\d+)", stats)
+        return int(found.group(1)) if found else None
+
+    wired, anonymous = pages("Pages wired down"), pages("Anonymous pages")
+    if wired is not None and anonymous is not None:
+        held = wired + max(0, anonymous - (pages("Pages purgeable") or 0)) + (pages("Pages occupied by compressor") or 0)
+        return max(0, min(total, total - held * page))
+    # An older macOS without those lines: count what it lists as free or droppable.
+    labels = ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable")
+    return min(total, sum((pages(label) or 0) for label in labels) * page)
+
+
 def _mac() -> tuple[int, int | None]:
     total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
                                timeout=5).stdout.strip())
     stats = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=5).stdout
-    page = int(re.search(r"page size of (\d+)", stats).group(1))
-    free = 0
-    for label in ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable"):
-        found = re.search(label + r":\s+(\d+)", stats)
-        if found:
-            free += int(found.group(1)) * page
-    return total, free
+    return total, mac_available(stats, total)
 
 
 def _windows() -> tuple[int, int | None]:
