@@ -233,3 +233,54 @@ def write(raw_root: object, rel: object, text: object, version: object) -> dict:
     except OSError as error:
         raise WorkspaceError(f"Could not save {path.name}: {error.strerror or error}.") from None
     return {"version": _version(data), "changed": True}
+
+
+def _new_target(raw_root: object, rel: object) -> tuple[Path, Path]:
+    root = open_root(raw_root)
+    if not isinstance(rel, str) or not rel.strip() or "\x00" in rel:
+        raise WorkspaceError("Type a name for the new file.")
+    rel = rel.strip().replace("\\", "/")
+    parts = Path(rel).parts
+    if rel.startswith("/") or not parts or any(part in ("..", ".") for part in parts):
+        raise WorkspaceError("That path leaves the opened folder.")
+    if any(part.startswith(".") for part in parts):
+        raise WorkspaceError("Names that start with a dot are not shown here, so they are not created.")
+    if not allowed(parts[-1]):
+        raise WorkspaceError(f"{parts[-1]} is not a kind of file this page opens, for example .py, .md or .txt.")
+    target = root.joinpath(*parts)
+    # Check the nearest folder that already exists, so a link cannot lead out.
+    existing = target.parent
+    while not existing.exists() and existing != root:
+        existing = existing.parent
+    resolved = existing.resolve()
+    if root != resolved and root not in resolved.parents:
+        raise WorkspaceError("That path leaves the opened folder.")
+    return root, target
+
+
+def create(raw_root: object, rel: object) -> dict:
+    """Make a new, empty file. An existing file is never replaced."""
+    root, target = _new_target(raw_root, rel)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "xb"):
+            pass
+    except FileExistsError:
+        raise WorkspaceError(f"{target.name} already exists in that folder.") from None
+    except PermissionError:
+        raise WorkspaceError(f"No permission to create {target.name} there.") from None
+    except OSError as error:
+        raise WorkspaceError(f"Could not create {target.name}: {error.strerror or error}.") from None
+    return {"path": target.relative_to(root).as_posix()}
+
+
+def remove(raw_root: object, rel: object) -> dict:
+    """Delete one file. Folders are never deleted."""
+    _, path = _inside(raw_root, rel)
+    try:
+        path.unlink()
+    except PermissionError:
+        raise WorkspaceError(f"No permission to delete {path.name}.") from None
+    except OSError as error:
+        raise WorkspaceError(f"Could not delete {path.name}: {error.strerror or error}.") from None
+    return {"deleted": True}

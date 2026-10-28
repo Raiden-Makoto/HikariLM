@@ -757,7 +757,10 @@
             <button class="choice" id="ask-file" type="button" disabled>Ask about this file</button>
             <button class="choice" id="ask-selection" type="button" disabled>Ask about selection</button>
             <button class="choice" id="save-file" type="button" disabled>Save</button>
+            <button class="choice" id="new-file" type="button" disabled>New file</button>
+            <button class="choice" id="delete-file" type="button" disabled>Delete file</button>
           </div>
+          <p class="note" id="disk-note" hidden>Modifying this file will edit its contents on disk.</p>
           <div id="conflict" hidden>
             <span id="conflict-text"></span>
             <button class="choice" id="conflict-reload" type="button">Reload the file</button>
@@ -2436,6 +2439,9 @@
     const askFile = document.querySelector("#ask-file");
     const askSelection = document.querySelector("#ask-selection");
     const saveFile = document.querySelector("#save-file");
+    const newFile = document.querySelector("#new-file");
+    const deleteFile = document.querySelector("#delete-file");
+    const diskNote = document.querySelector("#disk-note");
     const conflictBox = document.querySelector("#conflict");
     // Where the open folder lives. Either the helper's machine (read and
     // written by the helper) or this computer (a folder picked with the
@@ -2475,6 +2481,12 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ root, path, text, version }),
         }),
+        create: (path) => filesApi("/api/workspace/file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ root, path }),
+        }),
+        remove: (path) => filesApi(file(path), { method: "DELETE" }),
       };
     }
 
@@ -2611,6 +2623,39 @@
             throw localFailure(error, path);
           }
         },
+        async create(path) {
+          try {
+            const parts = path.split("/");
+            if (!path || path.startsWith("/") || parts.some((part) => !part || part === "." || part === ".." || part.startsWith("."))) {
+              throw new Error("Use a name like notes.md or src/main.py, with no leading slash or dots.");
+            }
+            const name = parts[parts.length - 1];
+            if (!localAllowed(name)) throw new Error(name + " is not a kind of file this page opens, for example .py, .md or .txt.");
+            let directory = root;
+            for (const part of parts.slice(0, -1)) directory = await directory.getDirectoryHandle(part, { create: true });
+            const exists = await directory.getFileHandle(name).then(() => true, (error) => {
+              if (error.name === "NotFoundError") return false;
+              throw error;
+            });
+            if (exists) throw new Error(name + " already exists in that folder.");
+            await directory.getFileHandle(name, { create: true });
+            return { path };
+          } catch (error) {
+            throw localFailure(error, path);
+          }
+        },
+        async remove(path) {
+          try {
+            await handleFor(path);
+            const parts = path.split("/");
+            let directory = root;
+            for (const part of parts.slice(0, -1)) directory = await directory.getDirectoryHandle(part);
+            await directory.removeEntry(parts[parts.length - 1]);
+            return { deleted: true };
+          } catch (error) {
+            throw localFailure(error, path);
+          }
+        },
         async write(path, text, version) {
           try {
             const handle = await handleFor(path);
@@ -2674,6 +2719,9 @@
       const open = Boolean(openPath);
       fileTitle.textContent = open ? openPath + (hasEdits() ? " ●" : "") : "No file open";
       saveFile.disabled = !open || saving || !hasEdits();
+      diskNote.hidden = !open;
+      newFile.disabled = !source || saving;
+      deleteFile.disabled = !open || saving;
       askFile.disabled = !open || Boolean(activeRequest);
       const picked = editor ? editor.getSelection() : { from: 0, to: 0 };
       askSelection.disabled = !open || Boolean(activeRequest) || picked.from === picked.to;
@@ -2823,10 +2871,12 @@
         if (source.kind === "helper") localStorage.setItem(FOLDER_KEY, body.root);
         else rememberHandle(source.root);
         renderFiles();
+        refreshFileButtons();
         return true;
       } catch (error) {
         if (!quiet) closeFile();
         source = null;
+        refreshFileButtons();
         allFiles = [];
         fileFilter.disabled = true;
         folderLabel.textContent = "No folder open";
@@ -3012,6 +3062,56 @@
       saving = false;
       refreshFileButtons();
     }
+
+    async function refreshList() {
+      const body = await source.list();
+      allFiles = body.files;
+      filesCut = body.cut;
+      renderFiles();
+    }
+
+    // Both ask first. A new file is empty and never replaces one that exists.
+    async function createNewFile() {
+      if (!source || saving) return;
+      const typed = prompt("Name of the new file in " + folderName + " (for example notes.md or src/main.py):", "");
+      if (typed === null) return;
+      const path = typed.trim().replace(/\\/g, "/");
+      if (!path) return;
+      if (!discardOk()) return;
+      try {
+        await source.create(path);
+        await refreshList();
+        await openFileAt(path, true);
+        fileNote.textContent = "Created " + path + ". It is empty.";
+      } catch (error) {
+        fileNote.textContent = "Not created: " + plainError(error.message);
+      }
+    }
+
+    async function deleteOpenFile() {
+      if (!source || !openPath || saving) return;
+      const path = openPath;
+      const warning = hasEdits() ? "\n\nYour unsaved changes will be lost too." : "";
+      if (!confirm("Delete " + path + " from disk?\n\nThis removes the real file and cannot be undone." + warning)) return;
+      try {
+        await source.remove(path);
+      } catch (error) {
+        fileNote.textContent = "Not deleted: " + plainError(error.message);
+        return;
+      }
+      closeFile();
+      localStorage.removeItem(FILE_KEY);
+      try {
+        await refreshList();
+      } catch (error) {
+        fileNote.textContent = plainError(error.message);
+        return;
+      }
+      fileNote.textContent = "Deleted " + path + ".";
+    }
+
+    newFile.addEventListener("click", createNewFile);
+    deleteFile.addEventListener("click", deleteOpenFile);
 
     async function askAbout(selectionOnly) {
       if (!openPath || activeRequest) return;

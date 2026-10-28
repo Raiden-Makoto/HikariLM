@@ -126,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"could not rename: {error.strerror or error}"}, status=500)
 
     def do_DELETE(self) -> None:
-        if not self._same_origin():
+        if not self._same_origin() or self._workspace("DELETE"):
             return
         if self.path.startswith(DRAFTS + "/"):
             store.delete_draft(self._chat_id())
@@ -146,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"deleted": removed}, status=200 if removed else 404)
 
     def do_POST(self) -> None:
-        if not self._same_origin():
+        if not self._same_origin() or self._workspace("POST"):
             return
         if self.path != "/api/chat":
             self._send_json({"error": "not found"}, status=404)
@@ -189,6 +189,11 @@ class Handler(BaseHTTPRequestHandler):
                 payload = self._body(MAX_BODY)
                 self._send_json(workspace.write(
                     payload.get("root"), payload.get("path"), payload.get("text"), payload.get("version")))
+            elif method == "POST" and parts.path.endswith("/file"):
+                payload = self._body(MAX_BODY)
+                self._send_json(workspace.create(payload.get("root"), payload.get("path")), status=201)
+            elif method == "DELETE" and parts.path.endswith("/file"):
+                self._send_json(workspace.remove(query.get("root", [""])[0], query.get("path", [""])[0]))
             else:
                 self._send_json({"error": "not found"}, status=404)
         except workspace.Conflict as error:

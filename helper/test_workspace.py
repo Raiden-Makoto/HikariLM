@@ -16,6 +16,36 @@ class WorkspaceTest(unittest.TestCase):
         (self.root / "sub").mkdir()
         (self.root / "sub" / "b.c").write_text("int x;\n")
 
+    def test_create_makes_an_empty_file_and_never_replaces(self):
+        out = workspace.create(str(self.root), "new/deep/c.py")
+        self.assertEqual(out["path"], "new/deep/c.py")
+        self.assertEqual((self.root / "new" / "deep" / "c.py").read_bytes(), b"")
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.create(str(self.root), "a.py")
+        self.assertEqual((self.root / "a.py").read_text(), "print(1)\n")
+
+    def test_create_refuses_bad_names(self):
+        for bad in ("", "../x.py", "/etc/x.py", "sub/../../x.py", ".hidden.py", "x.exe", "sub/"):
+            with self.assertRaises(workspace.WorkspaceError, msg=bad):
+                workspace.create(str(self.root), bad)
+
+    def test_create_refuses_a_link_out(self):
+        outside = Path(self._tmp.name) / "outside"
+        outside.mkdir()
+        os.symlink(outside, self.root / "link")
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.create(str(self.root), "link/x.py")
+        self.assertFalse((outside / "x.py").exists())
+
+    def test_remove_deletes_one_file_only(self):
+        workspace.remove(str(self.root), "a.py")
+        self.assertFalse((self.root / "a.py").exists())
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.remove(str(self.root), "sub")
+        with self.assertRaises(workspace.WorkspaceError):
+            workspace.remove(str(self.root), "../x.py")
+        self.assertTrue((self.root / "sub" / "b.c").exists())
+
     def test_listing_skips_unwanted(self):
         (self.root / "boot.asm").write_text("x")
         (self.root / "m.ckpt").write_bytes(b"x")
