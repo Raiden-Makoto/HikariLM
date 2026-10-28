@@ -14,6 +14,7 @@ import { sectionToOpen, setSection, start as startSections } from "./sections.js
 import { start as startFolderView } from "./folder-view.js";
 import { start as startFileActions } from "./file-actions.js";
 import { start as startLayout } from "./layout.js";
+import { start as startShortcuts } from "./shortcuts.js";
 
 startCore();
 startMarkdown();
@@ -26,6 +27,7 @@ startSections();
 startFolderView();
 startFileActions();
 startLayout();
+startShortcuts();
 
 applyTheme(localStorage.getItem("lightusagi-theme") || "light");
 applyBackground(localStorage.getItem("lightusagi-bg") || "");

@@ -1,17 +1,15 @@
 // The code editor's layout: hiding the file list, and the chat pane's width.
-import { inCodeView } from "./models.js";
+import { modKeys } from "./core.js";
 
 // Ctrl+B (Cmd+B on a Mac) hides and shows the file list, as in Cursor.
 const FILES_HIDDEN_KEY = "lightusagi-files-hidden";
 const toggleFiles = document.querySelector("#toggle-files");
-const isMac = /mac|iphone|ipad/i.test(navigator.platform || "");
 
-function setFilesHidden(hidden) {
+export function setFilesHidden(hidden) {
   document.body.classList.toggle("files-hidden", hidden);
   toggleFiles.setAttribute("aria-expanded", String(!hidden));
-  const keys = isMac ? "⌘B" : "Ctrl+B";
   toggleFiles.setAttribute("aria-label", hidden ? "Show files" : "Hide files");
-  toggleFiles.title = (hidden ? "Show files (" : "Hide files (") + keys + ")";
+  toggleFiles.title = (hidden ? "Show files (" : "Hide files (") + modKeys("B") + ")";
   localStorage.setItem(FILES_HIDDEN_KEY, hidden ? "1" : "0");
 }
 
@@ -43,12 +41,6 @@ const savedPane = Number(localStorage.getItem(PANE_KEY));
 // Listeners and first steps, run by main.js once every part is loaded.
 export function start() {
   toggleFiles.addEventListener("click", () => setFilesHidden(!document.body.classList.contains("files-hidden")));
-  document.addEventListener("keydown", (event) => {
-    if (!inCodeView() || event.altKey || event.shiftKey || event.key.toLowerCase() !== "b") return;
-    if (!(isMac ? event.metaKey : event.ctrlKey)) return;
-    event.preventDefault();
-    setFilesHidden(!document.body.classList.contains("files-hidden"));
-  });
   setFilesHidden(localStorage.getItem(FILES_HIDDEN_KEY) === "1");
   paneResize.addEventListener("pointerdown", (event) => {
     event.preventDefault();

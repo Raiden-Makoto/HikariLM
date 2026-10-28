@@ -58,8 +58,6 @@ export function showPreview(on) {
   previewButton.textContent = shown ? "Raw" : "Preview";
   previewButton.setAttribute("aria-pressed", String(shown));
 }
-export const askFile = document.querySelector("#ask-file");
-export const askSelection = document.querySelector("#ask-selection");
 export const saveFile = document.querySelector("#save-file");
 export const newFile = document.querySelector("#new-file");
 export const deleteFile = document.querySelector("#delete-file");
@@ -116,9 +114,6 @@ export function refreshFileButtons() {
   previewButton.hidden = !isMarkdown(state.openPath);
   newFile.disabled = !state.source || state.saving;
   deleteFile.disabled = !open || state.saving;
-  askFile.disabled = !open || Boolean(state.activeRequest);
-  const picked = editor ? editor.getSelection() : { from: 0, to: 0 };
-  askSelection.disabled = !open || Boolean(state.activeRequest) || picked.from === picked.to;
 }
 
 // Open the folder used last time. A folder from this computer needs the

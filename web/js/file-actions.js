@@ -7,7 +7,7 @@ import { notify } from "./text-files.js";
 import { codeRank, fillModels, modelsForView } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 import {
-  askFile, askSelection, conflictBox, deleteFile, discardOk, editor, editorText, fileList,
+  conflictBox, deleteFile, discardOk, editor, editorText, fileList,
   fileNote, hasEdits, loadEditor, newFile, previewButton, previewShown, refreshFileButtons, saveFile, showPreview,
 } from "./files.js";
 import { FILE_KEY } from "./sections.js";
@@ -151,8 +151,14 @@ async function deleteOpenFile() {
   fileNote.textContent = "Deleted " + path + ".";
 }
 
+// Put the open file, or its highlighted lines (the cursor's line if nothing
+// is highlighted), into the next message. Cmd/Ctrl+K and Cmd/Ctrl+L.
 export async function askAbout(selectionOnly) {
-  if (!state.openPath || state.activeRequest) return;
+  if (!state.openPath) return;
+  if (state.activeRequest) {
+    fileNote.textContent = "Wait for the reply to finish, then add it.";
+    return;
+  }
   if (hasEdits()) {
     fileNote.textContent = "Save the file first, so the question is about what is really in it.";
     return;
@@ -168,10 +174,15 @@ export async function askAbout(selectionOnly) {
   let name = state.folderName + "/" + body.path;
   if (selectionOnly) {
     // Not dirty, so the highlight's offsets are offsets into the disk text.
-    const { from: start, to: end } = editor ? editor.getSelection() : { from: 0, to: 0 };
-    if (start === end || body.text !== editorText()) {
-      fileNote.textContent = "Highlight some text first.";
+    let { from: start, to: end } = editor ? editor.getSelection() : { from: 0, to: 0 };
+    if (body.text !== editorText()) {
+      fileNote.textContent = "The file changed on disk. Open it again first.";
       return;
+    }
+    if (start === end) {
+      start = start === 0 ? 0 : text.lastIndexOf("\n", start - 1) + 1;
+      const stop = text.indexOf("\n", end);
+      end = stop < 0 ? text.length : stop;
     }
     text = text.slice(start, end);
     const first = body.text.slice(0, start).split("\n").length;
@@ -214,8 +225,6 @@ export function start() {
     showPreview(!previewShown());
     if (!previewShown() && editor) editor.focus();
   });
-  askFile.addEventListener("click", () => askAbout(false));
-  askSelection.addEventListener("click", () => askAbout(true));
   document.querySelector("#conflict-keep").addEventListener("click", () => { conflictBox.hidden = true; });
   document.querySelector("#conflict-reload").addEventListener("click", () => {
     conflictBox.hidden = true;

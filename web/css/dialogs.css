@@ -102,6 +102,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   font: inherit;
 }
 .field-row input { width: 8.5rem; }
+#keys-setting .choice { flex: none; padding: 0.35rem 0.8rem; }
+#new-chat-keys { min-width: 7rem; font-variant-numeric: tabular-nums; }
+#new-chat-keys[aria-pressed="true"] { color: var(--you); }
 .field-row input[type="text"] { flex: 1; min-width: 0; max-width: 16rem; }
 #pic-models { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
 .setting textarea { box-sizing: border-box; width: 100%; min-height: 6rem; margin-top: 0.5rem; resize: vertical; font-size: 0.82rem; }

@@ -16,6 +16,8 @@ To make pictures in Chat, pick *Set up picture making…* in the model list (or 
 
 If LM Studio's server (llmster) is already running, its models show up in the picker under *LM Studio*. LightUsagi does not start it. If it is not at `http://127.0.0.1:1234`, set `LMSTUDIO_HOST`. If it needs a key, set `LM_API_TOKEN`.
 
+Keys: Cmd+B (Ctrl+B on Linux) hides the side list. In the code editor, Cmd+K adds the open file to your message and Cmd+L adds the highlighted lines. Ctrl+Option+N (Ctrl+Alt+N) starts a new chat; you can change that one in Settings.
+
 Your chats and drafts are saved in `~/.lightusagi` (set `LIGHTUSAGI_HOME` to move it).
 
 The tests are in `tests/`. Run them from this folder with `python3 -m unittest`.

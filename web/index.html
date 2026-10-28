@@ -76,8 +76,6 @@
         <div class="editor">
           <div class="editor-bar">
             <span id="file-title">No file open</span>
-            <button class="choice" id="ask-file" type="button" disabled>Ask about this file</button>
-            <button class="choice" id="ask-selection" type="button" disabled>Ask about selection</button>
             <button class="choice" id="preview-file" type="button" aria-pressed="false" hidden>Preview</button>
             <button class="choice" id="save-file" type="button" disabled>Save</button>
             <button class="choice" id="new-file" type="button" disabled>New file</button>
@@ -195,6 +193,18 @@
           <input class="switch" id="notes-toggle" type="checkbox" role="switch">
         </label>
         <p class="note" id="notes-note" role="status"></p>
+      </div>
+      <div class="setting" id="keys-setting">
+        <span class="setting-label">Keyboard shortcuts</span>
+        <div class="field-row">
+          <span>New chat</span>
+          <span class="choices">
+            <button class="choice" id="new-chat-keys" type="button" aria-describedby="keys-note"></button>
+            <button class="choice" id="reset-new-chat-keys" type="button">Reset</button>
+          </span>
+        </div>
+        <p class="note" id="keys-note" role="status"></p>
+        <p class="note" id="keys-fixed"></p>
       </div>
       <div class="setting" id="context-setting">
         <span class="setting-label">Context length</span>
