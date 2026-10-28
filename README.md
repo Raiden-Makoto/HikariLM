@@ -1,3 +1,5 @@
+<img src="web/icon.svg" alt="" width="96">
+
 # HikariLM
 
 A light, local chat page for [Ollama](https://ollama.com), with a code editor beside it. It keeps one large model in memory at a time and puts everything else (chats, files, notes) on disk, so your RAM goes to the model.

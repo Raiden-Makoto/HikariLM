@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="lit" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#fff7dc"/>
+      <stop offset="0.6" stop-color="#ffd36b"/>
+      <stop offset="1" stop-color="#f29a2e"/>
+    </radialGradient>
+    <clipPath id="body"><path d="M180 128H332A84 84 0 0 1 416 212V276A84 84 0 0 1 332 360H230L146 418V352A84 84 0 0 1 96 276V212A84 84 0 0 1 180 128Z"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0b1a3d"/>
+  <path d="M180 128H332A84 84 0 0 1 416 212V276A84 84 0 0 1 332 360H230L146 418V352A84 84 0 0 1 96 276V212A84 84 0 0 1 180 128Z" fill="url(#lit)"/>
+  <g clip-path="url(#body)" stroke="#b5561a" stroke-opacity="0.35" stroke-width="10">
+    <path d="M80 184H432M80 228H432M80 272H432M80 316H432"/>
+  </g>
+  <rect x="196" y="100" width="120" height="36" rx="12" fill="#1f3366"/>
+  <rect x="248" y="66" width="16" height="40" rx="8" fill="#1f3366"/>
+</svg>

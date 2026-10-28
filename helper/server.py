@@ -165,6 +165,9 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         path = urlparse(self.path).path
+        if path in ("/icon.svg", "/favicon.ico"):
+            self._send_file(WEB_ROOT / "icon.svg", "image/svg+xml")
+            return
         if path in VENDOR:
             self._send_file(WEB_ROOT / "vendor" / path.rsplit("/", 1)[1], "text/javascript; charset=utf-8")
             return
