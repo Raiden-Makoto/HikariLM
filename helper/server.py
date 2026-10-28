@@ -54,7 +54,10 @@ class Handler(BaseHTTPRequestHandler):
                 room = self._room(model, settings)
                 out.update(room)
                 out["threshold"] = context.threshold_for(settings, room["num_ctx"])
-            except (budget.NoRoom, OllamaError) as error:
+            except budget.NoRoom as error:
+                out["error"] = str(error)
+                out["default"], out["default_from"] = budget.default_source(show(model))
+            except OllamaError as error:
                 out["error"] = str(error)
             self._send_json(out)
             return

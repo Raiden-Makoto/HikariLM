@@ -895,11 +895,7 @@
       </div>
       <div class="setting" id="context-setting">
         <span class="setting-label">Context length</span>
-        <datalist id="context-choices">
-          <option value="2048"></option><option value="4096"></option><option value="8192"></option>
-          <option value="16384"></option><option value="32768"></option><option value="65536"></option>
-          <option value="131072"></option>
-        </datalist>
+        <datalist id="context-choices"></datalist>
         <label class="field-row">
           <span>All models</span>
           <input id="ctx-all" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Ollama's">
@@ -2662,6 +2658,24 @@
       await showMemory();
     }
 
+    // Steps of 1,024 up to 8K, then a quarter of each doubling, so there is
+    // something between 8,192 and 16,384 and every larger pair.
+    const CONTEXT_CHOICES = [2048, 3072, 4096, 5120, 6144, 7168];
+    for (let size = 8192; size <= 262144; size *= 2) {
+      for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
+    }
+
+    function fillContextChoices(body) {
+      const list = document.querySelector("#context-choices");
+      list.replaceChildren(...CONTEXT_CHOICES.filter((size) => !body.trained || size <= body.trained).map((size) => {
+        const option = document.createElement("option");
+        option.value = size;
+        if (body.max_fit) option.label = size <= body.max_fit ? "fits" : "too big for this computer";
+        if (size === body.default) option.label = "Ollama's default" + (option.label ? ", " + option.label : "");
+        return option;
+      }));
+    }
+
     async function showMemory() {
       const note = document.querySelector("#context-note");
       const model = modelSelect.value;
@@ -2675,11 +2689,21 @@
           parts.push("Memory is not checked, because Ollama runs on another computer or its memory could not be read. " +
             "Set LIGHTUSAGI_MEMORY_GB to that computer's memory to turn the check on.");
         }
+        if (body.default) {
+          const from = { model: "set by the model", OLLAMA_CONTEXT_LENGTH: "from OLLAMA_CONTEXT_LENGTH", ollama: "Ollama's built-in" }[body.default_from];
+          const own = body.default.toLocaleString();
+          document.querySelector("#ctx-model").placeholder = serverSettings?.context.all
+            ? "Same: " + serverSettings.context.all.toLocaleString() : "Ollama's: " + own;
+          document.querySelector("#ctx-all").placeholder = "Ollama's: " + own;
+          parts.push("Ollama's default for " + model + " is " + own + " tokens (" + from + ").");
+        }
         if (body.error) parts.push(plainError(body.error));
         else if (model) {
-          parts.push(model + " will use " + body.num_ctx.toLocaleString() + " tokens and fits up to " +
-            body.max_fit.toLocaleString() + " here" + (body.clamped ? ", so the length asked for is cut to that." : "."));
+          parts.push(model + " will use " + body.num_ctx.toLocaleString() + " tokens" +
+            (body.max_fit ? " and fits up to " + body.max_fit.toLocaleString() + " here" : "") +
+            (body.clamped ? ", so the length asked for is cut to that." : "."));
         }
+        fillContextChoices(body);
         note.textContent = parts.join(" ") || "Blank uses Ollama's own setting.";
       } catch (error) {
         note.textContent = "";

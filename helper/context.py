@@ -45,7 +45,6 @@ Summarize the conversation history that will be compacted out of the active chat
 
 AUTO_SHARE = 0.75      # compact at this share of the context length, unless a threshold is set
 CAP_SHARE = 0.9        # a threshold above this share would leave no room for the reply
-CONTEXT_CHOICES = (2048, 4096, 8192, 16384, 32768, 65536, 131072)
 MAX_CONTEXT = 262144
 
 DEFAULTS = {

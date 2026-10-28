@@ -50,6 +50,18 @@ class BudgetTest(unittest.TestCase):
         self.assertEqual(budget.default_context({"parameters": "num_ctx 8192\nstop x"}), 8192)
         os.environ["OLLAMA_CONTEXT_LENGTH"] = "16384"
         self.assertEqual(budget.default_context(QWEN), 16384)
+        self.assertEqual(budget.default_source(QWEN), (16384, "OLLAMA_CONTEXT_LENGTH"))
+        self.assertEqual(budget.default_source({"parameters": "num_ctx 131072"}), (131072, "model"))
+        del os.environ["OLLAMA_CONTEXT_LENGTH"]
+        self.assertEqual(budget.default_source(QWEN), (4096, "ollama"))
+
+    def test_plan_reports_the_default_and_takes_any_length(self):
+        plan = budget.plan("qwen", 12288, QWEN, 5 * GIB, [], (32 * GIB, 24 * GIB))
+        self.assertEqual((plan["num_ctx"], plan["default"], plan["default_from"]), (12288, 4096, "ollama"))
+        big = {**QWEN, "parameters": "num_ctx 131072"}
+        plan = budget.plan("qwen", None, big, int(4.5 * GIB), [], (8 * GIB, 6 * GIB))
+        self.assertEqual(plan["default"], 131072)
+        self.assertTrue(plan["clamped"])
 
     def test_asked_for_context_fits_when_there_is_room(self):
         plan = budget.plan("qwen", 16384, QWEN, 5 * GIB, [], (32 * GIB, 24 * GIB))

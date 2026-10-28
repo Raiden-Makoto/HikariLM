@@ -156,15 +156,23 @@ def trained_context(shown: dict) -> int:
     return _number(info.get(f"{arch}.context_length"))
 
 
-def default_context(shown: dict) -> int:
-    """What Ollama would use without being told: the model's own setting, Ollama's, or 4096."""
+def default_source(shown: dict) -> tuple[int, str]:
+    """What Ollama would use without being told, and where that comes from: the model's
+    own setting, OLLAMA_CONTEXT_LENGTH, or 4096."""
     found = re.search(r"^\s*num_ctx\s+(\d+)", str(shown.get("parameters") or ""), re.M)
     if found:
-        return int(found.group(1))
+        return int(found.group(1)), "model"
     try:
-        return int(os.environ.get("OLLAMA_CONTEXT_LENGTH", "")) or DEFAULT_CONTEXT
+        value = int(os.environ.get("OLLAMA_CONTEXT_LENGTH", ""))
+        if value > 0:
+            return value, "OLLAMA_CONTEXT_LENGTH"
     except ValueError:
-        return DEFAULT_CONTEXT
+        pass
+    return DEFAULT_CONTEXT, "ollama"
+
+
+def default_context(shown: dict) -> int:
+    return default_source(shown)[0]
 
 
 def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list[dict],
@@ -174,12 +182,14 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
     `loaded` is what Ollama has in memory. A large model other than this one is
     unloaded before this one loads, so its memory counts as free; nomic stays.
     """
-    want = requested or default_context(shown)
+    default, source = default_source(shown)
+    want = requested or default
     trained = trained_context(shown)
     if trained:
         want = min(want, trained)
     want = max(MIN_CONTEXT, want)
-    result = {"num_ctx": want, "requested": requested, "max_fit": None, "clamped": False, "trained": trained or None}
+    result = {"num_ctx": want, "requested": requested, "max_fit": None, "clamped": False, "trained": trained or None,
+              "default": default, "default_from": source}
     if mem is None:
         return result
     total, available = mem
