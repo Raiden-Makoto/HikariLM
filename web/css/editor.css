@@ -137,6 +137,15 @@ input[type="search"]:focus-visible, #browse-input:focus-visible { outline: 2px s
 #conflict { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 #conflict[hidden] { display: none; }
 #conflict .choice { flex: none; padding: 0.3rem 0.8rem; }
+#review {
+  display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+  padding: 0.45rem 0.7rem; border: 1px solid color-mix(in srgb, #22c55e 45%, var(--line)); border-radius: 10px;
+  background: color-mix(in srgb, #22c55e 8%, var(--panel)); font-size: 0.85rem;
+}
+#review[hidden] { display: none; }
+#review-text { flex: 1; min-width: 12rem; }
+#review .choice { flex: none; padding: 0.3rem 0.8rem; }
+#review-accept { background: #16a34a; border-color: #16a34a; color: #fff; }
 @media (max-width: 900px) {
   body.view-files .work { flex-direction: column; overflow: auto; }
   body.view-files #files { flex: none; min-height: 30rem; }

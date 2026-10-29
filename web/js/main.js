@@ -13,6 +13,7 @@ import { start as startSettings } from "./settings.js";
 import { sectionToOpen, setSection, start as startSections } from "./sections.js";
 import { start as startFolderView } from "./folder-view.js";
 import { start as startFileActions } from "./file-actions.js";
+import { start as startApply } from "./apply.js";
 import { start as startLayout } from "./layout.js";
 import { start as startShortcuts } from "./shortcuts.js";
 
@@ -26,6 +27,7 @@ startSettings();
 startSections();
 startFolderView();
 startFileActions();
+startApply();
 startLayout();
 startShortcuts();
 

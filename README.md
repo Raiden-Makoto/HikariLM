@@ -23,7 +23,7 @@ Options: `--port 9000` for another port, `--no-browser` to skip opening the page
 - **Chat** with any Ollama model. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
 - **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it: any model Ollama lists with vision, such as `gemma3`, `llava`, or `qwen2.5vl`. Long documents are read in parts so they fit the model's context.
 - **Make pictures** with your own picture models. Pick *Set up picture making…* in the model list for a one-click start with FLUX.2 klein: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made. In Settings you can add any other model `sd-server` runs, or point HikariLM at a picture server you already run (AUTOMATIC1111, Forge, Draw Things).
-- **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Press Apply on a code block in a reply to put it into the file. Nothing is written until you press Save.
+- **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Apply works like Cursor's. The model labels code meant for a file with that file's path, and Apply puts it into that file, or creates the file if it is new. A block can leave out unchanged code with `... existing code ...` comments. If it can't be placed exactly, the chosen model writes the file with the change in it. Each change then shows in red and green to accept or reject. Commands, output and examples get no Apply button. Nothing is written until you press Save.
 - **Remembers earlier chats**: with `nomic-embed-text` installed, a few matching notes from past chats are sent along with a new question.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved.
 - **Organize chats**: pin them, put them in folders, rename them. New chats are named from their first message.
@@ -53,6 +53,8 @@ ollama pull qwen2.5-coder:7b && ollama pull gemma3 && ollama pull nomic-embed-te
 | ⌘L / Ctrl+L | Code editor: add the highlighted lines, or the cursor's line |
 | ⌃⌥N / Ctrl+Alt+N | New chat (change it in Settings) |
 | ⌘S / Ctrl+S | Code editor: save |
+| ⌘⏎ / Ctrl+Enter | Code editor: accept all changes from Apply |
+| ⌘⌫ / Ctrl+Backspace | Code editor: reject all changes from Apply |
 
 ## Where things are saved
 

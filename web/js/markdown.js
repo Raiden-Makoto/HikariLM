@@ -1,5 +1,6 @@
 // Turning replies into HTML: Markdown, a few safe tags, math, and the folded thinking.
 import { scrollLog } from "./core.js";
+import { parseInfo } from "./edit-blocks.js";
 
 // Replies are Markdown, sometimes with LaTeX. Raw HTML from a model is shown
 // as text, apart from a few formatting tags, links go only to web and mail addresses, and pictures on other
@@ -100,7 +101,34 @@ export function renderMarkdown(element, text) {
     element.innerHTML = markdown.parse(text);
   } catch (error) {
     element.textContent = text;
+    return;
   }
+  for (const button of element.querySelectorAll(".code-copy")) button.addEventListener("click", copyCode);
+  element.afterRender?.();
+}
+
+// Each code block gets a line above it: the file it is for (or its
+// language), and Copy. Apply is added by turns.js, in the code editor only.
+function codeBlock({ text, lang, codeBlockStyle }) {
+  const info = parseInfo(codeBlockStyle === "indented" ? "" : lang);
+  const label = info.quote ? info.path + ", lines " + info.quote.from + "–" + info.quote.to : info.path || info.lang;
+  const data = ' data-lang="' + escapeHtml(info.lang) + '"' +
+    (info.path && !info.quote ? ' data-path="' + escapeHtml(info.path) + '"' : "") +
+    (info.quote || codeBlockStyle === "indented" ? " data-quote" : "");
+  return '<div class="code-block"' + data + '><div class="code-head"><span class="code-label">' + escapeHtml(label) +
+    '</span><button class="code-copy" type="button">Copy</button></div><pre><code>' + escapeHtml(text) +
+    "</code></pre></div>";
+}
+
+function copyCode(event) {
+  const button = event.currentTarget;
+  const code = button.closest(".code-block").querySelector("code").textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy"; }, 1500);
+  }, () => {
+    button.textContent = "Could not copy";
+  });
 }
 
 // While a reply streams, draw it at most every 80 ms rather than on every token.
@@ -152,6 +180,7 @@ export function start() {
       extensions: [blockMath, inlineMath],
       renderer: {
         html: ({ text }) => safeHtml(text),
+        code: codeBlock,
         link({ href, title, tokens }) {
           const label = this.parser.parseInline(tokens);
           const safe = safeHref(href);

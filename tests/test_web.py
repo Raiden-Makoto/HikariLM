@@ -3,11 +3,14 @@ These checks stand in for a JavaScript linter, so a name missing from an
 import is found here rather than when someone presses the button that needs it."""
 
 import re
+import shutil
+import subprocess
 import threading
 import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 from helper import server
 
@@ -192,6 +195,16 @@ class ModuleImportsTest(unittest.TestCase):
                     continue
                 with self.subTest(module=name, variable=variable):
                     self.assertNotRegex(body, USE.format(re.escape(variable)) + r"\s*(=(?![=>])|[-+*/%|&?]=|\+\+|--)")
+
+
+class EditBlocksTest(unittest.TestCase):
+    def test_apply_reads_and_merges_code_blocks_like_cursor(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not installed")
+        run = subprocess.run([node, str(Path(__file__).with_name("edit_blocks.test.mjs"))],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

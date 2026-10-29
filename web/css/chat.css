@@ -280,8 +280,14 @@ body.has-bg .turn.assistant {
 #pane-resize { display: none; }
 #pane-head { display: none; }
 .used-notes { margin-top: 0.4rem; font-size: 0.8rem; color: inherit; opacity: 0.8; }
-.apply-row { display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-body.view-files .apply-row { display: flex; }
-.apply-row .choice { padding: 0.3rem 0.8rem; }
+.code-block { margin: 0 0 0.75em; border-radius: 10px; background: var(--hover); overflow: hidden; }
+.md .code-block pre { margin: 0; border-radius: 0; background: none; padding-top: 0.2em; }
+.code-head { display: flex; align-items: center; gap: 0.35rem; padding: 0.3em 0.5em 0 0.9em; min-height: 1.9em; font-size: 0.78em; color: var(--muted); }
+.code-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code-head button { flex: none; padding: 0.15em 0.6em; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; }
+.code-head button:hover { background: var(--field); }
+.code-head .code-apply { background: var(--you); border-color: var(--you); color: #fff; }
+.code-head .code-apply:hover { background: var(--you); filter: brightness(1.1); }
+.code-head .code-apply[hidden], body:not(.view-files) .code-apply { display: none; }
 body.view-files #pane-head { display: flex; justify-content: flex-end; padding: 0.4rem 0.75rem 0; }
 #pane-head .choice { padding: 0.3rem 0.8rem; }

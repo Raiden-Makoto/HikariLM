@@ -5,6 +5,7 @@ import { restoreFile } from "./sections.js";
 import { openFolder, openLocalFolder, showFolderDialog } from "./folder-view.js";
 import { saveOpenFile } from "./file-actions.js";
 import { renderMarkdown } from "./markdown.js";
+import { reviewChanged, syncApplyButtons } from "./apply.js";
 
 // Files section. The helper reads and writes the folder; the page only
 // shows one file at a time. The file on disk is the only copy of the text.
@@ -32,6 +33,7 @@ export function loadEditor() {
         },
         onSelection: () => refreshFileButtons(),
         onSave: () => saveOpenFile(),
+        onReview: reviewChanged,
       });
       return editor;
     }, (error) => {
@@ -114,7 +116,12 @@ export function refreshFileButtons() {
   previewButton.hidden = !isMarkdown(state.openPath);
   newFile.disabled = !state.source || state.saving;
   deleteFile.disabled = !open || state.saving;
+  if (applyPath !== state.openPath) {
+    applyPath = state.openPath;
+    syncApplyButtons();
+  }
 }
+let applyPath = null;
 
 // Open the folder used last time. A folder from this computer needs the
 // user's permission again after a reload, so it may only be offered.

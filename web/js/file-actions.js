@@ -48,6 +48,8 @@ export async function openFileAt(path, force = false) {
 
 export async function saveOpenFile() {
   if (!hasEdits() || state.saving) return;
+  // Saving keeps every change from a reply that is still waiting to be decided.
+  if (editor?.changesLeft()) editor.acceptAll();
   state.saving = true;
   refreshFileButtons();
   const sent = editorText();
@@ -72,39 +74,7 @@ export async function saveOpenFile() {
   refreshFileButtons();
 }
 
-// Put a code block from a reply into the editor: over the highlighted text
-// if there is some, otherwise over the whole file after asking. It is an
-// ordinary unsaved edit, so nothing reaches the disk until Save, and Ctrl+Z
-// undoes it. If the file changed on disk meanwhile, Save still refuses.
-// The editor leaves applied code highlighted. That highlight is not one the
-// person made, so the next Apply must still ask rather than replace it.
-let lastApplied = null;
-
-export function applyBlock(code) {
-  if (!state.openPath || !editor) {
-    fileNote.textContent = "Open a file first, then apply the code.";
-    return;
-  }
-  if (previewShown()) showPreview(false);
-  const { from, to } = editor.getSelection();
-  const current = editorText();
-  const leftover = lastApplied && lastApplied.path === state.openPath && lastApplied.from === from &&
-    lastApplied.to === to && current.slice(from, to) === lastApplied.text;
-  const whole = from === to || leftover;
-  const start = whole ? 0 : from;
-  const end = whole ? current.length : to;
-  if (whole && current && !confirm("Replace the whole of " + state.openPath + " with this code?\n\nNothing is saved until you press Save, and Ctrl+Z undoes it.\nTo replace only part of the file, highlight that part first.")) return;
-  // Keep the trailing line break of whatever is being replaced; a whole file always gets one.
-  let text = code;
-  if ((whole || current.slice(start, end).endsWith("\n")) && !text.endsWith("\n")) text += "\n";
-  editor.replace(start, end, text);
-  lastApplied = { path: state.openPath, from: start, to: start + text.length, text };
-  editor.focus();
-  fileNote.textContent = (whole ? "Replaced the whole file" : "Replaced the highlighted text") +
-    " with the code. Not saved yet: read it, then press Save. Ctrl+Z undoes it.";
-}
-
-async function refreshList() {
+export async function refreshList() {
   const body = await state.source.list();
   state.allFiles = body.files;
   state.filesCut = body.cut;

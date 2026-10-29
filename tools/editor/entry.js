@@ -18,6 +18,7 @@ import {
   completionStatus,
 } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { getChunks, getOriginalDoc, unifiedMergeView } from "@codemirror/merge";
 import { tags as t } from "@lezer/highlight";
 
 import { cpp } from "@codemirror/lang-cpp";
@@ -125,6 +126,25 @@ const theme = EditorView.theme({
   },
   ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "bold" },
   ".cm-completionDetail": { color: "var(--muted)", fontStyle: "normal" },
+  // Changes waiting to be accepted: new lines green, removed lines red above them.
+  "&.cm-merge-b .cm-changedLine": { backgroundColor: "color-mix(in srgb, #22c55e 16%, transparent)" },
+  "&.cm-merge-b .cm-changedText": { background: "color-mix(in srgb, #22c55e 32%, transparent)" },
+  ".cm-deletedChunk": {
+    position: "relative",
+    backgroundColor: "color-mix(in srgb, #ef4444 14%, transparent)",
+    paddingLeft: "6px",
+  },
+  ".cm-deletedChunk .cm-deletedText": { background: "color-mix(in srgb, #ef4444 32%, transparent)" },
+  ".cm-deletedChunk .cm-deletedLine del": { textDecoration: "none", color: "var(--muted)" },
+  ".cm-changedLineGutter": { background: "#22c55e" },
+  ".cm-deletedLineGutter": { background: "#ef4444" },
+  ".cm-deletedChunk .cm-chunkButtons": { position: "absolute", insetInlineEnd: "8px", top: "2px", zIndex: "2" },
+  ".cm-deletedChunk .cm-chunkButtons button": {
+    font: "inherit", fontFamily: "system-ui, sans-serif", fontSize: "0.74rem", lineHeight: "1.2",
+    padding: "0.15rem 0.5rem", margin: "0 0 0 4px", borderRadius: "5px", cursor: "pointer",
+    border: "1px solid var(--line)", color: "var(--ink)", background: "var(--panel)",
+  },
+  ".cm-deletedChunk .cm-chunkButtons button[name=accept]": { background: "#16a34a", borderColor: "#16a34a", color: "#fff" },
 });
 
 const colours = HighlightStyle.define([
@@ -159,12 +179,47 @@ const suggestions = [
 ];
 const suggesting = (view) => completionStatus(view.state) === "active";
 
-export function createEditor(parent, { onChange, onSelection, onSave }) {
+// One change from `from` text to `to` text, leaving out what they share at
+// both ends, so the cursor and scroll stay where they were.
+function smallestChange(from, to) {
+  let start = 0;
+  while (start < from.length && start < to.length && from[start] === to[start]) start++;
+  let endFrom = from.length;
+  let endTo = to.length;
+  while (endFrom > start && endTo > start && from[endFrom - 1] === to[endTo - 1]) {
+    endFrom--;
+    endTo--;
+  }
+  return { from: start, to: endFrom, insert: to.slice(start, endTo) };
+}
+
+export function createEditor(parent, { onChange, onSelection, onSave, onReview }) {
   const editable = new Compartment();
+  const reviewing = new Compartment();
   let escapedFromTab = false;
+  // Set while code from a reply is shown as changes to accept or reject.
+  let inReview = false;
+  let view;
+
+  const changesLeft = (state) => getChunks(state)?.chunks.length ?? 0;
+  const endReview = (how) => {
+    if (!inReview) return;
+    inReview = false;
+    view.dispatch({ effects: reviewing.reconfigure([]) });
+    onReview({ left: 0, ended: how });
+  };
+  const acceptAll = () => endReview("accepted");
+  const rejectAll = () => {
+    if (!inReview) return;
+    const original = getOriginalDoc(view.state).toString();
+    view.dispatch({ changes: smallestChange(view.state.doc.toString(), original), userEvent: "input.reject" });
+    endReview("rejected");
+  };
 
   const keys = Prec.highest(keymap.of([
     { key: "Mod-s", preventDefault: true, run: () => { onSave(); return true; } },
+    { key: "Mod-Enter", preventDefault: true, run: () => (inReview ? (acceptAll(), true) : false) },
+    { key: "Mod-Backspace", preventDefault: true, run: () => (inReview ? (rejectAll(), true) : false) },
     // Esc, then Tab, moves focus on instead of indenting, so the keyboard is not trapped.
     // Esc that only closes the suggestions does not count.
     { key: "Escape", run: (view) => { if (!suggesting(view)) escapedFromTab = true; return false; } },
@@ -189,40 +244,83 @@ export function createEditor(parent, { onChange, onSelection, onSave }) {
       theme, syntaxHighlighting(colours),
       languageFor(path),
       editable.of([EditorView.editable.of(!disabled), EditorState.readOnly.of(disabled)]),
+      reviewing.of([]),
       EditorView.domEventHandlers({ keyup: (event) => { if (event.key !== "Escape") escapedFromTab = false; } }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) onChange();
         if (update.docChanged || update.selectionSet) onSelection();
+        if (inReview && (update.docChanged || update.transactions.some((tr) => tr.effects.length))) {
+          // Every change accepted or rejected one by one, or undone: the review is over.
+          const left = changesLeft(update.state);
+          if (left) onReview({ left, ended: "" });
+          else queueMicrotask(() => endReview("accepted"));
+        }
       }),
     ],
   });
 
-  const view = new EditorView({ state: stateFor("", "", true), parent });
+  view = new EditorView({ state: stateFor("", "", true), parent });
+  const leaveReview = () => {
+    if (!inReview) return;
+    inReview = false;
+    onReview({ left: 0, ended: "closed" });
+  };
 
   return {
     // Show a file. A new state means a fresh undo history for it.
     open(text, path) {
+      leaveReview();
       view.setState(stateFor(text, path, false));
       view.scrollDOM.scrollTop = 0;
       view.scrollDOM.scrollLeft = 0;
     },
     // Nothing open: empty and read-only.
     close() {
+      leaveReview();
       view.setState(stateFor("", "", true));
     },
+    // Show new text as changes to the text now in the editor, each with Accept
+    // and Reject. Applying again before they are all decided adds to the same
+    // review, still compared with the text from before the first one.
+    review(text) {
+      if (!inReview) {
+        view.dispatch({
+          effects: reviewing.reconfigure(unifiedMergeView({
+            original: view.state.doc,
+            mergeControls: (type, action) => {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.name = type;
+              button.textContent = type === "accept" ? "Accept" : "Reject";
+              button.title = type === "accept" ? "Keep this change" : "Put back what was here";
+              button.onmousedown = action;
+              return button;
+            },
+            highlightChanges: false,
+            syntaxHighlightDeletions: true,
+          })),
+        });
+      }
+      const changes = smallestChange(view.state.doc.toString(), text);
+      view.dispatch({ changes, selection: { anchor: changes.from }, userEvent: "input.apply" });
+      inReview = true;
+      const left = changesLeft(view.state);
+      if (!left) {
+        endReview("accepted");
+        return 0;
+      }
+      const first = getChunks(view.state).chunks[0];
+      view.dispatch({ effects: EditorView.scrollIntoView(first.fromB, { y: "center" }) });
+      onReview({ left, ended: "" });
+      return left;
+    },
+    changesLeft: () => (inReview ? changesLeft(view.state) : 0),
+    acceptAll,
+    rejectAll,
     getValue: () => view.state.doc.toString(),
     getSelection() {
       const { from, to } = view.state.selection.main;
       return { from, to };
-    },
-    // Replace a range as one edit, so Ctrl+Z puts it back. Leaves the new text selected.
-    replace(from, to, text) {
-      view.dispatch({
-        changes: { from, to, insert: text },
-        selection: { anchor: from, head: from + text.length },
-        scrollIntoView: true,
-        userEvent: "input.paste",
-      });
     },
     hasFocus: () => view.hasFocus,
     focus: () => view.focus(),

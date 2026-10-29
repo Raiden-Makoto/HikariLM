@@ -13,6 +13,7 @@ import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
 import { announce, askNotifyPermission } from "./page.js";
 import { notesOn } from "./settings.js";
+import { editorPrompt } from "./edit-blocks.js";
 
 // Ask the helper to have a vision model write one picture down as text. It
 // answers from the saved description when it has one, so the vision model
@@ -158,6 +159,8 @@ async function send() {
       state.messages[state.messages.length - 1].files = converted;
       status.textContent = "Streaming from " + model + "…";
     }
+    // In the code editor the model is told how to write code for a file, so Apply knows where it goes.
+    const system = inCodeView() ? [{ role: "system", content: editorPrompt(state.folderName, state.openPath) }] : [];
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -165,7 +168,7 @@ async function send() {
         model,
         // What the documents are searched with, without the earlier notes in front.
         question: content,
-        messages: state.messages.map((message, index) => {
+        messages: [...system, ...state.messages.map((message, index) => {
           const out = {
             role: message.role,
             // A chat model cannot see a picture made earlier, only that it was made.
@@ -182,7 +185,7 @@ async function send() {
           if (message.contextSummary) out.contextSummary = message.contextSummary;
           if (message.usage) out.usage = message.usage;
           return out;
-        }),
+        })],
       }),
       signal: state.activeRequest.signal,
     });
@@ -215,7 +218,8 @@ async function send() {
           else if (event.error) status.textContent = "Context compaction failed, so the chat is sent as it is: " + plainError(event.error);
           else {
             // The summary is kept on the first message that stays, as a checkpoint.
-            if (state.messages[event.checkpoint]) state.messages[event.checkpoint].contextSummary = event.summary;
+            const kept = state.messages[event.checkpoint - system.length];
+            if (kept) kept.contextSummary = event.summary;
             status.textContent = "Context compacted: " + event.dropped + " older messages summarized. Streaming from " + model + "…";
           }
           continue;
@@ -308,7 +312,7 @@ async function send() {
     if (answer) finishMarkdown(reply.answer, answer);
     if (thought) drawThought();
     if (answer || thought) {
-      if (answer) updateApply(reply.block, answer);
+      if (answer) updateApply(reply.answer);
       state.messages.push({
         role: "assistant", content: answer, thinking: thought || undefined, model, usage,
         thoughtSeconds: thought ? Math.round(thinkSeconds()) : undefined, thinkingCut: thinkingCut || undefined,

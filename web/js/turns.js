@@ -6,7 +6,7 @@ import { renderMarkdown, showThought, splitStrayThinking } from "./markdown.js";
 import { pictureLabel, pictureSeed, pictureSize, pictureSteps, pictureToggle } from "./models.js";
 import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
-import { applyBlock } from "./file-actions.js";
+import { applyCode, syncApplyButtons } from "./apply.js";
 
 export function addTurn(role, text, thought, files, message) {
   if (role === "assistant" && text) ({ text, thought } = splitStrayThinking(text, thought));
@@ -51,40 +51,33 @@ export function addTurn(role, text, thought, files, message) {
     thinking.remove();
     box.remove();
   } else if (text) {
-    updateApply(block, text);
+    updateApply(answer);
   }
   log.append(block);
   scrollLog();
   return { block, thinking, thought: view, answer };
 }
 
-// Complete code blocks (``` ... ```) in a reply. In the code editor each one
-// gets an Apply button. This is only the page copying text into the editor,
-// so it costs the model nothing.
-function codeBlocks(text) {
-  const found = [];
-  const fence = /^```[^\n]*\n([\s\S]*?)\n?```[ \t]*$/gm;
-  let match;
-  while ((match = fence.exec(text))) found.push(match[1]);
-  return found;
-}
-
-export function updateApply(block, text) {
-  block.querySelector(".apply-row")?.remove();
-  const blocks = codeBlocks(text);
-  if (!blocks.length) return;
-  const row = document.createElement("div");
-  row.className = "apply-row";
-  blocks.forEach((code, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "choice";
-    button.textContent = blocks.length === 1 ? "Apply code" : "Apply code block " + (index + 1);
-    button.title = "Put this code into the open file as an unsaved edit";
-    button.addEventListener("click", () => applyBlock(code));
-    row.append(button);
-  });
-  block.append(row);
+// In the code editor, a finished reply's code blocks get Apply, as in Cursor:
+// a block that names a file goes into that file, and one with no name goes
+// into the open file only if it is in that file's language. Commands, output
+// and quoted lines get none. Drawn again whenever the reply is.
+export function updateApply(answer) {
+  answer.afterRender = () => {
+    for (const box of answer.querySelectorAll(".code-block:not([data-quote])")) {
+      const path = box.dataset.path || "";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "code-apply";
+      button.textContent = "Apply";
+      if (path) button.title = "Put this into " + path + ", to accept or reject change by change";
+      else button.dataset.lang = box.dataset.lang;
+      button.addEventListener("click", () => applyCode(box.querySelector("code").textContent, path));
+      box.querySelector(".code-head").append(button);
+    }
+    syncApplyButtons();
+  };
+  if (answer.classList.contains("md")) answer.afterRender();
 }
 
 export function renderLog() {
