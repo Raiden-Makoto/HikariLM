@@ -178,6 +178,70 @@ test("the whole file is taken from a model's reply", () => {
   assert.equal(fileFromReply("````md\n```py\nx\n```\n````"), "```py\nx\n```");
 });
 
+// The same kind of edit in each common language, with its own comment style.
+// null: a piece starts or ends with a new line next to "... existing code ...",
+// so it could replace the line there or go beside it. A model decides those.
+const LANGUAGES = [
+  ["JavaScript", "function total(items) {\n  let sum = 0;\n  for (const item of items) sum += item.price;\n  return sum;\n}\n\nfunction tax(amount) {\n  return amount * 0.13;\n}\n\nfunction label(item) {\n  return item.name;\n}\n",
+    "// ... existing code ...\nfunction tax(amount) {\n  return amount * 0.15;\n}\n// ... existing code ...\n",
+    (f) => f.replace("0.13", "0.15")],
+  ["TypeScript", "export interface Item {\n  name: string;\n  price: number;\n}\n\nexport function tax(amount: number): number {\n  return amount * 0.13;\n}\n",
+    "// ... existing code ...\nexport function tax(amount: number): number {\n  const rate = 0.13;\n  return amount * rate;\n}\n",
+    (f) => f.replace("  return amount * 0.13;\n", "  const rate = 0.13;\n  return amount * rate;\n")],
+  ["Go, with tabs", "package shop\n\nfunc Total(items []Item) float64 {\n\tsum := 0.0\n\tfor _, item := range items {\n\t\tsum += item.Price\n\t}\n\treturn sum\n}\n\nfunc Tax(amount float64) float64 {\n\treturn amount * 0.13\n}\n",
+    "// ... existing code ...\nfunc Tax(amount float64) float64 {\n\treturn amount * 0.15\n}\n",
+    (f) => f.replace("0.13", "0.15")],
+  ["Rust", "pub fn total(items: &[Item]) -> f64 {\n    items.iter().map(|i| i.price).sum()\n}\n\npub fn tax(amount: f64) -> f64 {\n    amount * 0.13\n}\n",
+    "pub fn tax(amount: f64) -> f64 {\n    let rate = 0.13;\n    amount * rate\n}\n",
+    (f) => f.replace("    amount * 0.13\n", "    let rate = 0.13;\n    amount * rate\n")],
+  ["C", "#include <stdio.h>\n\nint add(int a, int b) {\n    return a + b;\n}\n\nint main(void) {\n    printf(\"%d\\n\", add(1, 2));\n    return 0;\n}\n",
+    "#include <stdio.h>\n#include <stdlib.h>\n\n// ... existing code ...\n",
+    null],
+  ["Java", "public class Shop {\n    public double tax(double amount) {\n        return amount * 0.13;\n    }\n\n    public String label(Item item) {\n        return item.name;\n    }\n}\n",
+    "public double tax(double amount) {\n    double rate = 0.13;\n    return amount * rate;\n}\n",
+    (f) => f.replace("        return amount * 0.13;\n", "        double rate = 0.13;\n        return amount * rate;\n")],
+  ["HTML", "<!doctype html>\n<html>\n  <head>\n    <title>Shop</title>\n  </head>\n  <body>\n    <h1>Shop</h1>\n    <p>Welcome</p>\n  </body>\n</html>\n",
+    "<!-- ... existing code ... -->\n  <body>\n    <h1>Shop</h1>\n    <p>Welcome back</p>\n  </body>\n<!-- ... existing code ... -->\n",
+    (f) => f.replace("Welcome", "Welcome back")],
+  ["CSS", "body {\n  margin: 0;\n  color: #111;\n}\n\n.button {\n  padding: 4px;\n  color: blue;\n}\n",
+    "/* ... existing code ... */\n.button {\n  padding: 8px;\n  color: blue;\n}\n",
+    (f) => f.replace("padding: 4px", "padding: 8px")],
+  ["SQL", "CREATE TABLE items (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL\n);\n\nCREATE TABLE orders (\n  id INTEGER PRIMARY KEY,\n  item_id INTEGER\n);\n",
+    "-- ... existing code ...\nCREATE TABLE orders (\n  id INTEGER PRIMARY KEY,\n  item_id INTEGER,\n  quantity INTEGER NOT NULL\n);\n",
+    (f) => f.replace("  item_id INTEGER\n", "  item_id INTEGER,\n  quantity INTEGER NOT NULL\n")],
+  ["R", "library(dplyr)\n\nfit_model <- function(data) {\n  glm(y ~ x, data = data, family = binomial)\n}\n\nsummarise_fit <- function(fit) {\n  summary(fit)\n}\n",
+    "# ... existing code ...\nfit_model <- function(data) {\n  glm(y ~ x + z, data = data, family = binomial)\n}\n# ... existing code ...\n",
+    (f) => f.replace("y ~ x,", "y ~ x + z,")],
+  ["Ruby", "class Shop\n  def tax(amount)\n    amount * 0.13\n  end\n\n  def label(item)\n    item.name\n  end\nend\n",
+    "  def tax(amount)\n    amount * 0.15\n  end\n",
+    (f) => f.replace("0.13", "0.15")],
+  ["YAML", "name: shop\nversion: 1\nservices:\n  web:\n    image: nginx\n    port: 80\n  db:\n    image: postgres\n",
+    "# ... existing code ...\n  web:\n    image: nginx\n    port: 8080\n  db:\n# ... existing code ...\n",
+    (f) => f.replace("port: 80\n", "port: 8080\n")],
+  ["JSON", "{\n  \"name\": \"shop\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"start\": \"node app.js\"\n  }\n}\n",
+    "{\n  \"name\": \"shop\",\n  \"version\": \"1.1.0\",\n  // ... existing code ...\n}\n",
+    null],
+  ["Markdown", "# Shop\n\nA small shop.\n\n## Run it\n\nType `npm start`.\n\n## License\n\nMIT\n",
+    "## Run it\n\nType `npm install`, then `npm start`.\n\n## License\n",
+    (f) => f.replace("Type `npm start`.", "Type `npm install`, then `npm start`.")],
+  ["Shell script", "#!/bin/sh\nset -e\n\necho building\nmake\n\necho done\n",
+    "#!/bin/sh\nset -e\n\necho building\nmake all\n\necho done\n",
+    (f) => f.replace("make\n", "make all\n")],
+  ["LaTeX", "\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n",
+    "% ... existing code ...\n\\begin{document}\nHello, world.\n\\end{document}\n",
+    (f) => f.replace("Hello.", "Hello, world.")],
+  ["JSX", "export function App() {\n  return (\n    <div>\n      <h1>Shop</h1>\n      <p>Hi</p>\n    </div>\n  );\n}\n",
+    "    <div>\n      {/* ... existing code ... */}\n      <p>Hello</p>\n    </div>\n",
+    null],
+];
+for (const [name, file, edit, expect] of LANGUAGES) {
+  test(name + ": the edit lands in the right place", () => {
+    const merged = mergeEdit(file, edit);
+    if (expect === null) assert.equal(merged, null, "needs a model");
+    else assert.equal(merged, expect(file));
+  });
+}
+
 let failed = 0;
 for (const [name, run] of cases) {
   try {
