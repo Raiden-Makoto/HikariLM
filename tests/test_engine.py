@@ -81,7 +81,8 @@ class EngineTest(unittest.TestCase):
 
     def test_shape_for_the_memory_budget(self):
         coder, r1, gemma = engine.show(CODER), engine.show(R1), engine.show(GEMMA)
-        self.assertEqual(budget.per_token(coder), 28 * 4 * 256 * 2)
+        with mock.patch.dict(os.environ, {"OLLAMA_NUM_PARALLEL": "4", "OLLAMA_KV_CACHE_TYPE": "q4_0"}):
+            self.assertEqual(budget.per_token(coder), 28 * 4 * 256 * 2)
         self.assertEqual(budget.per_token(r1), 36 * 8 * 256 * 2)
         self.assertEqual(budget.per_token(gemma), 48 * 8 * 512 * 2)
         self.assertEqual(budget.trained_context(coder), 32768)

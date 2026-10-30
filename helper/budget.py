@@ -132,6 +132,9 @@ def per_token(shown: dict) -> int:
     value = _number(info.get(f"{arch}.attention.value_length")) or key
     if not (layers and kv_heads and key):
         return FALLBACK_PER_TOKEN
+    if shown.get("mlx"):
+        # MLX keeps one 16-bit cache; Ollama's settings do not reach it.
+        return int(layers * kv_heads * (key + value) * 2)
     cache = CACHE_BYTES.get(os.environ.get("OLLAMA_KV_CACHE_TYPE", "f16"), 2.0)
     parallel = max(1, int(os.environ.get("OLLAMA_NUM_PARALLEL", "1") or 1))
     return int(layers * kv_heads * (key + value) * cache * parallel)
