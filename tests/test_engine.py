@@ -156,7 +156,7 @@ class EngineTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"HIKARILM_MLX_PYTHON": "/nowhere/python"}):
             with self.assertRaises(OllamaError) as caught:
                 engine.open_chat(CODER, [{"role": "user", "content": "hi"}])
-        self.assertIn("pip install mlx-lm mlx-vlm", str(caught.exception))
+        self.assertIn("run ./start.sh again", str(caught.exception))
 
     def test_complete_joins_the_answer(self):
         self.assertEqual(engine.complete(CODER, [{"role": "user", "content": "a b"}], {"num_ctx": 2048}), "echo: a b")
@@ -172,6 +172,55 @@ class EngineTest(unittest.TestCase):
             ollama_show.assert_called_once_with("gemma3:4b")
         with mock.patch("helper.ollama.running", side_effect=OllamaError("down")):
             self.assertEqual(models.running(), [])
+
+
+class PrepareTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        patcher = mock.patch.dict(os.environ, {"HIKARILM_HOME": self._tmp.name})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("HIKARILM_MLX_PYTHON", None)
+        self.said = []
+
+    def run_prepare(self, fails=False):
+        def run(command, check):
+            if fails:
+                raise engine.subprocess.CalledProcessError(1, command)
+            if command[1:3] == ["-m", "venv"]:
+                (Path(command[3]) / "bin").mkdir(parents=True)
+                (Path(command[3]) / "bin" / "python").write_text("")
+            return mock.Mock(returncode=0)
+
+        with mock.patch.object(engine.subprocess, "run", side_effect=run) as ran:
+            ready = engine.prepare(self.said.append, "/usr/bin/python3")
+        return ready, [call.args[0] for call in ran.call_args_list]
+
+    def test_first_start_makes_the_venv_and_installs_once(self):
+        ready, commands = self.run_prepare()
+        self.assertTrue(ready)
+        venv = Path(self._tmp.name) / "venv"
+        self.assertEqual(commands[0], ["/usr/bin/python3", "-m", "venv", str(venv)])
+        self.assertEqual(commands[1], [str(venv / "bin" / "python"), "-m", "pip", "install", "--upgrade",
+                                       "mlx-lm", "mlx-vlm"])
+        self.assertEqual(self.run_prepare(), (True, []))
+
+    def test_a_venv_made_by_hand_only_gets_the_packages(self):
+        (Path(self._tmp.name) / "venv" / "bin").mkdir(parents=True)
+        (Path(self._tmp.name) / "venv" / "bin" / "python").write_text("")
+        _, commands = self.run_prepare()
+        self.assertEqual([command[1:3] for command in commands], [["-m", "pip"]])
+
+    def test_failure_is_said_and_tried_again_next_time(self):
+        ready, _ = self.run_prepare(fails=True)
+        self.assertFalse(ready)
+        self.assertIn("Ollama's models still work", self.said[-1])
+        self.assertTrue(self.run_prepare()[0])
+
+    def test_another_python_is_left_alone(self):
+        with mock.patch.dict(os.environ, {"HIKARILM_MLX_PYTHON": "/some/python"}):
+            self.assertEqual(self.run_prepare(), (True, []))
 
 
 class WorkerPromptTest(unittest.TestCase):

@@ -17,6 +17,7 @@ import os
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -34,16 +35,44 @@ SCAN_SECONDS = 5
 DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072}}
 # R1 distills write <think> themselves, so their templates do not show it.
 THINKERS = re.compile(r"deepseek-r1|qwq", re.IGNORECASE)
-SETUP = ("MLX is not set up. Run:  python3 -m venv ~/.hikarilm/venv && "
-         "~/.hikarilm/venv/bin/pip install mlx-lm mlx-vlm")
+SETUP = "MLX is not set up yet. Stop HikariLM and run ./start.sh again; it installs mlx-lm and mlx-vlm once."
 
 
 class EngineError(OllamaError):
     """Worded for the user."""
 
 
+PACKAGES = ("mlx-lm", "mlx-vlm")
+READY_MARK = ".hikarilm-ready"
+
+
+def venv() -> Path:
+    return store.home() / "venv"
+
+
 def python() -> Path:
-    return Path(os.environ.get("HIKARILM_MLX_PYTHON") or store.home() / "venv" / "bin" / "python")
+    return Path(os.environ.get("HIKARILM_MLX_PYTHON") or venv() / "bin" / "python")
+
+
+def prepare(say, base_python: str = sys.executable) -> bool:
+    """Make ~/.hikarilm/venv and install the MLX packages into it, once. True when it is ready.
+    Nothing is checked when HIKARILM_MLX_PYTHON names another Python."""
+    if os.environ.get("HIKARILM_MLX_PYTHON"):
+        return True
+    mark = venv() / READY_MARK
+    if mark.is_file():
+        return True
+    say(f"Setting up MLX in {venv()} (once, about 1 GB to download)…")
+    try:
+        if not python().exists():
+            subprocess.run([base_python, "-m", "venv", str(venv())], check=True)
+        subprocess.run([str(python()), "-m", "pip", "install", "--upgrade", *PACKAGES], check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        say(f"  MLX could not be set up ({error}). Ollama's models still work; run ./start.sh again to retry.")
+        return False
+    mark.write_text(" ".join(PACKAGES) + "\n", encoding="utf-8")
+    say("  MLX is ready.")
+    return True
 
 
 def worker() -> Path:

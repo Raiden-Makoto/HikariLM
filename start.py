@@ -129,6 +129,13 @@ def main() -> None:
         say("  " + moved)
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
+    from helper import engine
+
+    engine.prepare(say)
+    mlx = engine.names()
+    say("MLX models: " + ", ".join(mlx) if mlx else
+        "No MLX models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download "
+        "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
     report_ollama()
     say("Press Ctrl+C to stop.")
     say()

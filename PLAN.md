@@ -57,7 +57,7 @@ Ollama's chat lines, so the rest of the helper is unchanged.
 - [x] Model list in the page: MLX models first, with vision and thinking from their configs.
 - [x] Tests with a fake worker (`tests/fake_mlx_worker.py`) and the three real `config.json` files.
 - [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut, a picture read.
-- [ ] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
+- [x] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
 - [ ] Speed check against the step 1 numbers. Try speculative decoding and KV cache quantization only if it is slow.
 
 ### 3. Remove the old way
