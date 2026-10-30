@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, imagegen, keepalive, llmster, notes, picsetup, sdserver,
+from helper import (budget, context, descriptions, documents, imagegen, keepalive, notes, picsetup, sdserver,
                     store, thinking, workspace)
 from helper.models import complete, open_chat, running, show, sizes, tags, unload
 from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
@@ -42,7 +42,7 @@ managed = sdserver.Managed(KEEP_ALIVE)
 
 
 def unload_any(model: str) -> None:
-    """Free a large model, wherever it runs: sd-server is stopped, Ollama or llmster is asked."""
+    """Free a large model, wherever it runs: sd-server is stopped, Ollama is asked."""
     if model.startswith(imagegen.SD_PREFIX):
         managed.stop()
     elif not model.startswith(imagegen.REMOTE_PREFIX):
@@ -545,7 +545,7 @@ class Handler(BaseHTTPRequestHandler):
         shown = show(model)
         size = sizes().get(model, 0)
         return budget.plan(model, context.requested_context(settings, model), shown, size, running(),
-                           budget.memory(llmster.HOST if llmster.is_lms(model) else None))
+                           budget.memory())
 
     def _describe(self) -> None:
         """Have a vision model write a picture down as text, once.

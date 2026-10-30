@@ -21,6 +21,7 @@ written to disk until Save, chats and notes keep working across each upgrade.
 
 - [x] Delete the Linux and WSL paths; `start.py` refuses anything but Apple Silicon.
 - [x] `__version__ = "2.0.0"`, tag `v2.0.0`.
+- [x] v2.0.1: LM Studio (llmster) support removed.
 
 ## v3.0.0: MLX, with the big three
 
@@ -46,7 +47,7 @@ reply, stops on request, and frees the memory when the model is swapped or idle.
 
 - [ ] `engine.py`: load, stream (chat template, stop, thinking split for R1), unload.
 - [ ] Keep each chat's prompt cache between turns, so a follow-up only reads the new message.
-- [ ] `models.py` stays the one door the rest of the helper uses; it calls `engine.py` instead of Ollama and LM Studio.
+- [ ] `models.py` stays the one door the rest of the helper uses; it calls `engine.py` instead of Ollama.
 - [ ] `budget.py`: context length from free unified memory and the model's own size, not Ollama's numbers.
 - [ ] `keepalive.py` and `router.py`: one big model at a time, unloaded after it sits idle.
 - [ ] Gemma's picture reading (`descriptions.py`) through mlx-vlm.
@@ -57,7 +58,7 @@ reply, stops on request, and frees the memory when the model is swapped or idle.
 
 ### 3. Remove the old way
 
-- [ ] Delete `ollama.py` and `llmster.py`, and the Ollama parts of `imagegen.py`, `budget.py`, `keepalive.py`.
+- [ ] Delete `ollama.py`, and the Ollama parts of `imagegen.py`, `budget.py`, `keepalive.py`.
 - [ ] Settings that only mattered for Ollama go.
 - [ ] README: what `start.sh` installs, the three models and their sizes.
 

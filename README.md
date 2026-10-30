@@ -27,8 +27,6 @@ Options: `--port 9000` for another port, `--no-browser` to skip opening the page
 - **Remembers earlier chats**: with `nomic-embed-text` installed, a few matching notes from past chats are sent along with a new question.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved.
 - **Organize chats**: pin them, put them in folders, rename them. New chats are named from their first message.
-- **LM Studio**: if its server (llmster) is running, its models join the list under *LM Studio*.
-
 ## Models
 
 Any chat model works. These are what each part is tuned for:
@@ -70,8 +68,6 @@ Everything is in `~/.hikarilm`: chats, drafts, settings, notes, and pictures you
 | `HIKARILM_KEEP_ALIVE` | `5m` | How long a model stays loaded after its last reply |
 | `HIKARILM_MEMORY_GB` | this computer's | Memory to plan for, when Ollama runs on another machine |
 | `HIKARILM_IMAGES` | automatic | `on` or `off` for Ollama's own picture models |
-| `LMSTUDIO_HOST`, `LM_API_TOKEN` | `http://127.0.0.1:1234` | Where LM Studio's server is, and its key |
-
 ## Development
 
 The helper is Python with the standard library only, and the page is plain HTML, CSS, and JavaScript modules, so there is no build step. Run the tests from this folder with `python3 -m unittest`. The code editor is a CodeMirror bundle in `web/vendor/`; `tools/editor/build.sh` rebuilds it (only needed to change it).

@@ -95,9 +95,6 @@ export function visionModel() {
 }
 export const codeRank = (name) => (/qwen.*coder|coder.*qwen/i.test(name) ? 0 : /code|devstral/i.test(name) ? 1 : 2);
 
-// Models from LM Studio's llmster carry an lms: prefix; the picker shows their own name.
-const isLmsModel = (name) => name.startsWith("lms:");
-const modelLabel = (name) => (isLmsModel(name) ? name.slice(4) + " (LM Studio)" : name);
 export const SETUP_PICTURES = "__setup_pictures";
 
 export function modelsForView() {
@@ -133,15 +130,9 @@ export function fillModels(problem = modelProblem) {
     modelSelect.append(element);
     return element;
   };
-  const fromOllama = models.filter((name) => !isLmsModel(name));
-  const fromLms = models.filter(isLmsModel);
-  const grouped = pictures.length || fromLms.length || !inCodeView();
-  const chatPlace = grouped && fromOllama.length ? group(fromLms.length ? "Ollama" : "Chat") : modelSelect;
-  for (const name of fromOllama) chatPlace.append(new Option(name, name));
-  if (fromLms.length) {
-    const lmsPlace = group("LM Studio");
-    for (const name of fromLms) lmsPlace.append(new Option(modelLabel(name), name));
-  }
+  const grouped = pictures.length || !inCodeView();
+  const chatPlace = grouped && models.length ? group("Chat") : modelSelect;
+  for (const name of models) chatPlace.append(new Option(name, name));
   if (pictures.length) {
     const picturePlace = group("Make pictures");
     for (const item of pictures) picturePlace.append(new Option(item.label, item.id));

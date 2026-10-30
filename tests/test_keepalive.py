@@ -69,8 +69,8 @@ class KeeperTest(unittest.TestCase):
         self.clock.now += 2
         self.assertEqual(self.keeper.overdue(loaded), ["gemma3:latest"])
 
-    def test_llmster_model_without_expiry(self):
-        model = "lms:falcon3-10b-instruct-1.58bit"
+    def test_ours_without_expiry(self):
+        model = "falcon3:10b"
         self.assertIsNone(self.keeper.leaves_at(model))
         with self.keeper.using(model, "1m"):
             self.assertIsNone(self.keeper.leaves_at(model))
