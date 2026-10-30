@@ -30,7 +30,7 @@ written to disk until Save, chats and notes keep working across each upgrade.
 Ollama's files are GGUF and MLX cannot use them, so these come again from
 Hugging Face. About 17 GB.
 
-- [ ] `python3 -m venv ~/.hikarilm/venv && ~/.hikarilm/venv/bin/pip install mlx-lm mlx-vlm`
+- [x] `python3 -m venv ~/.hikarilm/venv && ~/.hikarilm/venv/bin/pip install mlx-lm mlx-vlm`
 - [ ] `~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit`
 - [ ] `~/.hikarilm/venv/bin/hf download mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit`
 - [ ] `~/.hikarilm/venv/bin/hf download mlx-community/gemma-3-12b-it-4bit`
