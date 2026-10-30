@@ -1,7 +1,6 @@
 """Making pictures: where it works, which models make them, and the images/ folder.
 
-Ollama runs image generation models such as flux.2 only on Apple Silicon, so
-the section is off everywhere else. Newer Ollama builds refuse even there; once
+Ollama runs image generation models such as flux.2 only on Apple Silicon. Newer Ollama builds refuse even there; once
 one says so, its picture models are hidden until Ollama is updated, and the
 user is pointed to sd-server. Image models never answer messages, so
 they are kept out of chat everywhere, supported or not.
@@ -45,14 +44,14 @@ PNG = b"\x89PNG\r\n\x1a\n"
 # models are not currently supported" (ollama/ollama#14306).
 REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
 REFUSED_FILE = "ollama-pictures.json"
-SD_ALTERNATIVE = ("HikariLM can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein "
-                  "on macOS and Linux: pick \"Set up picture making…\" in the model list, which downloads "
+SD_ALTERNATIVE = ("HikariLM can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein: "
+                  "pick \"Set up picture making…\" in the model list, which downloads "
                   "and sets it up once.")
 
 
 # --- where it works ---------------------------------------------------------
 
-def _apple_silicon() -> bool:
+def apple_silicon() -> bool:
     if platform.system() != "Darwin":
         return False
     if platform.machine() == "arm64":
@@ -65,21 +64,6 @@ def _apple_silicon() -> bool:
         return False
 
 
-def _machine() -> str:
-    system = platform.system() or "an unknown system"
-    if system == "Linux":
-        try:
-            with open("/proc/version", encoding="utf-8", errors="replace") as handle:
-                if "microsoft" in handle.read().lower():
-                    system = "Linux in WSL"
-        except OSError:
-            pass
-    if system == "Darwin":
-        system = "an Intel Mac"
-        return system
-    return f"{system} {platform.machine() or ''}".strip()
-
-
 def support() -> dict:
     """{"supported": bool, "reason": str}. HIKARILM_IMAGES=on or off wins over the test."""
     forced = os.environ.get("HIKARILM_IMAGES", "").strip().lower()
@@ -87,10 +71,9 @@ def support() -> dict:
         return {"supported": True, "reason": ""}
     if forced == "off":
         return {"supported": False, "reason": "Image generation is turned off (HIKARILM_IMAGES=off)."}
-    if _apple_silicon():
+    if apple_silicon():
         return {"supported": True, "reason": ""}
-    return {"supported": False,
-            "reason": f"Image generation needs a Mac with Apple Silicon. This computer is {_machine()}."}
+    return {"supported": False, "reason": "Image generation needs a Mac with Apple Silicon."}
 
 
 # FLUX.2 klein 4B for sd-server, as stable-diffusion.cpp's docs/flux2.md sets it up. None

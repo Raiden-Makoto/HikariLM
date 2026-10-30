@@ -8,12 +8,9 @@ off, file by file. Downloads stream to disk in small pieces and never sit in mem
 
 from __future__ import annotations
 
-import ctypes.util
 import json
 import os
-import platform
 import shutil
-import sys
 import threading
 import time
 import urllib.request
@@ -35,23 +32,12 @@ class SetupError(Exception):
 
 def _release_asset(assets: list[dict]) -> dict:
     """The sd-server zip that runs on this computer."""
-    machine = platform.machine().lower()
-    if sys.platform == "darwin":
-        if machine != "arm64":
-            raise SetupError("sd-server has no ready-made download for Intel Macs, so it has to be built from "
-                             "github.com/leejet/stable-diffusion.cpp.")
-        wanted = [("darwin", "arm64")]
-    elif machine in ("x86_64", "amd64"):
-        # The Vulkan build uses any graphics card, but needs Vulkan to be installed.
-        cpu = ("linux", "x86_64.zip")
-        wanted = [("linux", "x86_64-vulkan"), cpu] if ctypes.util.find_library("vulkan") else [cpu]
-    else:
-        raise SetupError(f"sd-server has no ready-made download for {platform.system()} on {machine}.")
-    for parts in wanted:
-        for asset in assets:
-            name = asset.get("name", "").lower()
-            if name.endswith(".zip") and all(part in name for part in parts):
-                return asset
+    if not imagegen.apple_silicon():
+        raise SetupError("Picture making needs a Mac with Apple Silicon.")
+    for asset in assets:
+        name = asset.get("name", "").lower()
+        if name.endswith(".zip") and "darwin" in name and "arm64" in name:
+            return asset
     raise SetupError("The latest sd-server release has no download for this computer.")
 
 

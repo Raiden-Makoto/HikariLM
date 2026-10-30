@@ -21,7 +21,7 @@ class SupportTest(unittest.TestCase):
         with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="x86_64"):
             got = imagegen.support()
         self.assertFalse(got["supported"])
-        self.assertIn("Image generation needs a Mac with Apple Silicon. This computer is Linux", got["reason"])
+        self.assertEqual(got["reason"], "Image generation needs a Mac with Apple Silicon.")
         with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="aarch64"):
             self.assertFalse(imagegen.support()["supported"])
         with mock.patch("platform.system", return_value="Darwin"), mock.patch("platform.machine", return_value="arm64"):
@@ -37,9 +37,7 @@ class SupportTest(unittest.TestCase):
         with mock.patch("platform.system", return_value="Darwin"), \
                 mock.patch("platform.machine", return_value="x86_64"), \
                 mock.patch("subprocess.run", return_value=answer):
-            got = imagegen.support()
-        self.assertFalse(got["supported"])
-        self.assertIn("an Intel Mac", got["reason"])
+            self.assertFalse(imagegen.support()["supported"])
 
     def test_override(self):
         os.environ["HIKARILM_IMAGES"] = "on"

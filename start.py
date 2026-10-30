@@ -31,10 +31,12 @@ def say(text: str = "") -> None:
 
 
 def check_python() -> None:
-    if sys.platform == "win32":
-        sys.exit("HikariLM runs on macOS and Linux only.")
     if sys.version_info < (3, 9):
         sys.exit(f"HikariLM needs Python 3.9 or newer. This is Python {sys.version.split()[0]}.")
+    from helper.imagegen import apple_silicon
+
+    if not apple_silicon():
+        sys.exit("HikariLM runs only on a Mac with Apple Silicon (M1 or newer).")
 
 
 def check_files() -> None:

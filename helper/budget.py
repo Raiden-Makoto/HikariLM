@@ -48,15 +48,6 @@ def ollama_is_local(host: str | None = None) -> bool:
     return name in LOCAL_HOSTS or name.startswith("127.") or name == socket.gethostname().lower()
 
 
-def _proc() -> tuple[int, int | None]:
-    with open("/proc/meminfo", encoding="ascii") as handle:
-        values = {}
-        for line in handle:
-            name, _, rest = line.partition(":")
-            values[name] = int(rest.split()[0]) * 1024
-    return values["MemTotal"], values.get("MemAvailable")
-
-
 def mac_available(stats: str, total: int) -> int:
     """What macOS can hand to a new program, from `vm_stat`.
 
@@ -109,11 +100,7 @@ def memory(host: str | None = None) -> tuple[int, int | None] | None:
             pass
     if not ollama_is_local(host):
         return None
-    if sys.platform == "darwin":
-        readers = (_mac, _sysconf)
-    else:
-        readers = (_proc, _sysconf)
-    for reader in readers:
+    for reader in (_mac, _sysconf) if sys.platform == "darwin" else (_sysconf,):
         try:
             total, available = reader()
             if total > 0:

@@ -8,7 +8,7 @@ No Docker, no packages to install, no account. Your chats never leave your compu
 
 ## Run it
 
-HikariLM runs on macOS and Linux (Windows is not supported). You need Ollama running and Python 3.9 or newer.
+HikariLM runs only on a Mac with Apple Silicon (M1 or newer). You need Ollama running and Python 3.9 or newer.
 
 ```bash
 ./start.sh            # or: python3 start.py
@@ -46,15 +46,15 @@ ollama pull qwen2.5-coder:7b && ollama pull gemma3 && ollama pull nomic-embed-te
 
 ## Keys
 
-| Keys (Mac / Linux) | Does |
+| Keys | Does |
 |---|---|
-| ⌘B / Ctrl+B | Hide or show the chat list, or the file list in the code editor |
-| ⌘K / Ctrl+K | Code editor: add the open file to your message |
-| ⌘L / Ctrl+L | Code editor: add the highlighted lines, or the cursor's line |
-| ⌃⌥N / Ctrl+Alt+N | New chat (change it in Settings) |
-| ⌘S / Ctrl+S | Code editor: save |
-| ⌘⏎ / Ctrl+Enter | Code editor: accept all changes from Apply |
-| ⌘⌫ / Ctrl+Backspace | Code editor: reject all changes from Apply |
+| ⌘B | Hide or show the chat list, or the file list in the code editor |
+| ⌘K | Code editor: add the open file to your message |
+| ⌘L | Code editor: add the highlighted lines, or the cursor's line |
+| ⌃⌥N | New chat (change it in Settings) |
+| ⌘S | Code editor: save |
+| ⌘⏎ | Code editor: accept all changes from Apply |
+| ⌘⌫ | Code editor: reject all changes from Apply |
 
 ## Where things are saved
 
@@ -69,7 +69,7 @@ Everything is in `~/.hikarilm`: chats, drafts, settings, notes, and pictures you
 | `HIKARILM_PORT`, `HIKARILM_HOST` | `8787`, `127.0.0.1` | Where the page is served |
 | `HIKARILM_KEEP_ALIVE` | `5m` | How long a model stays loaded after its last reply |
 | `HIKARILM_MEMORY_GB` | this computer's | Memory to plan for, when Ollama runs on another machine |
-| `HIKARILM_IMAGES` | automatic | `on` or `off` for Ollama's own picture models (Apple Silicon only) |
+| `HIKARILM_IMAGES` | automatic | `on` or `off` for Ollama's own picture models |
 | `LMSTUDIO_HOST`, `LM_API_TOKEN` | `http://127.0.0.1:1234` | Where LM Studio's server is, and its key |
 
 ## Development

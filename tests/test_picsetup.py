@@ -71,6 +71,7 @@ class PictureSetupTest(unittest.TestCase):
         self.patch(mock.patch.dict(os.environ, {"HIKARILM_HOME": str(self.home)}))
         self.patch(mock.patch("shutil.which", return_value=None))
         self.patch(mock.patch.object(picsetup, "KLEIN_BYTES", 0))
+        self.patch(mock.patch.object(imagegen, "apple_silicon", return_value=True))
 
     def patch(self, patcher):
         patcher.start()
@@ -133,18 +134,9 @@ class PictureSetupTest(unittest.TestCase):
         assets = [{"name": name} for name in ("sd-bin-Darwin-macOS-arm64.zip", "sd-bin-win-vulkan-x64.zip",
                                                "sd-bin-Linux-Ubuntu-24.04-x86_64.zip",
                                                "sd-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip")]
-        with mock.patch("sys.platform", "darwin"), mock.patch("platform.machine", return_value="arm64"):
-            self.assertIn("Darwin", picsetup._release_asset(assets)["name"])
-        with mock.patch("sys.platform", "darwin"), mock.patch("platform.machine", return_value="x86_64"):
-            with self.assertRaises(picsetup.SetupError):
-                picsetup._release_asset(assets)
-        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
-                mock.patch("ctypes.util.find_library", return_value=None):
-            self.assertEqual(picsetup._release_asset(assets)["name"], "sd-bin-Linux-Ubuntu-24.04-x86_64.zip")
-        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
-                mock.patch("ctypes.util.find_library", return_value="libvulkan.so.1"):
-            self.assertEqual(picsetup._release_asset(assets)["name"], "sd-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip")
-        with mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="aarch64"):
+        with mock.patch.object(imagegen, "apple_silicon", return_value=True):
+            self.assertEqual(picsetup._release_asset(assets)["name"], "sd-bin-Darwin-macOS-arm64.zip")
+        with mock.patch.object(imagegen, "apple_silicon", return_value=False):
             with self.assertRaises(picsetup.SetupError):
                 picsetup._release_asset(assets)
 
