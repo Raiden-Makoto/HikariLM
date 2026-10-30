@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, imagegen, keepalive, notes, picsetup, sdserver,
+from helper import (budget, context, descriptions, documents, engine, imagegen, keepalive, notes, picsetup, sdserver,
                     store, thinking, workspace)
 from helper.models import complete, open_chat, running, show, sizes, tags, unload
 from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
@@ -1015,4 +1015,5 @@ def main() -> None:
     finally:
         stopping.set()
         managed.stop()
+        engine.unload()
         server.server_close()

@@ -1,0 +1,244 @@
+"""Run one MLX model and answer chats with it, one at a time.
+
+The helper starts this with the Python in ~/.hikarilm/venv, where mlx-lm and
+mlx-vlm are installed; the helper itself never imports MLX. It loads the model
+given on the command line once, then reads one JSON command per line on stdin
+and writes JSON lines on stdout:
+
+    {"op": "chat", "messages": [...], "num_ctx": 8192, "num_predict": 512, "think": true}
+        -> {"text": "..."} as it is written, then {"done": true, ...counts}
+    {"op": "stop"}   ends the reply being written; its "done" line still comes.
+
+A failure is {"error": "..."}. To free the model the helper ends this process,
+which hands all of its memory back at once.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+import queue
+import sys
+import tempfile
+import threading
+import time
+
+THINK_OPEN = "<think>"
+EMPTY_THINK = "<think>\n\n</think>\n\n"
+
+_out_lock = threading.Lock()
+
+
+def send(event: dict) -> None:
+    with _out_lock:
+        sys.stdout.write(json.dumps(event) + "\n")
+        sys.stdout.flush()
+
+
+def _clear_cache(mx) -> None:
+    clear = getattr(mx, "clear_cache", None) or getattr(getattr(mx, "metal", None), "clear_cache", None)
+    if clear:
+        clear()
+
+
+def _sampling(path: str) -> dict:
+    """The makers' own sampling settings from generation_config.json, else a gentle default."""
+    out = {"temperature": 0.7, "top_p": 0.9, "top_k": 0}
+    try:
+        with open(os.path.join(path, "generation_config.json"), encoding="utf-8") as handle:
+            config = json.load(handle)
+    except (OSError, ValueError):
+        return out
+    for key in out:
+        if isinstance(config.get(key), (int, float)):
+            out[key] = config[key]
+    if config.get("do_sample") is False:
+        out["temperature"] = 0.0
+    return out
+
+
+def _text(content) -> str:
+    if isinstance(content, list):
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return str(content or "")
+
+
+class TextModel:
+    """mlx-lm. The last chat's prompt cache is kept, so a follow-up only reads what is new."""
+
+    def __init__(self, path: str) -> None:
+        import mlx.core as mx
+        from mlx_lm import load, stream_generate
+        from mlx_lm.models import cache as cache_module
+        from mlx_lm.sample_utils import make_sampler
+
+        self.mx, self.stream_generate, self.caches = mx, stream_generate, cache_module
+        self.model, self.tokenizer = load(path)
+        sampling = _sampling(path)
+        self.sampler = make_sampler(temp=sampling["temperature"], top_p=sampling["top_p"], top_k=sampling["top_k"])
+        template = str(getattr(self.tokenizer, "chat_template", "") or "")
+        self.template_switch = "enable_thinking" in template
+        self.cache = None
+        self.cached: list[int] = []
+
+    def _prompt(self, messages: list[dict], think) -> tuple[list[int], str]:
+        """Token ids to send, and text the model is taken to have written already."""
+        chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
+        extra = {"enable_thinking": bool(think)} if self.template_switch and think is not None else {}
+        text = self.tokenizer.apply_chat_template(chat, add_generation_prompt=True, tokenize=False, **extra)
+        lead = ""
+        if think is False and not self.template_switch:
+            # An R1 distill always reasons; an empty reasoning block makes it answer at once.
+            text = text[:-len("<think>\n")] if text.endswith("<think>\n") else text
+            text += EMPTY_THINK
+        elif text.rstrip().endswith(THINK_OPEN):
+            # The template opens the reasoning itself; hand the tag on so it can be split off.
+            lead = THINK_OPEN + "\n"
+        return self.tokenizer.encode(text, add_special_tokens=False), lead
+
+    def _reuse(self, ids: list[int]) -> list[int]:
+        """Trim the kept cache to what this prompt shares with it; returns the ids still to read."""
+        caches = self.caches
+        same = 0
+        for old, new in zip(self.cached, ids):
+            if old != new:
+                break
+            same += 1
+        same = min(same, len(ids) - 1)
+        if self.cache is not None and same > 0 and caches.can_trim_prompt_cache(self.cache):
+            caches.trim_prompt_cache(self.cache, len(self.cached) - same)
+            self.cached = ids[:same]
+            return ids[same:]
+        self.cache = caches.make_prompt_cache(self.model)
+        self.cached = []
+        return ids
+
+    def chat(self, request: dict, stop: threading.Event):
+        ids, lead = self._prompt(request["messages"], request.get("think"))
+        if lead:
+            yield {"text": lead}
+        fresh = self._reuse(ids)
+        made: list[int] = []
+        last = None
+        pieces = self.stream_generate(self.model, self.tokenizer, fresh, max_tokens=_room(request, len(ids)),
+                                      sampler=self.sampler, prompt_cache=self.cache)
+        try:
+            for last in pieces:
+                made.append(last.token)
+                if last.text:
+                    yield {"text": last.text}
+                if stop.is_set():
+                    break
+        finally:
+            pieces.close()
+        offset = getattr(self.cache[0], "offset", None) if self.cache else None
+        if isinstance(offset, int):
+            self.cached = (self.cached + fresh + made)[:offset]
+        else:
+            self.cache, self.cached = None, []
+        _clear_cache(self.mx)
+        yield _counts(last, len(ids), stop.is_set())
+
+
+class VisionModel:
+    """mlx-vlm, for models that read pictures. Pictures come as base64, as Ollama takes them."""
+
+    def __init__(self, path: str) -> None:
+        import mlx.core as mx
+        from mlx_vlm import load, stream_generate
+        from mlx_vlm.prompt_utils import apply_chat_template
+
+        self.mx, self.stream_generate, self.template = mx, stream_generate, apply_chat_template
+        self.model, self.processor = load(path)
+        self.sampling = _sampling(path)
+
+    def chat(self, request: dict, stop: threading.Event):
+        messages = request["messages"]
+        pictures = [image for m in messages for image in m.get("images") or []]
+        chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
+        prompt = self.template(self.processor, self.model.config, chat, num_images=len(pictures))
+        with tempfile.TemporaryDirectory() as folder:
+            paths = []
+            for number, image in enumerate(pictures):
+                path = os.path.join(folder, f"{number}.img")
+                with open(path, "wb") as handle:
+                    handle.write(base64.b64decode(image.split(",", 1)[-1]))
+                paths.append(path)
+            last = None
+            guess = sum(len(m["content"]) for m in chat) // 3 + 300 * len(paths)
+            pieces = self.stream_generate(self.model, self.processor, prompt, image=paths or None,
+                                          max_tokens=_room(request, guess), temperature=self.sampling["temperature"])
+            try:
+                for last in pieces:
+                    if last.text:
+                        yield {"text": last.text}
+                    if stop.is_set():
+                        break
+            finally:
+                pieces.close()
+        _clear_cache(self.mx)
+        yield _counts(last, getattr(last, "prompt_tokens", 0), stop.is_set())
+
+
+def _room(request: dict, prompt_tokens: int) -> int:
+    """How long the reply may be: what is asked for, and never past the context length."""
+    left = max(64, int(request.get("num_ctx") or 8192) - prompt_tokens)
+    wanted = request.get("num_predict")
+    return min(left, int(wanted)) if isinstance(wanted, int) and wanted > 0 else left
+
+
+def _counts(last, prompt_tokens: int, stopped: bool) -> dict:
+    return {"done": True, "stopped": stopped,
+            "reason": getattr(last, "finish_reason", None) or ("stop" if stopped else "length"),
+            "prompt_tokens": int(getattr(last, "prompt_tokens", 0) or prompt_tokens),
+            "tokens": int(getattr(last, "generation_tokens", 0) or 0),
+            "prompt_tps": float(getattr(last, "prompt_tps", 0) or 0),
+            "tps": float(getattr(last, "generation_tps", 0) or 0),
+            "peak": float(getattr(last, "peak_memory", 0) or 0)}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--vision", action="store_true")
+    args = parser.parse_args()
+    started = time.monotonic()
+    try:
+        runner = (VisionModel if args.vision else TextModel)(args.model)
+    except Exception as error:  # noqa: BLE001 - any load failure is reported, then the process ends
+        send({"error": f"The model could not be loaded: {error}"})
+        return
+    send({"ready": True, "seconds": round(time.monotonic() - started, 1)})
+
+    commands: queue.Queue = queue.Queue()
+    stop = threading.Event()
+
+    def read() -> None:
+        for line in sys.stdin:
+            try:
+                command = json.loads(line)
+            except ValueError:
+                continue
+            if command.get("op") == "stop":
+                stop.set()
+            else:
+                commands.put(command)
+        commands.put(None)
+
+    threading.Thread(target=read, daemon=True).start()
+    while True:
+        command = commands.get()
+        if command is None:
+            return
+        stop.clear()
+        try:
+            for event in runner.chat(command, stop):
+                send(event)
+        except Exception as error:  # noqa: BLE001 - the helper shows it; the next chat still works
+            send({"error": str(error) or type(error).__name__})
+
+
+if __name__ == "__main__":
+    main()

@@ -132,7 +132,7 @@ export function fillModels(problem = modelProblem) {
   };
   const grouped = pictures.length || !inCodeView();
   const chatPlace = grouped && models.length ? group("Chat") : modelSelect;
-  for (const name of models) chatPlace.append(new Option(name, name));
+  for (const name of models) chatPlace.append(new Option(name.replace(/^mlx-community\//, ""), name));
   if (pictures.length) {
     const picturePlace = group("Make pictures");
     for (const item of pictures) picturePlace.append(new Option(item.label, item.id));

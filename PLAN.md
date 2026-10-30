@@ -42,18 +42,22 @@ Keep the Ollama copies until v3 is released; `ollama rm` them after.
 
 ### 2. The engine
 
-New `helper/engine.py`: loads a model with mlx-lm or mlx-vlm, streams a chat
-reply, stops on request, and frees the memory when the model is swapped or idle.
+`helper/engine.py` finds the MLX models `hf download` put in the Hugging Face
+cache and runs them in `helper/mlx_worker.py`, a process started with the venv's
+Python (the helper itself stays standard library only). One model at a time;
+unloading ends the worker, which frees all of its memory. Replies come back as
+Ollama's chat lines, so the rest of the helper is unchanged.
 
-- [ ] `engine.py`: load, stream (chat template, stop, thinking split for R1), unload.
-- [ ] Keep each chat's prompt cache between turns, so a follow-up only reads the new message.
-- [ ] `models.py` stays the one door the rest of the helper uses; it calls `engine.py` instead of Ollama.
-- [ ] `budget.py`: context length from free unified memory and the model's own size, not Ollama's numbers.
-- [ ] `keepalive.py` and `router.py`: one big model at a time, unloaded after it sits idle.
-- [ ] Gemma's picture reading (`descriptions.py`) through mlx-vlm.
-- [ ] Model list in the page: the installed MLX models, with which can see and which think.
+- [x] `engine.py` and `mlx_worker.py`: load, stream (chat template, stop, R1's thinking on and off), unload.
+- [x] The last chat's prompt cache is kept, so a follow-up only reads the new message (mlx-lm models).
+- [x] `models.py` stays the one door: MLX names go to `engine.py`, the rest to Ollama until step 3.
+- [x] `budget.py`: the model's shape from its `config.json` (with Gemma 3's left-out defaults).
+- [x] `keepalive.py` and `router.py`: unchanged; they unload MLX models through `models.py`.
+- [x] Gemma's picture reading through mlx-vlm (pictures go to the worker as files).
+- [x] Model list in the page: MLX models first, with vision and thinking from their configs.
+- [x] Tests with a fake worker (`tests/fake_mlx_worker.py`) and the three real `config.json` files.
+- [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut, a picture read.
 - [ ] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
-- [ ] Tests with a fake engine, as the fake Ollama does today. Then a run on the Mac with the real three.
 - [ ] Speed check against the step 1 numbers. Try speculative decoding and KV cache quantization only if it is slow.
 
 ### 3. Remove the old way
