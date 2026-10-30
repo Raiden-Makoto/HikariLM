@@ -1,25 +1,30 @@
-# HikariLM v2 plan
+# HikariLM plan
 
-v2 runs every model inside the HikariLM helper with Apple's MLX. No Ollama, no
-sd-server, no LM Studio. Macs with Apple Silicon only.
+- **v2**: Macs with Apple Silicon only. Released.
+- **v3**: every model inside the HikariLM helper with Apple's MLX, starting with the
+  big three from ready-made MLX weights. No Ollama, no sd-server, no LM Studio.
+- **v4**: the models we convert ourselves, from their makers' official weights.
 
-| Model | Runs with | Weights | About |
-|---|---|---|---|
-| Qwen2.5-Coder 7B | mlx-lm | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
-| DeepSeek-R1 8B | mlx-lm | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
-| Gemma 3 12B (reads pictures) | mlx-vlm | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
-| Falcon3 10B BitNet | mlx-lm | converted by us from `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
-| nomic-embed-text | our own MLX port | `nomic-ai/nomic-embed-text-v1.5` | 0.3 GB |
-| FLUX.2 klein 4B | mflux | `black-forest-labs/FLUX.2-klein-4B`, made 4-bit by us | 15 GB download, 4.6 GB kept |
+| Model | Version | Runs with | Weights | About |
+|---|---|---|---|---|
+| Qwen2.5-Coder 7B | v3 | mlx-lm | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
+| DeepSeek-R1 8B | v3 | mlx-lm | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
+| Gemma 3 12B (reads pictures) | v3 | mlx-vlm | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
+| Falcon3 10B BitNet | v4 | mlx-lm | converted by us from `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+| nomic-embed-text | v4 | our own MLX port | `nomic-ai/nomic-embed-text-v1.5` | 0.3 GB |
+| FLUX.2 klein 4B | v4 | mflux | `black-forest-labs/FLUX.2-klein-4B`, made 4-bit by us | 15 GB download, 4.6 GB kept |
 
 Rules that carry over: one large model in memory at a time, RAM first, nothing
-written to disk until Save, chats and notes keep working across the upgrade.
+written to disk until Save, chats and notes keep working across each upgrade.
 
-## 0. Mac only
+## v2.0.0: Mac only
 
 - [x] Delete the Linux and WSL paths; `start.py` refuses anything but Apple Silicon.
+- [x] `__version__ = "2.0.0"`, tag `v2.0.0`.
 
-## 1. Download the big three again (on the Mac)
+## v3.0.0: MLX, with the big three
+
+### 1. Download the big three again (on the Mac)
 
 Ollama's files are GGUF and MLX cannot use them, so these come again from
 Hugging Face. About 17 GB.
@@ -32,9 +37,9 @@ Hugging Face. About 17 GB.
   (Gemma: `mlx_vlm.generate --model <repo> --image <a picture> --prompt "what is this"`)
 - [ ] Note tokens per second for each, to compare with Ollama later.
 
-Keep the Ollama copies until step 4 is done; `ollama rm` them after.
+Keep the Ollama copies until v3 is released; `ollama rm` them after.
 
-## 2. The engine, with the big three
+### 2. The engine
 
 New `helper/engine.py`: loads a model with mlx-lm or mlx-vlm, streams a chat
 reply, stops on request, and frees the memory when the model is swapped or idle.
@@ -50,7 +55,18 @@ reply, stops on request, and frees the memory when the model is swapped or idle.
 - [ ] Tests with a fake engine, as the fake Ollama does today. Then a run on the Mac with the real three.
 - [ ] Speed check against the step 1 numbers. Try speculative decoding and KV cache quantization only if it is slow.
 
-## 3. The tricky three, from official weights only
+### 3. Remove the old way
+
+- [ ] Delete `ollama.py` and `llmster.py`, and the Ollama parts of `imagegen.py`, `budget.py`, `keepalive.py`.
+- [ ] Settings that only mattered for Ollama go.
+- [ ] README: what `start.sh` installs, the three models and their sizes.
+
+### 4. Release v3.0.0
+
+- [ ] All tests pass, and each model has been used on the Mac: chat, code editor Apply, a picture read.
+- [ ] `__version__ = "3.0.0"`, tag `v3.0.0`, release notes saying v2 users download the models again.
+
+## v4.0.0: our own conversions, from official weights only
 
 Each one is checked against its makers' own code before it is used.
 
@@ -60,14 +76,6 @@ Each one is checked against its makers' own code before it is used.
   A test checks its vectors against Nomic's published ones. Notes are indexed again once, since the numbers change slightly.
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
   Picture setup in the page downloads and converts it, with progress.
-
-## 4. Remove the old way
-
-- [ ] Delete `ollama.py`, `llmster.py`, `sdserver.py`, `picsetup.py` and the Ollama parts of `imagegen.py`, `budget.py`, `keepalive.py`.
-- [ ] Settings that only mattered for Ollama or sd-server go.
-- [ ] README: Mac only, what `start.sh` installs, the six models and their sizes.
-
-## 5. Release v2.0.0
-
-- [ ] All tests pass, and every model has been used on the Mac: chat, code editor Apply, a picture read, a picture made, a note found.
-- [ ] `__version__ = "2.0.0"`, tag `v2.0.0`, release notes saying v1 users download the models again.
+- [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.
+- [ ] All tests pass, and a picture made and a note found on the Mac.
+- [ ] `__version__ = "4.0.0"`, tag `v4.0.0`.
