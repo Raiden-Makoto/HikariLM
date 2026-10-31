@@ -243,6 +243,17 @@
         <p class="note" id="context-note" role="status"></p>
       </div>
       <div class="setting">
+        <label class="field-row">
+          <span class="setting-label">KV cache</span>
+          <select id="kv-bits">
+            <option value="8">8-bit</option>
+            <option value="4">4-bit</option>
+            <option value="0">Full (16-bit)</option>
+          </select>
+        </label>
+        <p class="note">How the MLX models keep what they have read. 8-bit holds about twice as much context in the same memory with almost no change to answers; 4-bit about four times, and answers can change, mostly in long thinking. Gemma 3 always keeps a full cache.</p>
+      </div>
+      <div class="setting">
         <label class="switch-row">
           <span class="setting-label">Let models think</span>
           <input class="switch" id="think-toggle" type="checkbox" role="switch">

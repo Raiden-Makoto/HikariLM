@@ -58,8 +58,9 @@ Ollama's chat lines, so the rest of the helper is unchanged.
 - [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut. (A picture read works.)
 - [x] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
 - [x] Speed check: fast enough. Speculative decoding is not needed.
-- [ ] Optional: KV cache quantization (mlx-lm's `kv_bits` 8 or 4), so the same memory holds a longer
-  context and more of a chat's history before compaction.
+- [x] KV cache quantization, a Settings choice (8-bit by default, 4-bit, or full): mlx-lm's `kv_bits`,
+  so the same memory holds a longer context. Gemma 3 (mlx-vlm) and sliding-window caches stay full.
+  Still to check on the Mac: that 8-bit answers look the same and 4-bit is usable.
 - [x] Model names are shown short everywhere ("DeepSeek R1"), from one table in `models.js` and `helper/names.py`.
 
 ### 3. Remove the old way

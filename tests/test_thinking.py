@@ -64,6 +64,11 @@ class SettingTest(unittest.TestCase):
         self.assertFalse(thinking.clean({"enabled": False})["enabled"])
         self.assertEqual(context.clean_settings({})["thinking"], thinking.DEFAULTS)
 
+    def test_kv_cache_setting(self):
+        self.assertEqual(context.clean_settings({})["kv_cache"], {"bits": 8})
+        for bits, kept in ((0, 0), (4, 4), (8, 8), (3, 8), ("8", 8), (True, 8)):
+            self.assertEqual(context.clean_settings({"kv_cache": {"bits": bits}})["kv_cache"]["bits"], kept)
+
     def test_think_value(self):
         can = {"capabilities": ["completion", "thinking"]}
         on, off = {"enabled": True}, {"enabled": False}

@@ -53,6 +53,7 @@ async function showContextSetting() {
   document.querySelector("#compact-note").textContent = "";
   document.querySelector("#think-toggle").checked = serverSettings.thinking.enabled;
   document.querySelector("#think-limit").value = serverSettings.thinking.budget ?? "";
+  document.querySelector("#kv-bits").value = String(serverSettings.kv_cache.bits);
   const pictures = serverSettings.pictures;
   document.querySelector("#pic-program").value = pictures.program;
   document.querySelector("#pic-models").value = pictures.models;
@@ -161,6 +162,7 @@ async function savePictureSetting() {
     context: serverSettings.context,
     compaction: serverSettings.compaction,
     thinking: serverSettings.thinking,
+    kv_cache: serverSettings.kv_cache,
     pictures: {
       program: document.querySelector("#pic-program").value,
       models: document.querySelector("#pic-models").value,
@@ -243,6 +245,7 @@ async function saveContextSetting() {
       enabled: document.querySelector("#think-toggle").checked,
       budget: numberOrNull(document.querySelector("#think-limit")),
     },
+    kv_cache: { bits: Number(document.querySelector("#kv-bits").value) },
     pictures: serverSettings.pictures,
   };
   const note = document.querySelector("#compact-note");
@@ -287,7 +290,7 @@ export function start() {
     for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
   }
 
-  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt")
+  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
   document.querySelectorAll("#picture-setting input, #pic-models")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) savePictureSetting(); }));

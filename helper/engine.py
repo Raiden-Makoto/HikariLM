@@ -373,6 +373,12 @@ def _forget(process: _Worker) -> None:
         _worker = None
 
 
+def _kv_bits() -> int:
+    from helper import context  # context reaches imagegen and Ollama; only needed once a chat starts
+
+    return context.load_settings()["kv_cache"]["bits"]
+
+
 def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict | None = None, think=None) -> Reply:
     """Start a reply. The caller closes it; closing it early stops the model."""
     if not _lock.acquire(timeout=WAIT_SECONDS):
@@ -381,7 +387,8 @@ def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict |
         process = _ready(model)
         options = options or {}
         process.send({"op": "chat", "messages": [_plain(m) for m in messages], "think": think,
-                      "num_ctx": options.get("num_ctx"), "num_predict": options.get("num_predict")})
+                      "num_ctx": options.get("num_ctx"), "num_predict": options.get("num_predict"),
+                      "kv_bits": _kv_bits()})
     except BaseException:
         _lock.release()
         raise

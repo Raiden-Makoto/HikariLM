@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from helper import budget, engine, models, thinking
+from helper import budget, context, engine, models, thinking
 from helper.ollama import OllamaError
 
 HERE = Path(__file__).resolve().parent
@@ -101,7 +101,10 @@ class EngineTest(unittest.TestCase):
     def test_sends_options_and_think(self):
         sent = json.loads(self.chat(R1, "options", num_ctx=4096, num_predict=200, think=False)[0]["message"]["content"])
         self.assertEqual((sent["think"], sent["num_ctx"], sent["num_predict"]), (False, 4096, 200))
+        self.assertEqual(sent["kv_bits"], 8)
         self.assertFalse(sent["vision"])
+        context.save_settings({**context.load_settings(), "kv_cache": {"bits": 4}})
+        self.assertEqual(json.loads(self.chat(R1, "options")[0]["message"]["content"])["kv_bits"], 4)
         self.assertTrue(json.loads(self.chat(GEMMA, "options")[0]["message"]["content"])["vision"])
 
     def test_pictures_reach_the_worker(self):

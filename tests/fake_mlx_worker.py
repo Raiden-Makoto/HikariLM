@@ -52,7 +52,7 @@ def main():
         if last == "slow":
             pieces = (f"word{n} " for n in range(10000))
         elif last == "options":
-            sent = {key: command.get(key) for key in ("think", "num_ctx", "num_predict")}
+            sent = {key: command.get(key) for key in ("think", "num_ctx", "num_predict", "kv_bits")}
             sent.update(vision=args.vision, pid=os.getpid(), images=len(command["messages"][-1].get("images") or []))
             pieces = iter([json.dumps(sent)])
         else:

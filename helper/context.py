@@ -52,7 +52,9 @@ DEFAULTS = {
     "thinking": dict(thinking.DEFAULTS),
     "context": {"all": None, "models": {}},
     "compaction": {"enabled": True, "threshold": None, "retention": 40, "max_tokens": 1000, "prompt": ""},
+    "kv_cache": {"bits": 8},
 }
+KV_BITS = (0, 8, 4)    # off, or the bits each number of the MLX cache is kept in
 
 
 # --- settings -----------------------------------------------------------------
@@ -93,7 +95,10 @@ def clean_settings(raw) -> dict:
             if number:
                 models[name.strip()] = number
     prompt = compaction.get("prompt") if isinstance(compaction.get("prompt"), str) else ""
+    kv = raw.get("kv_cache") if isinstance(raw.get("kv_cache"), dict) else {}
+    bits = kv.get("bits", 8)
     return {
+        "kv_cache": {"bits": bits if bits in KV_BITS and not isinstance(bits, bool) else 8},
         "pictures": imagegen.clean_picture_settings(raw.get("pictures")),
         "thinking": thinking.clean(raw.get("thinking")),
         "context": {"all": _positive(context.get("all"), 512, MAX_CONTEXT), "models": models},

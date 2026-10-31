@@ -128,6 +128,7 @@ class TextModel:
         self.template_switch = "enable_thinking" in template
         self.cache = None
         self.cached: list[int] = []
+        self.kv_bits = 0
 
     def _prompt(self, messages: list[dict], think) -> tuple[list[int], str]:
         """Token ids to send, and text the model is taken to have written already."""
@@ -166,15 +167,24 @@ class TextModel:
         self.cached = []
         return ids
 
+    def _quantizable(self) -> bool:
+        # Sliding-window caches (RotatingKVCache) cannot be quantized by mlx-lm.
+        return all(type(entry).__name__ in ("KVCache", "QuantizedKVCache") for entry in self.cache)
+
     def chat(self, request: dict, stop: threading.Event):
         ids, lead = self._prompt(request["messages"], request.get("think"))
         if lead:
             yield {"text": lead}
+        bits = request.get("kv_bits") if request.get("kv_bits") in (4, 8) else 0
+        if bits != self.kv_bits:
+            # A cache kept at one setting cannot be read at another, so it is started again.
+            self.cache, self.cached, self.kv_bits = None, [], bits
         fresh = self._reuse(ids)
         made: list[int] = []
         last = None
+        quantize = {"kv_bits": bits, "kv_group_size": 64, "quantized_kv_start": 0} if bits and self._quantizable() else {}
         pieces = self.stream_generate(self.model, self.tokenizer, fresh, max_tokens=_room(request, len(ids)),
-                                      sampler=self.sampler, prompt_cache=self.cache)
+                                      sampler=self.sampler, prompt_cache=self.cache, **quantize)
         turn = TurnEnd()
         try:
             for last in pieces:
