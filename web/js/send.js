@@ -87,7 +87,7 @@ async function send() {
   if (state.attached.some((file) => file.image) && !isVision(model)) {
     describer = visionModel();
     if (!describer) {
-      notify("Pictures need a model that can read them, such as gemma3. Remove the picture or install one.");
+      notify("Pictures need a model that can read them, such as Gemma 3. Remove the picture or install one.");
       return;
     }
   }
@@ -144,7 +144,7 @@ async function send() {
           converted.push(file);
           continue;
         }
-        status.textContent = "Reading " + file.name + " with " + describer + "…";
+        status.textContent = "Reading " + file.name + " with " + modelLabel(describer) + "…";
         let live = "";
         const result = await describePicture(file, describer, state.activeRequest.signal, (piece) => {
           live += piece;
@@ -152,7 +152,7 @@ async function send() {
           reply.thinking.hidden = false;
           scrollLog();
         });
-        converted.push({ name: file.name + " (read by " + (result.model || describer) + ")", text: result.text });
+        converted.push({ name: file.name + " (read by " + modelLabel(result.model || describer) + ")", text: result.text });
       }
       reply.thinking.textContent = "";
       reply.thinking.hidden = true;

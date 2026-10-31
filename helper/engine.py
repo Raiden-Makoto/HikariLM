@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 from helper import store
+from helper.names import label
 from helper.ollama import OllamaError
 
 WORKER = Path(__file__).with_name("mlx_worker.py")
@@ -147,7 +148,7 @@ def owns(model: str) -> bool:
 def _folder(model: str) -> Path:
     folder = found().get(model)
     if folder is None:
-        raise EngineError(f"{model} is not downloaded. Get it with:  ~/.hikarilm/venv/bin/hf download {model}")
+        raise EngineError(f"{label(model)} is not downloaded. Get it with:  ~/.hikarilm/venv/bin/hf download {model}")
     return folder
 
 
@@ -271,7 +272,7 @@ _lock = threading.Lock()      # held from opening a reply until it is closed
 
 
 def _died(model: str) -> str:
-    return (f"The MLX worker stopped while running {model}. What it said is in "
+    return (f"The MLX worker stopped while running {label(model)}. What it said is in "
             f"{store.home() / 'mlx-worker.log'}.")
 
 

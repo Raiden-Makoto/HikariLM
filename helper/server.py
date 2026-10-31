@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, engine, imagegen, keepalive, notes, picsetup, sdserver,
+from helper import (budget, context, descriptions, documents, engine, imagegen, keepalive, names, notes, picsetup, sdserver,
                     store, thinking, workspace)
 from helper.models import complete, open_chat, running, show, sizes, tags, unload
 from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
@@ -322,7 +322,7 @@ class Handler(BaseHTTPRequestHandler):
                 shown = None
             if not imagegen.is_image_model(model, shown):
                 return False
-        self._send_json({"error": f"{model} makes pictures and cannot answer messages. "
+        self._send_json({"error": f"{names.label(model)} makes pictures and cannot answer messages. "
                                   "Pick a chat model to talk, or send it a description of a picture."},
                         status=400)
         return True
@@ -641,9 +641,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": allowed["reason"], "unsupported": True}, status=403)
                     return
                 if model not in chat_models(tags()):
-                    raise ValueError(f"{model} is not installed in Ollama.")
+                    raise ValueError(f"{names.label(model)} is not installed in Ollama.")
                 if not imagegen.is_image_model(model, show(model)):
-                    raise ValueError(f"{model} answers messages and cannot make pictures. Choose a picture model.")
+                    raise ValueError(f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model.")
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return

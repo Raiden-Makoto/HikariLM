@@ -21,7 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from helper import store
+from helper import names, store
 
 # Names that make pictures, for when Ollama does not say what a model can do.
 IMAGE_NAMES = ("flux", "z-image", "stable-diffusion", "sdxl", "sd3", "qwen-image", "hidream")
@@ -130,7 +130,7 @@ def note_refusal(error: str, ollama_version: str, model: str) -> str | None:
     except OSError:
         pass
     which = f"Ollama {ollama_version}" if ollama_version else "This Ollama"
-    return (f"{which} cannot make pictures with {model}: it says \"{error}\". Ollama has taken image generation "
+    return (f"{which} cannot make pictures with {names.label(model)}: it says \"{error}\". Ollama has taken image generation "
             f"out for now. {SD_ALTERNATIVE} Ollama's picture models are hidden until Ollama is updated.")
 
 

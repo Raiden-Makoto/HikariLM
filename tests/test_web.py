@@ -12,7 +12,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from helper import server
+from helper import names, server
 
 WEB = server.WEB_ROOT
 JS = WEB / "js"
@@ -239,6 +239,25 @@ class EditBlocksTest(unittest.TestCase):
         run = subprocess.run([node, str(Path(__file__).with_name("edit_blocks.test.mjs"))],
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+
+class ModelNamesTest(unittest.TestCase):
+    def test_short_names(self):
+        for name, short in (("mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit", "DeepSeek R1"),
+                            ("mlx-community/Qwen2.5-Coder-7B-Instruct-4bit", "Qwen2.5 Coder"),
+                            ("mlx-community/gemma-3-12b-it-4bit", "Gemma 3"),
+                            ("qwen2.5-coder:7b", "Qwen2.5 Coder"), ("gemma3:12b", "Gemma 3"),
+                            ("falcon3-10b-mlx", "Falcon3"), ("kimi-k2:latest", "kimi k2")):
+            with self.subTest(name=name):
+                self.assertEqual(names.label(name), short)
+
+    def test_page_and_helper_use_the_same_table(self):
+        source = (JS / "models.js").read_text(encoding="utf-8")
+        table = source[source.index("const FAMILIES"):source.index("];", source.index("const FAMILIES"))]
+        page = [(pattern.replace("\\\\", "\\"), short) for pattern, short in re.findall(r'\[/(.+?)/i, "([^"]+)"\]', table)]
+        self.assertEqual(page, [(pattern, short) for pattern, short in names.FAMILIES])
+        noise = re.search(r"const NOISE = /(.+?)/i;", source).group(1)
+        self.assertEqual(noise, names.NOISE)
 
 
 if __name__ == "__main__":

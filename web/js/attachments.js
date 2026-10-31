@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { modelSelect, status } from "./core.js";
 import { readDocx, readXlsx } from "./office.js";
 import { decodeText, isTextKind, notify, readBase64, readPdf } from "./text-files.js";
-import { inCodeView, updatePictureMode, visionModel } from "./models.js";
+import { inCodeView, modelLabel, updatePictureMode, visionModel } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 
 export const MAX_FILE = 500_000;
@@ -171,9 +171,9 @@ export async function addFiles(list) {
   }
   renderChips();
   const notes = [];
-  if (switched) notes.push("Switched to " + switched + " because you attached a picture. To get code from it, choose a coder model: " + switched + " will write the picture down for it first.");
+  if (switched) notes.push("Switched to " + modelLabel(switched) + " because you attached a picture. To get code from it, choose a coder model: " + modelLabel(switched) + " will write the picture down for it first.");
   if (problems.length) notes.push("Heads up: " + problems.join("; ") + ".");
   status.textContent = notes.join(" ");
   saveDraft(draftKey(), true);
-  if (switched) notify("Switched to " + switched + " to read your image.");
+  if (switched) notify("Switched to " + modelLabel(switched) + " to read your image.");
 }

@@ -63,6 +63,7 @@ def port_is_free(host: str, port: int) -> bool:
 def report_ollama() -> None:
     """Say what Ollama has. Never stops the start: it can be launched later."""
     from helper import context, imagegen
+    from helper.names import label
     from helper.ollama import OLLAMA_HOST, OllamaError, show, tags
     from helper.router import chat_models
 
@@ -70,7 +71,7 @@ def report_ollama() -> None:
     try:
         names, image_models, _ = imagegen.split(chat_models(tags()), show)
         if names:
-            say("Ollama models: " + ", ".join(names))
+            say("Ollama models: " + ", ".join(label(name) for name in names))
         else:
             say("Ollama is running but has no chat models yet. Try:  ollama pull gemma3")
     except OllamaError:
@@ -129,11 +130,11 @@ def main() -> None:
         say("  " + moved)
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
-    from helper import engine
+    from helper import engine, names
 
     engine.prepare(say)
     mlx = engine.names()
-    say("MLX models: " + ", ".join(mlx) if mlx else
+    say("MLX models: " + ", ".join(names.label(name) for name in mlx) if mlx else
         "No MLX models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download "
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
     report_ollama()

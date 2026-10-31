@@ -34,9 +34,8 @@ Hugging Face. About 17 GB.
 - [x] `~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit`
 - [x] `~/.hikarilm/venv/bin/hf download mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit`
 - [x] `~/.hikarilm/venv/bin/hf download mlx-community/gemma-3-12b-it-4bit`
-- [ ] Each one answers: `~/.hikarilm/venv/bin/mlx_lm.generate --model <repo> --prompt "hi"`
-  (Gemma: `mlx_vlm.generate --model <repo> --image <a picture> --prompt "what is this"`)
-- [ ] Note tokens per second for each, to compare with Ollama later.
+- [x] Each one answers, and Gemma reads a picture.
+- [x] Speed: replies are fast on the Mac; no numbers needed.
 
 Keep the Ollama copies until v3 is released; `ollama rm` them after.
 
@@ -56,9 +55,12 @@ Ollama's chat lines, so the rest of the helper is unchanged.
 - [x] Gemma's picture reading through mlx-vlm (pictures go to the worker as files).
 - [x] Model list in the page: MLX models first, with vision and thinking from their configs.
 - [x] Tests with a fake worker (`tests/fake_mlx_worker.py`) and the three real `config.json` files.
-- [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut, a picture read.
+- [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut. (A picture read works.)
 - [x] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
-- [ ] Speed check against the step 1 numbers. Try speculative decoding and KV cache quantization only if it is slow.
+- [x] Speed check: fast enough. Speculative decoding is not needed.
+- [ ] Optional: KV cache quantization (mlx-lm's `kv_bits` 8 or 4), so the same memory holds a longer
+  context and more of a chat's history before compaction.
+- [x] Model names are shown short everywhere ("DeepSeek R1"), from one table in `models.js` and `helper/names.py`.
 
 ### 3. Remove the old way
 

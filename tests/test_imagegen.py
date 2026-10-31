@@ -183,7 +183,7 @@ class OllamaRefusesTest(unittest.TestCase):
         self.assertEqual([item["id"] for item in imagegen.picture_models(self.settings, ["x/flux2-klein"])[0]],
                          ["x/flux2-klein"])
         message = imagegen.note_refusal(self.ERROR, self.version, "x/flux2-klein")
-        self.assertIn("Ollama 0.13.0 cannot make pictures with x/flux2-klein", message)
+        self.assertIn("Ollama 0.13.0 cannot make pictures with flux2 klein", message)
         self.assertIn("sd-server", message)
         found, notes = imagegen.picture_models(self.settings, ["x/flux2-klein"])
         self.assertEqual(found, [])
