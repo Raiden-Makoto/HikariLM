@@ -79,15 +79,8 @@ class EngineTest(unittest.TestCase):
         engine.forget_scan()
         self.assertIn("falcon3-10b-mlx", engine.names())
 
-    def test_shape_for_the_memory_budget(self):
-        coder, r1, gemma = engine.show(CODER), engine.show(R1), engine.show(GEMMA)
-        with mock.patch.dict(os.environ, {"OLLAMA_NUM_PARALLEL": "4", "OLLAMA_KV_CACHE_TYPE": "q4_0"}):
-            self.assertEqual(budget.per_token(coder), 28 * 4 * 256 * 2)
-        self.assertEqual(budget.per_token(r1), 36 * 8 * 256 * 2)
-        # Gemma 3: 8 of its 48 layers see the whole context; 40 keep only the last 1024 tokens.
-        self.assertEqual(budget.per_token(gemma), 8 * 8 * 512 * 2)
-        self.assertEqual(gemma["window_bytes"], 40 * 8 * 512 * 2 * 1024)
-        self.assertEqual(coder["window_bytes"], 0)
+    def test_context_lengths(self):
+        coder, gemma = engine.show(CODER), engine.show(GEMMA)
         self.assertEqual(budget.trained_context(coder), 32768)
         self.assertEqual(budget.trained_context(gemma), 131072)
         self.assertEqual(budget.default_source(coder), (8192, "model"))
@@ -103,17 +96,7 @@ class EngineTest(unittest.TestCase):
         self.assertEqual("".join(e["message"]["content"] for e in events), "echo: hello there")
         self.assertTrue(events[-1]["done"])
         self.assertEqual((events[-1]["prompt_eval_count"], events[-1]["eval_count"]), (11, 3))
-        self.assertEqual(engine.running(), [{"name": CODER, "size": 700, "expires": None}])
-
-    def test_memory_is_measured_not_taken_from_the_files(self):
-        self.assertEqual(engine.sizes()[CODER], 1000)
-        self.chat(CODER, "hi")
-        # Loaded, MLX counted 600 bytes of weights; after a reply 700 with the kept prompt cache.
-        self.assertEqual(engine.sizes()[CODER], 600)
-        self.assertEqual(engine.running()[0]["size"], 700)
-        engine.unload()
-        self.assertEqual(engine.sizes()[CODER], 600)
-        self.assertEqual(engine.sizes()[R1], 1000)
+        self.assertEqual(engine.running(), [{"name": CODER, "size": 1000, "expires": None}])
 
     def test_sends_options_and_think(self):
         sent = json.loads(self.chat(R1, "options", num_ctx=4096, num_predict=200, think=False)[0]["message"]["content"])
@@ -155,17 +138,11 @@ class EngineTest(unittest.TestCase):
         self.assertIsNotNone(process.poll())
         self.assertEqual(engine.running(), [])
 
-    def test_memory_message_counts_what_can_really_be_used(self):
-        gib = budget.GIB
+    def test_the_context_asked_for_is_used_as_is(self):
         shown = engine.show(GEMMA)
-        budget.plan(GEMMA, None, shown, int(11 * gib), [], (16 * gib, 15 * gib))
-        with self.assertRaises(budget.NoRoom) as caught:
-            budget.plan(GEMMA, None, shown, int(11 * gib), [], (16 * gib, 10 * gib))
-        self.assertIn("(11.0 GB model, 0.4 GB for 2048 tokens of context, 1.0 GB kept spare), and about 10.0 GB "
-                      "can be used (10.0 GB free now counting cached files)", str(caught.exception))
-        room = budget.plan(GEMMA, None, shown, int(8 * gib), [], (16 * gib, 15 * gib))
-        expected = (15 * gib - budget.RESERVE - 8 * gib - shown["window_bytes"]) // budget.per_token(shown)
-        self.assertEqual(room["max_fit"], int(expected) // budget.STEP * budget.STEP)
+        self.assertEqual(budget.plan(65536, shown)["num_ctx"], 65536)
+        self.assertEqual(budget.plan(None, shown)["num_ctx"], budget.default_source(shown)[0])
+        self.assertEqual(budget.plan(10 ** 6, shown)["num_ctx"], 131072)
 
     def test_crash_is_an_error_and_the_next_chat_starts_again(self):
         events = self.chat(CODER, "crash")

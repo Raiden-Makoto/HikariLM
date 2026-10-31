@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { linesKeys, messageBox, modKeys, modelSelect, plainError } from "./core.js";
 import { MAX_FILES_TOTAL, renderChips } from "./attachments.js";
 import { notify } from "./text-files.js";
-import { codeRank, fillModels, modelsForView } from "./models.js";
+import { codeRank, fillModels, modelLabel, modelsForView } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 import {
   conflictBox, deleteFile, discardOk, editor, editorText, fileList,
@@ -173,9 +173,9 @@ export async function askAbout(selectionOnly) {
   let note = "";
   if (coder) {
     modelSelect.value = coder;
-    note = " Model: " + coder + ".";
+    note = " Model: " + modelLabel(coder) + ".";
   } else if (modelSelect.value) {
-    note = " No coder model is installed, so " + modelSelect.value + " will answer.";
+    note = " No coder model is installed, so " + modelLabel(modelSelect.value) + " will answer.";
   }
   const same = state.attached.findIndex((file) => file.name === name);
   if (same >= 0) state.attached.splice(same, 1);

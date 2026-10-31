@@ -102,18 +102,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/context?"):
             model = parse_qs(urlparse(self.path).query).get("model", [""])[0]
-            out = {"memory": None, "model": model}
-            mem = budget.memory()
-            if mem:
-                out["memory"] = {"total": mem[0], "available": mem[1], "cached": budget.cached()}
+            out = {"model": model}
             try:
                 settings = context.load_settings()
                 room = self._room(model, settings)
                 out.update(room)
                 out["threshold"] = context.threshold_for(settings, room["num_ctx"])
-            except budget.NoRoom as error:
-                out["error"] = str(error)
-                out["default"], out["default_from"] = budget.default_source(show(model))
             except OllamaError as error:
                 out["error"] = str(error)
             self._send_json(out)
@@ -345,9 +339,6 @@ class Handler(BaseHTTPRequestHandler):
         settings = context.load_settings()
         try:
             room = self._room(model, settings)
-        except budget.NoRoom as error:
-            self._send_json({"error": str(error), "memory": True}, status=400)
-            return
         except OllamaError as error:
             self._send_json({"error": str(error)}, status=502)
             return
@@ -541,11 +532,8 @@ class Handler(BaseHTTPRequestHandler):
         return sent
 
     def _room(self, model: str, settings: dict) -> dict:
-        """How much context this model gets right now. Raises budget.NoRoom if it does not fit at all."""
-        shown = show(model)
-        size = sizes().get(model, 0)
-        return budget.plan(model, context.requested_context(settings, model), shown, size, running(),
-                           budget.memory())
+        """How much context this model gets."""
+        return budget.plan(context.requested_context(settings, model), show(model))
 
     def _describe(self) -> None:
         """Have a vision model write a picture down as text, once.
@@ -580,9 +568,6 @@ class Handler(BaseHTTPRequestHandler):
             response = open_chat(
                 model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE,
                 {"num_ctx": room["num_ctx"]})
-        except budget.NoRoom as error:
-            self._send_json({"error": str(error), "memory": True}, status=400)
-            return
         except OllamaError as error:
             self._send_json({"error": str(error)}, status=502)
             return
@@ -637,10 +622,6 @@ class Handler(BaseHTTPRequestHandler):
         pictures = settings["pictures"]
         spec = program = None
         try:
-            try:
-                loaded = running()
-            except OllamaError:
-                loaded = []
             if model.startswith(imagegen.SD_PREFIX):
                 spec = imagegen.find_sd_model(settings, model)
                 if spec is None:
@@ -651,7 +632,6 @@ class Handler(BaseHTTPRequestHandler):
                                      "Pick \"Set up picture making…\" in the model list.")
                 if not sdserver.model_files(spec["args"]):
                     raise ValueError(f"None of the model files for {spec['name']} were found. Check its line in Settings.")
-                budget.check_picture(spec["name"], sdserver.model_size(spec["args"]), loaded, budget.memory())
             elif model.startswith(imagegen.REMOTE_PREFIX):
                 if not pictures["address"]:
                     raise ValueError("No picture server address is set in Settings.")
@@ -664,10 +644,6 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(f"{model} is not installed in Ollama.")
                 if not imagegen.is_image_model(model, show(model)):
                     raise ValueError(f"{model} answers messages and cannot make pictures. Choose a picture model.")
-                budget.check_picture(model, sizes().get(model, 0), loaded, budget.memory())
-        except budget.NoRoom as error:
-            self._send_json({"error": str(error), "memory": True}, status=400)
-            return
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return

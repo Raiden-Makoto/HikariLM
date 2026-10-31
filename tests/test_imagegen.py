@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from helper import budget, imagegen, sdserver, store
+from helper import imagegen, sdserver, store
 from helper.router import Work
 
 PNG = imagegen.PNG + b"rest of a picture"
@@ -207,16 +207,6 @@ class WorkTest(unittest.TestCase):
         self.assertIn("picture is being made", work.start_chat())
         work.end_picture()
         self.assertIsNone(work.start_chat())
-
-
-class MemoryTest(unittest.TestCase):
-    def test_picture_model_must_fit(self):
-        gib = budget.GIB
-        budget.check_picture("flux", 8 * gib, [], (32 * gib, 24 * gib))
-        with self.assertRaises(budget.NoRoom):
-            budget.check_picture("flux", 8 * gib, [], (16 * gib, 4 * gib))
-        budget.check_picture("flux", 8 * gib, [{"name": "qwen", "size": 6 * gib}], (16 * gib, 6 * gib))
-
 
 if __name__ == "__main__":
     unittest.main()

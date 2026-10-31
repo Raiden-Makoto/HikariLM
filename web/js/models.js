@@ -3,7 +3,25 @@ import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, status } from "./core.js";
 import { attachButton } from "./attachments.js";
 
-export const modelLabel = (name) => name.replace(/^mlx-community\//, "");
+// Short names for people: "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit" is
+// "DeepSeek R1". Earlier entries win, so a distill is named for its teacher.
+const FAMILIES = [
+  [/deepseek[-_ ]?r1/i, "DeepSeek R1"], [/deepseek[-_ ]?v3/i, "DeepSeek V3"],
+  [/qwen2\.5[-_ ]?coder/i, "Qwen2.5 Coder"], [/qwen3[-_ ]?coder/i, "Qwen3 Coder"],
+  [/qwen2\.5[-_ ]?vl/i, "Qwen2.5 VL"], [/qwen3/i, "Qwen3"], [/qwen2\.5/i, "Qwen2.5"],
+  [/gemma[-_ ]?3n/i, "Gemma 3n"], [/gemma[-_ ]?3/i, "Gemma 3"], [/gemma[-_ ]?2/i, "Gemma 2"],
+  [/llama[-_ ]?3\.3/i, "Llama 3.3"], [/llama[-_ ]?3\.2/i, "Llama 3.2"], [/llama[-_ ]?3\.1/i, "Llama 3.1"],
+  [/gpt-oss/i, "gpt-oss"], [/devstral/i, "Devstral"], [/mistral/i, "Mistral"], [/phi[-_ ]?4/i, "Phi-4"],
+  [/falcon[-_ ]?3/i, "Falcon3"], [/nomic-embed/i, "nomic-embed-text"],
+];
+const NOISE = /^(\d+(\.\d+)?[bm]|\d+bit|\d{4}|instruct|it|chat|mlx|gguf|latest|q\d\w*|fp16|bf16)$/i;
+export function modelLabel(name) {
+  const base = String(name || "").split("/").pop();
+  const family = FAMILIES.find(([pattern]) => pattern.test(base));
+  if (family) return family[1];
+  const words = base.split(/[-_:]/).filter((word) => word && !NOISE.test(word));
+  return words.join(" ") || base;
+}
 
 // What the last send used, from the helper: the context length it ran
 // with, where compaction starts, and (after the reply) the tokens used.
@@ -134,7 +152,12 @@ export function fillModels(problem = modelProblem) {
   };
   const grouped = pictures.length || !inCodeView();
   const chatPlace = grouped && models.length ? group("Chat") : modelSelect;
-  for (const name of models) chatPlace.append(new Option(modelLabel(name), name));
+  // Two installed models with the same short name keep their full names, so both can be told apart.
+  const labels = models.map(modelLabel);
+  models.forEach((name, index) => {
+    const twin = labels.indexOf(labels[index]) !== labels.lastIndexOf(labels[index]);
+    chatPlace.append(new Option(twin ? name.split("/").pop() : labels[index], name));
+  });
   if (pictures.length) {
     const picturePlace = group("Make pictures");
     for (const item of pictures) picturePlace.append(new Option(item.label, item.id));

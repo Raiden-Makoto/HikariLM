@@ -165,38 +165,9 @@ def _size(folder: Path) -> int:
     return total
 
 
-MEASURED_FILE = "mlx-memory.json"
-
-
-def _measured() -> dict[str, int]:
-    """What each model really took once loaded, as MLX counted it. The files on disk are only
-    a first guess: not everything in them has to sit in memory."""
-    try:
-        data = json.loads((store.home() / MEASURED_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return {name: int(value) for name, value in data.items() if isinstance(value, int) and value > 0} \
-        if isinstance(data, dict) else {}
-
-
-def _remember(model: str, memory) -> None:
-    if not isinstance(memory, int) or memory <= 0:
-        return
-    data = _measured()
-    if data.get(model) == memory:
-        return
-    data[model] = memory
-    try:
-        store.home().mkdir(parents=True, exist_ok=True)
-        (store.home() / MEASURED_FILE).write_text(json.dumps(data, indent=1), encoding="utf-8")
-    except OSError:
-        pass
-
-
 def sizes() -> dict[str, int]:
-    """Memory each model takes once loaded: measured when it has been loaded before, else its files."""
-    measured = _measured()
-    return {name: measured.get(name) or _size(folder) for name, folder in found().items()}
+    """Each model's size on disk, for the model list."""
+    return {name: _size(folder) for name, folder in found().items()}
 
 
 def _template(folder: Path) -> str:
@@ -227,7 +198,6 @@ def show(model: str) -> dict:
                        ("attention.key_length", "head_dim"), ("context_length", "max_position_embeddings")):
         if isinstance(text.get(field), int):
             info[f"{arch}.{key}"] = text[field]
-    window_bytes = _windowed(text, info, arch)
     capabilities = ["completion"]
     if "vision_config" in config:
         capabilities.append("vision")
@@ -235,30 +205,7 @@ def show(model: str) -> dict:
     if THINKERS.search(model) or "<think>" in template or "enable_thinking" in template:
         capabilities.append("thinking")
     default = min(trained, DEFAULT_CONTEXT) if trained else DEFAULT_CONTEXT
-    return {"model_info": info, "capabilities": capabilities, "parameters": f"num_ctx {default}", "mlx": True,
-            "window_bytes": window_bytes}
-
-
-def _windowed(text: dict, info: dict, arch: str) -> int:
-    """Layers that only look back a fixed window (most of Gemma 3's) keep at most that many
-    tokens, whatever the context length. They leave block_count, which budget.py multiplies by
-    the context, and come back as a fixed number of bytes instead."""
-    window = text.get("sliding_window")
-    layers = info.get(f"{arch}.block_count")
-    if not isinstance(window, int) or not isinstance(layers, int):
-        return 0
-    kinds = text.get("layer_types")
-    if isinstance(kinds, list) and kinds:
-        local = sum(1 for kind in kinds if kind == "sliding_attention")
-    elif isinstance(text.get("sliding_window_pattern"), int) and text["sliding_window_pattern"] > 0:
-        local = layers - layers // text["sliding_window_pattern"]
-    else:
-        return 0
-    heads = info.get(f"{arch}.attention.head_count") or 0
-    kv_heads = info.get(f"{arch}.attention.head_count_kv") or heads
-    key = info.get(f"{arch}.attention.key_length") or ((info.get(f"{arch}.embedding_length") or 0) // heads if heads else 0)
-    info[f"{arch}.block_count"] = layers - local
-    return int(local * kv_heads * key * 2 * 2 * window)
+    return {"model_info": info, "capabilities": capabilities, "parameters": f"num_ctx {default}", "mlx": True}
 
 
 class _Worker:
@@ -268,7 +215,7 @@ class _Worker:
         if not python().exists():
             raise EngineError(SETUP)
         self.model = model
-        self.size = _measured().get(model) or _size(folder)
+        self.size = _size(folder)
         store.home().mkdir(parents=True, exist_ok=True)
         log = open(store.home() / "mlx-worker.log", "wb")
         command = [str(python()), str(worker()), "--model", str(folder)] + (["--vision"] if vision else [])
@@ -340,9 +287,6 @@ def _ready(model: str) -> _Worker:
     if not event or not event.get("ready"):
         started.end()
         raise EngineError((event or {}).get("error") or _died(model))
-    if isinstance(event.get("memory"), int) and event["memory"] > 0:
-        _remember(model, event["memory"])
-        started.size = event["memory"]
     _worker = started
     return started
 
@@ -394,9 +338,6 @@ class Reply:
             return self._line({"error": (event or {}).get("error") or _died(self.model)})
         if event.get("done"):
             self.finished = True
-            if isinstance(event.get("memory"), int) and event["memory"] > 0:
-                # What unloading it would free now: the weights and the prompt cache kept for a follow-up.
-                self.process.size = event["memory"]
             return self._line({
                 "message": {"role": "assistant", "content": ""}, "done": True,
                 "done_reason": "stop" if event.get("stopped") else event.get("reason") or "stop",

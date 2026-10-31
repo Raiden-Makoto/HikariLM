@@ -6,7 +6,7 @@ import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
 import { addTurn, pictureFigure, setBusy, updateApply } from "./turns.js";
 import {
-  inCodeView, isPictureModel, isVision, loadModels, pictureLabel, pictureSeed, pictureSize,
+  inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed, pictureSize,
   pictureSteps, refreshState, visionModel,
 } from "./models.js";
 import { saveChat } from "./chat-list.js";
@@ -108,7 +108,7 @@ async function send() {
   let restored = false;
   const reply = addTurn("assistant", "");
   setBusy(true);
-  status.textContent = "Streaming from " + model + "…";
+  status.textContent = "Streaming from " + modelLabel(model) + "…";
   state.activeRequest = new AbortController();
   let saved = false;
   let answer = "";
@@ -157,7 +157,7 @@ async function send() {
       reply.thinking.textContent = "";
       reply.thinking.hidden = true;
       state.messages[state.messages.length - 1].files = converted;
-      status.textContent = "Streaming from " + model + "…";
+      status.textContent = "Streaming from " + modelLabel(model) + "…";
     }
     // In the code editor the model is told how to write code for a file, so Apply knows where it goes.
     const system = inCodeView() ? [{ role: "system", content: editorPrompt(state.folderName, state.openPath) }] : [];
@@ -208,9 +208,6 @@ async function send() {
         if (event.error) throw new Error(event.error);
         if (event.hikarilm === "context") {
           state.lastContext = event;
-          if (event.clamped) {
-            notify("Context cut to " + event.num_ctx.toLocaleString() + " tokens so " + model + " fits in this computer's memory.");
-          }
           continue;
         }
         if (event.hikarilm === "compaction") {
@@ -220,7 +217,7 @@ async function send() {
             // The summary is kept on the first message that stays, as a checkpoint.
             const kept = state.messages[event.checkpoint - system.length];
             if (kept) kept.contextSummary = event.summary;
-            status.textContent = "Context compacted: " + event.dropped + " older messages summarized. Streaming from " + model + "…";
+            status.textContent = "Context compacted: " + event.dropped + " older messages summarized. Streaming from " + modelLabel(model) + "…";
           }
           continue;
         }
@@ -239,7 +236,7 @@ async function send() {
               event.files.map((file) => file.name + " (" + file.used + " of " + file.total + ")").join(", ") +
               (event.search === "words" ? ", matched by words since nomic-embed-text is not installed" : "");
           sent.block.append(used);
-          status.textContent = "Streaming from " + model + "…";
+          status.textContent = "Streaming from " + modelLabel(model) + "…";
           scrollLog();
           continue;
         }
@@ -255,7 +252,7 @@ async function send() {
         }
         if (event.hikarilm === "thinking_cut") {
           thinkingCut = true;
-          if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + model + " is answering now…";
+          if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + modelLabel(model) + " is answering now…";
           drawThought();
           continue;
         }

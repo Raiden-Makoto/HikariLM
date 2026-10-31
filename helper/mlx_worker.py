@@ -82,15 +82,6 @@ def send(event: dict) -> None:
         sys.stdout.flush()
 
 
-def _memory(mx, name: str) -> int:
-    """MLX's own count of the bytes it holds (get_active_memory or get_peak_memory)."""
-    read = getattr(mx, name, None) or getattr(getattr(mx, "metal", None), name, None)
-    try:
-        return int(read()) if read else 0
-    except Exception:  # noqa: BLE001 - a missing counter only means nothing is measured
-        return 0
-
-
 def _clear_cache(mx) -> None:
     clear = getattr(mx, "clear_cache", None) or getattr(getattr(mx, "metal", None), "clear_cache", None)
     if clear:
@@ -282,8 +273,7 @@ def main() -> None:
     except Exception as error:  # noqa: BLE001 - any load failure is reported, then the process ends
         send({"error": f"The model could not be loaded: {error}"})
         return
-    send({"ready": True, "seconds": round(time.monotonic() - started, 1),
-          "memory": _memory(runner.mx, "get_active_memory")})
+    send({"ready": True, "seconds": round(time.monotonic() - started, 1)})
 
     commands: queue.Queue = queue.Queue()
     stop = threading.Event()
@@ -308,8 +298,6 @@ def main() -> None:
         stop.clear()
         try:
             for event in runner.chat(command, stop):
-                if event.get("done"):
-                    event["memory"] = _memory(runner.mx, "get_active_memory")
                 send(event)
         except Exception as error:  # noqa: BLE001 - the helper shows it; the next chat still works
             send({"error": str(error) or type(error).__name__})

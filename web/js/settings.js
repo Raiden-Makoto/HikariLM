@@ -1,7 +1,7 @@
 // The Settings window, and the one-time picture setup window.
 import { state } from "./state.js";
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { allPictures, isPictureModel, loadModels, pictureNotes } from "./models.js";
+import { allPictures, isPictureModel, loadModels, modelLabel, pictureNotes } from "./models.js";
 import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
@@ -24,8 +24,7 @@ async function showNotesSetting() {
   }
 }
 
-// Context length and compaction live in the helper, which enforces them
-// and refuses a context that would not fit in memory.
+// Context length and compaction live in the helper, which enforces them.
 let serverSettings = null;
 const gigabytes = (bytes) => (bytes / 1024 ** 3).toFixed(1) + " GB";
 const numberOrNull = (input) => (input.value.trim() === "" ? null : Number(input.value));
@@ -45,7 +44,7 @@ async function showContextSetting() {
   document.querySelector("#ctx-all").value = ctx.all ?? "";
   document.querySelector("#ctx-model").value = (model && ctx.models[model]) ?? "";
   document.querySelector("#ctx-model").disabled = !model;
-  document.querySelector("#ctx-model-label").textContent = model ? "Only " + model : "This model";
+  document.querySelector("#ctx-model-label").textContent = model ? "Only " + modelLabel(model) : "This model";
   document.querySelector("#compact-toggle").checked = compaction.enabled;
   document.querySelector("#compact-threshold").value = compaction.threshold ?? "";
   document.querySelector("#compact-retention").value = compaction.retention;
@@ -59,7 +58,7 @@ async function showContextSetting() {
   document.querySelector("#pic-models").value = pictures.models;
   document.querySelector("#pic-address").value = pictures.address;
   showPictureSetup();
-  await showMemory();
+  await showContext();
 }
 
 async function showPictureSetup(saved = false) {
@@ -193,41 +192,28 @@ function fillContextChoices(body) {
   list.replaceChildren(...CONTEXT_CHOICES.filter((size) => !body.trained || size <= body.trained).map((size) => {
     const option = document.createElement("option");
     option.value = size;
-    if (body.max_fit) option.label = size <= body.max_fit ? "fits" : "too big for this computer";
-    if (size === body.default) option.label = "Ollama's default" + (option.label ? ", " + option.label : "");
+    if (size === body.default) option.label = "Ollama's default";
     return option;
   }));
 }
 
-async function showMemory() {
+async function showContext() {
   const note = document.querySelector("#context-note");
   const model = contextModel();
   try {
     const body = await (await fetch("/api/context?model=" + encodeURIComponent(model))).json();
     const parts = [];
-    if (body.memory) {
-      const { total, available, cached } = body.memory;
-      parts.push("This computer: " + gigabytes(total) +
-        (available ? ", " + gigabytes(available) + " free" +
-          (cached ? " (" + gigabytes(Math.min(cached, available)) + " of it cached files macOS hands back when needed)" : "") +
-          "." : "."));
-    } else {
-      parts.push("Memory is not checked, because Ollama runs on another computer or its memory could not be read. " +
-        "Set HIKARILM_MEMORY_GB to that computer's memory to turn the check on.");
-    }
     if (body.default) {
       const from = { model: "set by the model", OLLAMA_CONTEXT_LENGTH: "from OLLAMA_CONTEXT_LENGTH", ollama: "Ollama's built-in" }[body.default_from];
       const own = body.default.toLocaleString();
       document.querySelector("#ctx-model").placeholder = serverSettings?.context.all
         ? "Same: " + serverSettings.context.all.toLocaleString() : "Ollama's: " + own;
       document.querySelector("#ctx-all").placeholder = "Ollama's: " + own;
-      parts.push("Ollama's default for " + model + " is " + own + " tokens (" + from + ").");
+      parts.push("Ollama's default for " + modelLabel(model) + " is " + own + " tokens (" + from + ").");
     }
     if (body.error) parts.push(plainError(body.error));
     else if (model) {
-      parts.push(model + " will use " + body.num_ctx.toLocaleString() + " tokens" +
-        (body.max_fit ? " and fits up to " + body.max_fit.toLocaleString() + " here" : "") +
-        (body.clamped ? ", so the length asked for is cut to that." : "."));
+      parts.push(modelLabel(model) + " will use " + body.num_ctx.toLocaleString() + " tokens.");
     }
     fillContextChoices(body);
     note.textContent = parts.join(" ") || "Blank uses Ollama's own setting.";
@@ -274,7 +260,7 @@ async function saveContextSetting() {
   note.textContent = "Saved.";
   document.querySelector("#compact-retention").value = body.compaction.retention;
   document.querySelector("#think-limit").value = body.thinking.budget ?? "";
-  await showMemory();
+  await showContext();
 }
 
 // Listeners and first steps, run by main.js once every part is loaded.

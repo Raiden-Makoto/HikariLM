@@ -4,8 +4,6 @@ import unittest
 
 from helper import budget, context, store
 
-GIB = 1024 ** 3
-
 # What /api/show reports for a qwen2.5 7B, trimmed to what matters.
 QWEN = {
     "parameters": "stop \"<|im_end|>\"",
@@ -30,20 +28,9 @@ def chat(turns, chars=400):
 
 class BudgetTest(unittest.TestCase):
     def setUp(self):
-        for name in ("OLLAMA_KV_CACHE_TYPE", "OLLAMA_NUM_PARALLEL", "OLLAMA_CONTEXT_LENGTH", "HIKARILM_MEMORY_GB",
-                     "OLLAMA_HOST"):
-            old = os.environ.pop(name, None)
-            if old is not None:
-                self.addCleanup(os.environ.__setitem__, name, old)
-
-    def test_cache_size_comes_from_the_model_shape(self):
-        # 28 layers x 4 kv heads x (128 + 128) x 2 bytes
-        self.assertEqual(budget.per_token(QWEN), 28 * 4 * 256 * 2)
-        os.environ["OLLAMA_KV_CACHE_TYPE"] = "q8_0"
-        self.assertEqual(budget.per_token(QWEN), 28 * 4 * 256)
-
-    def test_unknown_shape_uses_a_cautious_guess(self):
-        self.assertEqual(budget.per_token({}), budget.FALLBACK_PER_TOKEN)
+        old = os.environ.pop("OLLAMA_CONTEXT_LENGTH", None)
+        if old is not None:
+            self.addCleanup(os.environ.__setitem__, "OLLAMA_CONTEXT_LENGTH", old)
 
     def test_default_context(self):
         self.assertEqual(budget.default_source(QWEN)[0], 4096)
@@ -54,123 +41,14 @@ class BudgetTest(unittest.TestCase):
         del os.environ["OLLAMA_CONTEXT_LENGTH"]
         self.assertEqual(budget.default_source(QWEN), (4096, "ollama"))
 
-    def test_plan_reports_the_default_and_takes_any_length(self):
-        plan = budget.plan("qwen", 12288, QWEN, 5 * GIB, [], (32 * GIB, 24 * GIB))
+    def test_the_length_asked_for_is_sent(self):
+        plan = budget.plan(12288, QWEN)
         self.assertEqual((plan["num_ctx"], plan["default"], plan["default_from"]), (12288, 4096, "ollama"))
-        big = {**QWEN, "parameters": "num_ctx 131072"}
-        plan = budget.plan("qwen", None, big, int(4.5 * GIB), [], (8 * GIB, 6 * GIB))
-        self.assertEqual(plan["default"], 131072)
-        self.assertTrue(plan["clamped"])
+        self.assertEqual(budget.plan(None, QWEN)["num_ctx"], 4096)
 
-    def test_asked_for_context_fits_when_there_is_room(self):
-        plan = budget.plan("qwen", 16384, QWEN, 5 * GIB, [], (32 * GIB, 24 * GIB))
-        self.assertEqual(plan["num_ctx"], 16384)
-        self.assertFalse(plan["clamped"])
-
-    def test_context_is_cut_to_what_fits(self):
-        # 8 GB machine, 4 GB free, a 5 GB model: about 1 GB left for the cache.
-        plan = budget.plan("qwen", 131072, QWEN, int(4.5 * GIB), [], (8 * GIB, 6 * GIB))
-        self.assertTrue(plan["clamped"])
-        self.assertLess(plan["num_ctx"], 131072)
-        self.assertLessEqual(plan["num_ctx"], 32768)  # never past what the model was trained for
-        self.assertEqual(plan["num_ctx"] % budget.STEP, 0)
-        used = int(4.5 * GIB) + plan["num_ctx"] * budget.per_token(QWEN) + budget.RESERVE
-        self.assertLessEqual(used, 6 * GIB)
-
-    def test_free_memory_counts_in_full(self):
-        # 15 of 16 GB free (cached files included): a 12 GB model fits, with no share of the total held back.
-        plan = budget.plan("qwen", 4096, QWEN, 12 * GIB, [], (16 * GIB, 15 * GIB))
-        used = 12 * GIB + plan["max_fit"] * budget.per_token(QWEN) + budget.RESERVE
-        self.assertGreaterEqual(plan["max_fit"], budget.MIN_CONTEXT)
-        self.assertLessEqual(used, 15 * GIB)
-
-    def test_a_model_that_does_not_fit_is_refused(self):
-        with self.assertRaises(budget.NoRoom) as caught:
-            budget.plan("big", None, QWEN, 20 * GIB, [], (16 * GIB, 12 * GIB))
-        self.assertIn("Not enough memory", str(caught.exception))
-
-    def test_the_model_being_replaced_counts_as_free(self):
-        loaded = [{"name": "gemma3:12b", "size": 9 * GIB}, {"name": "nomic-embed-text:latest", "size": GIB}]
-        with self.assertRaises(budget.NoRoom):
-            budget.plan("qwen", 8192, QWEN, 5 * GIB, [], (16 * GIB, 2 * GIB))
-        plan = budget.plan("qwen", 8192, QWEN, 5 * GIB, loaded, (16 * GIB, 2 * GIB))
-        self.assertEqual(plan["num_ctx"], 8192)
-
-    def test_memory_is_only_read_when_ollama_is_here(self):
-        for host in ("", "127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434", "0.0.0.0"):
-            self.assertTrue(budget.ollama_is_local(host), host)
-        self.assertFalse(budget.ollama_is_local("http://192.168.1.20:11434"))
-        self.assertFalse(budget.ollama_is_local("gpu-box:11434"))
-
-    def test_this_computers_memory_can_be_read(self):
-        mem = budget.memory()
-        self.assertIsNotNone(mem)
-        self.assertGreater(mem[0], 0)
-        os.environ["HIKARILM_MEMORY_GB"] = "8"
-        self.assertEqual(budget.memory(), (8 * GIB, None))
-
-    def test_parallel_slots_multiply_the_cache(self):
-        os.environ["OLLAMA_NUM_PARALLEL"] = "4"
-        self.assertEqual(budget.per_token(QWEN), 28 * 4 * 256 * 2 * 4)
-
-
-VM_STAT = """Mach Virtual Memory Statistics: (page size of 16384 bytes)
-Pages free:                               20000.
-Pages active:                            300000.
-Pages inactive:                          290000.
-Pages speculative:                         5000.
-Pages throttled:                              0.
-Pages wired down:                        150000.
-Pages purgeable:                          10000.
-"Translation faults":                 123456789.
-Pages copy-on-write:                    1234567.
-Pages zero filled:                     98765432.
-Pages reactivated:                        12345.
-Pages purged:                              6789.
-File-backed pages:                       500000.
-Anonymous pages:                         350000.
-Pages stored in compressor:              120000.
-Pages occupied by compressor:             50000.
-Decompressions:                           11111.
-Compressions:                             22222.
-Pageins:                                  33333.
-Pageouts:                                     0.
-Swapins:                                      0.
-Swapouts:                                     0.
-"""
-
-
-class MacMemoryTest(unittest.TestCase):
-    TOTAL = 1048576 * 16384   # 16 GB
-
-    def test_cached_files_count_as_free(self):
-        held = 150000 + (350000 - 10000) + 50000
-        self.assertEqual(budget.mac_available(VM_STAT, self.TOTAL), self.TOTAL - held * 16384)
-        old = (20000 + 290000 + 5000 + 10000) * 16384
-        self.assertGreater(budget.mac_available(VM_STAT, self.TOTAL), old + 2 * budget.GIB)
-
-    def test_cached_part_is_reported(self):
-        self.assertEqual(budget.mac_cached(VM_STAT, self.TOTAL), (500000 + 10000) * 16384)
-
-    def test_older_macos(self):
-        stats = "\n".join(line for line in VM_STAT.splitlines()
-                          if not line.startswith(("Anonymous", "File-backed")))
-        self.assertEqual(budget.mac_available(stats, self.TOTAL), (20000 + 290000 + 5000 + 10000) * 16384)
-
-    def test_never_past_total(self):
-        stats = VM_STAT.replace("150000.", "0.").replace("350000.", "0.").replace("Pages occupied by compressor:             50000.", "Pages occupied by compressor: 0.")
-        self.assertEqual(budget.mac_available(stats, self.TOTAL), self.TOTAL)
-
-    def test_fits_once_the_cache_counts(self):
-        # A 6 GB model with under 5 GB free or inactive, but plenty held only as cached files.
-        mem = (self.TOTAL, budget.mac_available(VM_STAT, self.TOTAL))
-        shown = {"model_info": {"general.architecture": "qwen2", "qwen2.block_count": 28,
-                                "qwen2.attention.head_count": 28, "qwen2.attention.head_count_kv": 4,
-                                "qwen2.embedding_length": 3584, "qwen2.context_length": 32768}}
-        result = budget.plan("big", 4096, shown, 6 * budget.GIB, [], mem)
-        self.assertEqual(result["num_ctx"], 4096)
-        with self.assertRaises(budget.NoRoom):
-            budget.plan("big", 4096, shown, 6 * budget.GIB, [], (self.TOTAL, (20000 + 290000 + 5000 + 10000) * 16384))
+    def test_never_past_what_the_model_was_trained_for(self):
+        self.assertEqual(budget.plan(131072, QWEN)["num_ctx"], 32768)
+        self.assertEqual(budget.plan(100, QWEN)["num_ctx"], budget.MIN_CONTEXT)
 
 
 class CompactionTest(unittest.TestCase):

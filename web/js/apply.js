@@ -8,7 +8,7 @@ import { isMac, modKeys, modelSelect, plainError, status } from "./core.js";
 import { discardOk, editor, editorText, fileNote, loadEditor, previewShown, showPreview } from "./files.js";
 import { openFileAt, refreshList } from "./file-actions.js";
 import { closeFile } from "./folder-view.js";
-import { refreshState } from "./models.js";
+import { modelLabel, refreshState } from "./models.js";
 import { setBusy } from "./turns.js";
 import { applyPrompt, applyTarget, fileFromReply, isMarker, mergeEdit, resolvePath } from "./edit-blocks.js";
 
@@ -101,7 +101,7 @@ async function mergeWithModel(path, current, code) {
   const total = current.split("\n").length;
   state.activeRequest = new AbortController();
   setBusy(true);
-  say("Fitting the code into " + path + " with " + model + "…");
+  say("Fitting the code into " + path + " with " + modelLabel(model) + "…");
   let reply = "";
   try {
     const response = await fetch("/api/chat", {
@@ -129,7 +129,7 @@ async function mergeWithModel(path, current, code) {
         const piece = event.message?.content || "";
         if (!piece) continue;
         reply += piece;
-        say("Fitting the code into " + path + " with " + model + "… " +
+        say("Fitting the code into " + path + " with " + modelLabel(model) + "… " +
           Math.min(reply.split("\n").length, total) + " of about " + total + " lines written");
       }
     }
@@ -143,12 +143,12 @@ async function mergeWithModel(path, current, code) {
   }
   let merged = fileFromReply(reply);
   if (merged === null || !merged.trim()) {
-    fileNote.textContent = model + " did not write the whole file back, so nothing was applied.";
+    fileNote.textContent = modelLabel(model) + " did not write the whole file back, so nothing was applied.";
     return null;
   }
   const leftOut = merged.split("\n").some((line) => isMarker(line) && !current.includes(line.trim()));
   if (leftOut) {
-    fileNote.textContent = model + " left parts of the file out, so nothing was applied. Try again, or a bigger model.";
+    fileNote.textContent = modelLabel(model) + " left parts of the file out, so nothing was applied. Try again, or a bigger model.";
     return null;
   }
   merged = merged.replace(/\r\n/g, "\n");
