@@ -9,8 +9,12 @@ layer on random inputs, then the logits of whole prompts, MLX against PyTorch on
     /tmp/falcon-check/bin/pip install mlx mlx-lm "transformers>=4.48,<5" torch accelerate numpy
     /tmp/falcon-check/bin/python tests/check_falcon.py
 
-It needs about 5 GB free: the MLX model is freed before PyTorch loads its own, so only one 4 GB
-model is in memory at a time. PyTorch on the CPU takes a minute or two.
+It needs about 6 GB free: the MLX model is freed before PyTorch loads its own, so only one
+model is in memory at a time (the float32 run makes PyTorch's embeddings twice as large).
+PyTorch on the CPU takes a few minutes.
+
+Passing means MLX is within 0.99 cosine and 95% same next tokens of TII's bf16 run, or no further
+from exact (TII's own code in float32) than TII's bf16 run is itself.
 """
 
 import gc
@@ -91,22 +95,54 @@ def main() -> int:
 
     hf = AutoModelForCausalLM.from_pretrained(str(folder), torch_dtype=torch.bfloat16)
     hf.eval()
-    worst, agree, positions = 1.0, 0, 0
-    for text, ids, mine in zip(PROMPTS, prompts, ours):
-        with torch.no_grad():
-            theirs = hf(torch.tensor([ids])).logits[0].float().numpy()
-        cosines = [cosine(a, b) for a, b in zip(mine, theirs)]
-        same = int((mine.argmax(-1) == theirs.argmax(-1)).sum())
-        worst, agree, positions = min(worst, min(cosines)), agree + same, positions + len(ids)
-        top_mine = [tokenizer.decode([t]) for t in np.argsort(-mine[-1])[:5]]
-        top_theirs = [tokenizer.decode([t]) for t in np.argsort(-theirs[-1])[:5]]
-        print(f"{text[:50]:50}  lowest cosine {min(cosines):.5f}, same next token {same}/{len(ids)}")
-        print(f"    first words, MLX: {top_mine}\n    first words, TII: {top_theirs}")
-    top1 = agree / positions
-    ok = layer_cos >= MIN_LAYER and worst >= MIN_COSINE and top1 >= MIN_TOP1
-    print(f"lowest cosine {worst:.5f}, same next token at {top1:.1%} of positions")
+    tii = [run(hf, ids) for ids in prompts]
+
+    # TII's own code in float32: how far its bf16 run is from exact, the most MLX can be expected to match.
+    hf.float()
+    for module in hf.modules():
+        if isinstance(module, BitLinear):
+            module.dtype = torch.float32
+    exact = [run(hf, ids) for ids in prompts]
+
+    print("\nMLX against TII (bf16):")
+    worst, top1 = compare(prompts, ours, tii, tokenizer, "MLX")
+    print("\nTII (bf16) against TII (float32), the yardstick:")
+    floor_worst, floor_top1 = compare(prompts, tii, exact, tokenizer, "TII bf16")
+    print("\nMLX against TII (float32):")
+    exact_worst, exact_top1 = compare(prompts, ours, exact, tokenizer, "MLX")
+
+    close = worst >= MIN_COSINE and top1 >= MIN_TOP1
+    within = exact_worst >= floor_worst - 0.01 and exact_top1 >= floor_top1 - 0.02
+    ok = layer_cos >= MIN_LAYER and (close or within)
+    print(f"\nMLX to TII bf16: lowest cosine {worst:.5f}, same next token {top1:.1%}")
+    print(f"MLX to exact: lowest cosine {exact_worst:.5f}, same next token {exact_top1:.1%}; "
+          f"TII's own bf16 to exact: {floor_worst:.5f}, {floor_top1:.1%}")
     print("OK: MLX matches TII's reference." if ok else "FAILED: MLX does not match TII's reference closely enough.")
     return 0 if ok else 1
+
+
+def run(hf, ids):
+    import torch
+
+    with torch.no_grad():
+        return hf(torch.tensor([ids])).logits[0].float().numpy()
+
+
+def compare(prompts, first, second, tokenizer, name) -> tuple[float, float]:
+    """Lowest cosine of the logits at any position, and the share of positions with the same next token."""
+    import numpy as np
+
+    worst, agree, positions = 1.0, 0, 0
+    for text, ids, a, b in zip(PROMPTS, prompts, first, second):
+        cosines = [cosine(x, y) for x, y in zip(a, b)]
+        low = int(np.argmin(cosines))
+        same = int((a.argmax(-1) == b.argmax(-1)).sum())
+        worst, agree, positions = min(worst, cosines[low]), agree + same, positions + len(ids)
+        print(f"  {text[:46]:46}  lowest cosine {cosines[low]:.5f} at token {low} "
+              f"({tokenizer.decode([ids[low]])!r}), same next token {same}/{len(ids)}")
+        print(f"      next words, {name}: {[tokenizer.decode([t]) for t in np.argsort(-a[-1])[:5]]}")
+        print(f"      next words, other: {[tokenizer.decode([t]) for t in np.argsort(-b[-1])[:5]]}")
+    return worst, agree / positions
 
 
 if __name__ == "__main__":

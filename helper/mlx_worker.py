@@ -122,19 +122,39 @@ def round_bitnet_activations() -> None:
     """Make mlx-lm's BitLinear compute what transformers' BitLinear does, the code Falcon3
     1.58-bit was trained and published with: each token's inputs are rounded to 8-bit levels
     (127 / its largest value), the packed ternary weights multiply those whole numbers, and
-    the result is divided by both scales. mlx-lm's kernel alone multiplies the inputs unrounded."""
+    the result is divided by both scales. mlx-lm's kernel alone multiplies the inputs unrounded.
+
+    Each step is in the weights' dtype (bf16) and in transformers' order, since a scale or a
+    product rounded differently moves inputs across a rounding step, and that grows over 40 layers."""
     import mlx.core as mx
-    from mlx_lm.models.bitlinear_layers import BitLinear
+    from mlx_lm.models.bitlinear_layers import BitLinear, _bitlinear_kernel
 
     if getattr(BitLinear, "_rounds_inputs", False):
         return
 
+    def ternary_product(self, whole):
+        """The packed weights times the inputs, with no scale, in the inputs' dtype."""
+        shape = whole.shape
+        flat = whole.reshape(-1, shape[-1])
+        out = _bitlinear_kernel(
+            inputs=[flat, self.weight, mx.ones((1,), whole.dtype)],
+            template=[("T", whole.dtype), ("invert_weight_scales", False),
+                      ("in_features", flat.shape[1]), ("out_features", self.out_features)],
+            grid=(32, flat.shape[0] * self.out_features // 4, 1),
+            threadgroup=(32, 1, 1),
+            output_shapes=[(flat.shape[0], self.out_features)],
+            output_dtypes=[whole.dtype],
+        )[0]
+        return out.reshape(*shape[:-1], self.out_features)
+
     def __call__(self, x):
         dtype = self.weight_scale.dtype
-        wide = x.astype(mx.float32)
-        scale = 127.0 / mx.maximum(mx.abs(wide).max(axis=-1, keepdims=True), 1e-5)
-        whole = mx.clip(mx.round(wide * scale), -128, 127).astype(dtype)
-        y = (self.execute_matmul_kernel(whole, self.weight).astype(mx.float32) / scale).astype(dtype)
+        x = x.astype(dtype)
+        largest = mx.maximum(mx.abs(x).max(axis=-1, keepdims=True), mx.array(1e-5, dtype))
+        scale = mx.array(127, dtype) / largest
+        whole = mx.clip(mx.round(x * scale), -128, 127)
+        scales = scale * self.weight_scale if self.invert_weight_scales else scale / self.weight_scale
+        y = ternary_product(self, whole) / scales
         return y if self.bias is None else y + self.bias
 
     BitLinear.__call__ = __call__
