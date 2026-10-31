@@ -105,8 +105,10 @@ Each one is checked against its makers' own code before it is used.
 - [x] mlx-lm multiplies a layer's inputs unrounded; TII's reference (transformers' BitLinear) rounds each
   token's inputs to 8-bit levels first, as the model was trained. The worker does the same
   (`round_bitnet_activations`).
-- [ ] On the Mac: `tests/check_falcon.py` matches TII's reference (one layer, then whole-prompt logits).
-- [ ] Add it to the suggested models once it passes.
+- [x] On the Mac: `tests/check_falcon.py` matches TII's reference (one layer, then whole-prompt logits).
+  MLX is closer to TII's code in float32 than TII's own bf16 run is; the few next tokens it picks
+  differently are near ties ([#6](https://github.com/Raiden-Makoto/HikariLM/issues/6)).
+- [x] Add it to the suggested models once it passes.
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
   Picture setup in the page downloads and converts it, with progress.
 - [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.

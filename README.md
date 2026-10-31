@@ -29,6 +29,9 @@ If you are not sure where to start, these fit a Mac with less than 18 GB of RAM 
 | Questions about code | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
 | General chat, with thinking | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
+| General chat, the smallest | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+
+Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM runs TII's files as they are and computes each layer the way TII's code does; `tests/check_falcon.py` compares the two.
 
 With more memory, take bigger ones or less quantized ones (8-bit instead of 4-bit, say) from [mlx-community](https://huggingface.co/mlx-community).
 
