@@ -27,7 +27,7 @@ def main():
     if "broken" in args.model:
         send({"error": "The model could not be loaded: broken on purpose"})
         return
-    send({"ready": True, "seconds": 0.1})
+    send({"ready": True, "seconds": 0.1, "memory": 600})
     commands, stop = queue.Queue(), threading.Event()
 
     def read():
@@ -65,7 +65,8 @@ def main():
                 break
             if last == "slow":
                 time.sleep(0.01)
-        send({"done": True, "stopped": stop.is_set(), "reason": "stop", "prompt_tokens": 11, "tokens": count})
+        send({"done": True, "stopped": stop.is_set(), "reason": "stop", "prompt_tokens": 11, "tokens": count,
+              "memory": 700})
 
 
 if __name__ == "__main__":

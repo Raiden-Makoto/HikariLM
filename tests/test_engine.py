@@ -103,7 +103,17 @@ class EngineTest(unittest.TestCase):
         self.assertEqual("".join(e["message"]["content"] for e in events), "echo: hello there")
         self.assertTrue(events[-1]["done"])
         self.assertEqual((events[-1]["prompt_eval_count"], events[-1]["eval_count"]), (11, 3))
-        self.assertEqual(engine.running(), [{"name": CODER, "size": 1000, "expires": None}])
+        self.assertEqual(engine.running(), [{"name": CODER, "size": 700, "expires": None}])
+
+    def test_memory_is_measured_not_taken_from_the_files(self):
+        self.assertEqual(engine.sizes()[CODER], 1000)
+        self.chat(CODER, "hi")
+        # Loaded, MLX counted 600 bytes of weights; after a reply 700 with the kept prompt cache.
+        self.assertEqual(engine.sizes()[CODER], 600)
+        self.assertEqual(engine.running()[0]["size"], 700)
+        engine.unload()
+        self.assertEqual(engine.sizes()[CODER], 600)
+        self.assertEqual(engine.sizes()[R1], 1000)
 
     def test_sends_options_and_think(self):
         sent = json.loads(self.chat(R1, "options", num_ctx=4096, num_predict=200, think=False)[0]["message"]["content"])
