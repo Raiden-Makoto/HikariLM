@@ -12,6 +12,8 @@ export const narrow = window.matchMedia("(max-width: 720px)");
 export const isMac = /mac|iphone|ipad/i.test(navigator.platform || "");
 // How a Cmd (Mac) or Ctrl (elsewhere) shortcut is written on the page.
 export const modKeys = (key) => (isMac ? "⌘" : "Ctrl+") + key;
+// Cmd/Ctrl+L belongs to the browser (it jumps to the address bar before the page hears it).
+export const linesKeys = () => (isMac ? "⇧⌘K" : "Ctrl+Shift+K");
 
 export function plainError(message) {
   if (message.includes("not reachable")) return "Ollama is not running.";
@@ -57,8 +59,8 @@ function greeting(now = new Date()) {
 // The code editor takes text and code only, so it does not offer PDFs or pictures.
 export function welcomeHint() {
   return document.body.classList.contains("view-files")
-    ? "Ask about the open file: " + modKeys("K") + " adds it to the message, " + modKeys("L") +
-      " adds the highlighted lines. Or paste some code, or attach a text or code file."
+    ? "Ask about the open file: " + modKeys("K") + " adds it to the message, " + linesKeys() +
+      " or a right-click adds the highlighted lines. Or paste some code, or attach a text or code file."
     : "Ask a question, paste some code, or drop in a file, PDF, or picture.";
 }
 

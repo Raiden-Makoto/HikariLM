@@ -48,7 +48,7 @@ ollama pull qwen2.5-coder:7b && ollama pull gemma3 && ollama pull nomic-embed-te
 |---|---|
 | ⌘B | Hide or show the chat list, or the file list in the code editor |
 | ⌘K | Code editor: add the open file to your message |
-| ⌘L | Code editor: add the highlighted lines, or the cursor's line |
+| ⇧⌘K | Code editor: add the highlighted lines, or the cursor's line (also right-click, Add code to chat) |
 | ⌃⌥N | New chat (change it in Settings) |
 | ⌘S | Code editor: save |
 | ⌘⏎ | Code editor: accept all changes from Apply |

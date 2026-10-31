@@ -1,14 +1,14 @@
 // Keyboard shortcuts for the whole page, and the new chat one the user can change.
-import { isMac, modKeys } from "./core.js";
+import { isMac, linesKeys, modKeys } from "./core.js";
 import { inCodeView } from "./models.js";
 import { newChat } from "./chats.js";
 import { setSidebar } from "./page.js";
 import { setFilesHidden } from "./layout.js";
 import { askAbout } from "./file-actions.js";
 
-// Cmd (Mac) or Ctrl (elsewhere) with B, K or L is fixed:
+// Cmd (Mac) or Ctrl (elsewhere) with B or K is fixed:
 //   B hides and shows the side list: the chats in Chat, the files in the code editor.
-//   K adds the open file to the message, L its highlighted lines (code editor only).
+//   K adds the open file to the message, Shift+K its highlighted lines (code editor only).
 // New chat is Ctrl+Option+N (Ctrl+Alt+N) unless the user picks another in Settings.
 const NEW_CHAT_KEY = "hikarilm-new-chat-keys";
 const DEFAULT_NEW_CHAT = { ctrl: true, alt: true, shift: false, meta: false, code: "KeyN" };
@@ -39,12 +39,12 @@ function keysLabel(keys) {
 const matches = (keys, event) => event.code === keys.code && event.ctrlKey === keys.ctrl &&
   event.altKey === keys.alt && event.shiftKey === keys.shift && event.metaKey === keys.meta;
 
-// With Cmd/Ctrl alone: new window, new tab, close tab and quit belong to the
-// browser; the rest are the page's and the editor's (side list, add file, add
-// lines, save, find, go to line, next match, undo, redo, copy, paste, cut,
-// select all, comment).
-const BROWSER_KEYS = ["n", "t", "w", "q"];
-const TAKEN_KEYS = ["b", "k", "l", "s", "f", "g", "d", "z", "y", "c", "v", "x", "a", "slash"];
+// With Cmd/Ctrl alone: new window, new tab, close tab, quit and the address
+// bar belong to the browser; the rest are the page's and the editor's (side
+// list, add file, save, find, go to line, next match, undo, redo, copy, paste,
+// cut, select all, comment). Cmd/Ctrl+Shift+K adds the highlighted lines.
+const BROWSER_KEYS = ["n", "t", "w", "q", "l"];
+const TAKEN_KEYS = ["b", "k", "s", "f", "g", "d", "z", "y", "c", "v", "x", "a", "slash"];
 
 // Why a combination cannot be the new chat shortcut, or "" if it can.
 function refusal(keys) {
@@ -52,7 +52,7 @@ function refusal(keys) {
   const modOnly = (isMac ? keys.meta && !keys.ctrl : keys.ctrl && !keys.meta) && !keys.alt;
   const key = keyName(keys.code).toLowerCase();
   if (modOnly && BROWSER_KEYS.includes(key)) return "The browser keeps " + keysLabel(keys) + " for itself.";
-  if (modOnly && !keys.shift && TAKEN_KEYS.includes(key)) return keysLabel(keys) + " is already used here.";
+  if (modOnly && (keys.shift ? key === "k" : TAKEN_KEYS.includes(key))) return keysLabel(keys) + " is already used here.";
   return "";
 }
 
@@ -97,13 +97,13 @@ function onKey(event) {
     return;
   }
   const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-  if (!mod || event.altKey || event.shiftKey) return;
+  if (!mod || event.altKey) return;
   const key = event.key.toLowerCase();
-  if (key === "b") {
+  if (key === "b" && !event.shiftKey) {
     if (inCodeView()) setFilesHidden(!document.body.classList.contains("files-hidden"));
     else setSidebar(document.body.classList.contains("sidebar-closed"));
-  } else if ((key === "k" || key === "l") && inCodeView()) {
-    askAbout(key === "l");
+  } else if (event.code === "KeyK" && inCodeView()) {
+    askAbout(event.shiftKey);
   } else {
     return;
   }
@@ -133,10 +133,10 @@ export function start() {
     showKeys();
   });
   document.querySelector("#keys-fixed").textContent = modKeys("B") + " hides or shows the chats, or the files in the code editor. " +
-    "In the code editor, " + modKeys("K") + " adds the open file to the message and " + modKeys("L") +
-    " adds the highlighted lines (or the line the cursor is on).";
+    "In the code editor, " + modKeys("K") + " adds the open file to the message and " + linesKeys() +
+    " (or right-click, Add code to chat) adds the highlighted lines, or the line the cursor is on.";
   document.querySelector("#toggle-sidebar").title = "Hide or show chats (" + modKeys("B") + ")";
   document.querySelector("#disk-note").textContent = "Modifying this file will edit its contents on disk. " +
-    modKeys("K") + " adds the file to the message, " + modKeys("L") + " the highlighted lines.";
+    modKeys("K") + " adds the file to the message, " + linesKeys() + " or a right-click the highlighted lines.";
   showKeys();
 }

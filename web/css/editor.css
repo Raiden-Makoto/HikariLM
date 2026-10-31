@@ -21,6 +21,36 @@ body.view-files #pane-resize {
 }
 #pane-resize:hover::after, #pane-resize:focus-visible::after, body.resizing #pane-resize::after { background: var(--you); }
 #pane-resize:focus-visible { outline: none; }
+#editor-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 13rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+#editor-menu[hidden] { display: none; }
+#editor-menu button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+#editor-menu button:hover, #editor-menu button:focus-visible { background: var(--hover); outline: none; }
+#editor-menu button:disabled { opacity: 0.45; cursor: default; background: none; }
+#editor-menu kbd { font: inherit; opacity: 0.6; }
+#editor-menu hr { margin: 0.25rem 0.3rem; border: 0; border-top: 1px solid var(--line); }
 body.resizing { cursor: col-resize; user-select: none; }
 body.resizing iframe, body.resizing textarea { pointer-events: none; }
 body.files-hidden .file-side { display: none; }

@@ -322,6 +322,13 @@ export function createEditor(parent, { onChange, onSelection, onSave, onReview }
       const { from, to } = view.state.selection.main;
       return { from, to };
     },
+    // Put the cursor at a point on the screen, as a click there would.
+    cursorAt(x, y) {
+      const pos = view.posAtCoords({ x, y });
+      if (pos === null) return;
+      view.dispatch({ selection: { anchor: pos } });
+      view.focus();
+    },
     hasFocus: () => view.hasFocus,
     focus: () => view.focus(),
   };
