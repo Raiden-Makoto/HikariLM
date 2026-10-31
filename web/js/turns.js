@@ -8,7 +8,7 @@ import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
 import { applyCode, syncApplyButtons } from "./apply.js";
 
-export function addTurn(role, text, thought, files, message) {
+export function addTurn(role, text, thought, files, message, question) {
   if (role === "assistant" && text) ({ text, thought } = splitStrayThinking(text, thought));
   document.querySelector("#empty")?.remove();
   const block = document.createElement("article");
@@ -51,18 +51,17 @@ export function addTurn(role, text, thought, files, message) {
     thinking.remove();
     box.remove();
   } else if (text) {
-    updateApply(answer);
+    updateApply(answer, question);
   }
   log.append(block);
   scrollLog();
   return { block, thinking, thought: view, answer };
 }
 
-// In the code editor, a finished reply's code blocks get Apply, as in Cursor:
-// a block that names a file goes into that file, and one with no name goes
-// into the open file only if it is in that file's language. Commands, output
-// and quoted lines get none. Drawn again whenever the reply is.
-export function updateApply(answer) {
+// In the code editor, a finished reply's code blocks get Apply, as in Cursor. Which
+// ones show is applyTarget's call (edit-blocks.js), from the question this reply
+// answers: { text, files } of the user's message. Drawn again whenever the reply is.
+export function updateApply(answer, question) {
   answer.afterRender = () => {
     for (const box of answer.querySelectorAll(".code-block:not([data-quote])")) {
       const path = box.dataset.path || "";
@@ -70,8 +69,10 @@ export function updateApply(answer) {
       button.type = "button";
       button.className = "code-apply";
       button.textContent = "Apply";
-      if (path) button.title = "Put this into " + path + ", to accept or reject change by change";
-      else button.dataset.lang = box.dataset.lang;
+      button.hidden = true;
+      button.dataset.lang = box.dataset.lang || "";
+      button.dataset.path = path;
+      button.question = question;
       button.addEventListener("click", () => applyCode(box.querySelector("code").textContent, path));
       box.querySelector(".code-head").append(button);
     }
@@ -86,7 +87,11 @@ export function renderLog() {
     return;
   }
   log.replaceChildren();
-  for (const message of state.messages) addTurn(message.role, message.content, message.thinking, message.files, message);
+  let question = null;
+  for (const message of state.messages) {
+    if (message.role === "user") question = { text: message.content, files: message.files };
+    addTurn(message.role, message.content, message.thinking, message.files, message, question);
+  }
 }
 
 // A picture reply is kept in the chat as its notes; the file is shown by

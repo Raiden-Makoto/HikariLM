@@ -206,8 +206,11 @@ async function showMemory() {
     const body = await (await fetch("/api/context?model=" + encodeURIComponent(model))).json();
     const parts = [];
     if (body.memory) {
-      parts.push("This computer: " + gigabytes(body.memory.total) +
-        (body.memory.available ? ", " + gigabytes(body.memory.available) + " free." : "."));
+      const { total, available, cached } = body.memory;
+      parts.push("This computer: " + gigabytes(total) +
+        (available ? ", " + gigabytes(available) + " free" +
+          (cached ? " (" + gigabytes(Math.min(cached, available)) + " of it cached files macOS hands back when needed)" : "") +
+          "." : "."));
     } else {
       parts.push("Memory is not checked, because Ollama runs on another computer or its memory could not be read. " +
         "Set HIKARILM_MEMORY_GB to that computer's memory to turn the check on.");

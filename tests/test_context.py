@@ -142,6 +142,9 @@ class MacMemoryTest(unittest.TestCase):
         old = (20000 + 290000 + 5000 + 10000) * 16384
         self.assertGreater(budget.mac_available(VM_STAT, self.TOTAL), old + 2 * budget.GIB)
 
+    def test_cached_part_is_reported(self):
+        self.assertEqual(budget.mac_cached(VM_STAT, self.TOTAL), (500000 + 10000) * 16384)
+
     def test_older_macos(self):
         stats = "\n".join(line for line in VM_STAT.splitlines()
                           if not line.startswith(("Anonymous", "File-backed")))

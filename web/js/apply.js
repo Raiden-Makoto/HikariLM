@@ -10,7 +10,7 @@ import { openFileAt, refreshList } from "./file-actions.js";
 import { closeFile } from "./folder-view.js";
 import { refreshState } from "./models.js";
 import { setBusy } from "./turns.js";
-import { applyPrompt, fileFromReply, fitsOpenFile, isMarker, mergeEdit, resolvePath } from "./edit-blocks.js";
+import { applyPrompt, applyTarget, fileFromReply, isMarker, mergeEdit, resolvePath } from "./edit-blocks.js";
 
 const reviewBox = document.querySelector("#review");
 const reviewText = document.querySelector("#review-text");
@@ -19,12 +19,18 @@ const rejectButton = document.querySelector("#review-reject");
 // A file Apply made, still empty on disk. Rejecting its code removes it again.
 let madeForApply = "";
 
-// A block with no file name shows Apply only while a file in its language is open.
+// Each Apply shows only where applyTarget says the block belongs, which can change as
+// files open and the file list loads.
 export function syncApplyButtons() {
-  for (const button of document.querySelectorAll(".code-apply[data-lang]")) {
-    const fits = fitsOpenFile(button.dataset.lang, state.openPath);
-    button.hidden = !fits;
-    if (fits) button.title = "Put this into " + state.openPath + ", to accept or reject change by change";
+  const place = {
+    files: state.allFiles || [], folderName: state.folderName || "", openPath: state.openPath || "",
+    root: state.source?.kind === "helper" ? state.source.root : "",
+  };
+  for (const button of document.querySelectorAll(".code-apply")) {
+    const target = applyTarget({ lang: button.dataset.lang || "", path: button.dataset.path || "" },
+      button.question, place);
+    button.hidden = !target;
+    if (target) button.title = "Put this into " + target + ", to accept or reject change by change";
   }
 }
 

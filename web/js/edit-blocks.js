@@ -22,8 +22,9 @@ export function editorPrompt(folder, openPath) {
       "comment style (// ... existing code ... in JavaScript, # ... existing code ... in Python). " +
       "For a new file, or one you rewrite completely, write all of it with no such comments. One block per file.",
     "",
-    "Anything that is not a change to a file, such as commands to run, output or a short example, goes in a plain " +
-      "block with only the language (```bash) and no path.",
+    "Put a path on a block only when it changes a file in this project, or writes a new file the user asked for. " +
+      "Anything else, such as an example to explain something, commands to run or output, goes in a plain " +
+      "block with only the language (```python, ```bash) and no path.",
   ].join("\n");
 }
 
@@ -97,6 +98,49 @@ export function resolvePath(named, files, folderName, root) {
   const under = files.filter((file) => file.endsWith("/" + path));
   if (under.length === 1) return { path: under[0], exists: true };
   return { path, exists: false };
+}
+
+// The project files a question is about: the ones attached from the editor
+// (Cmd/Ctrl+K adds "folder/path", Cmd/Ctrl+L "folder/path lines 3–9") and any it names.
+export function askedFiles(question, files, folderName) {
+  const asked = new Set();
+  for (const file of question?.files || []) {
+    let name = String(file.name || "").replace(/ lines? \d+(–\d+)?$/, "");
+    if (folderName && name.startsWith(folderName + "/")) name = name.slice(folderName.length + 1);
+    if (files.includes(name)) asked.add(name);
+  }
+  const text = String(question?.text || "");
+  for (const file of files) {
+    const base = file.split("/").pop();
+    if (base.length > 2 && text.includes(base) && mentions(text, base)) asked.add(file);
+  }
+  return asked;
+}
+
+function mentions(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("(^|[^\\w.-])" + escaped + "(?![\\w-])").test(text);
+}
+
+const WANTS_FILE = /\b(create|make|add|write|generate|scaffold|set up|new)\b[^.?!\n]*\b(files?|modules?|scripts?|components?|pages?|tests?|classes?)\b/i;
+
+// Which file a reply's code block may be applied to, or "" for none. As in Cursor's
+// editor chat, Apply belongs to a question about the project's code: one with a file
+// attached or named. Then a block goes into the existing file it names, into a new
+// file only if the question asks for one (or names it), and a block with no name
+// into the open file only if the question was about that file and it is in its language.
+export function applyTarget(block, question, place) {
+  const { files = [], folderName = "", root = "", openPath = "" } = place;
+  if (block.quote || (!block.path && NOT_FILES.has(block.lang))) return "";
+  const asked = askedFiles(question, files, folderName);
+  const text = String(question?.text || "");
+  if (block.path) {
+    const found = resolvePath(block.path, files, folderName, root);
+    if (!found) return "";
+    if (found.exists) return asked.size ? found.path : "";
+    return WANTS_FILE.test(text) || mentions(text, found.path.split("/").pop()) ? found.path : "";
+  }
+  return openPath && asked.has(openPath) && fitsOpenFile(block.lang, openPath) ? openPath : "";
 }
 
 // "// ... existing code ...", "# ...", "<!-- ... -->", "/* rest of the code */".

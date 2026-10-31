@@ -71,6 +71,28 @@ def mac_available(stats: str, total: int) -> int:
     return min(total, sum((pages(label) or 0) for label in labels) * page)
 
 
+def mac_cached(stats: str, total: int) -> int:
+    """Cached files and purgeable memory, which mac_available already counts as free."""
+    page = int(re.search(r"page size of (\d+)", stats).group(1))
+    pages = 0
+    for label in ("File-backed pages", "Pages purgeable"):
+        found = re.search(re.escape(label) + r":\s+(\d+)", stats)
+        pages += int(found.group(1)) if found else 0
+    return min(total, pages * page)
+
+
+def cached() -> int | None:
+    """How much of the free memory is cached files macOS drops when a program needs the room."""
+    if sys.platform != "darwin" or os.environ.get("HIKARILM_MEMORY_GB"):
+        return None
+    try:
+        total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
+                                   timeout=5).stdout.strip())
+        return mac_cached(subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=5).stdout, total)
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return None
+
+
 def _mac() -> tuple[int, int | None]:
     total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
                                timeout=5).stdout.strip())
@@ -209,7 +231,7 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
     result["max_fit"] = fit
     if fit < MIN_CONTEXT:
         cache = fixed + cost * MIN_CONTEXT
-        free = "" if available is None else f", {_gb(available)} free now" + (
+        free = "" if available is None else f", {_gb(available)} free now counting cached files" + (
             f" plus {_gb(leaving)} from the model it replaces" if leaving else "")
         raise NoRoom(
             f"Not enough memory to run {model} safely. It needs about {_gb(size + cache + RESERVE)} "

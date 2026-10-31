@@ -8,6 +8,7 @@ import {
 } from "./files.js";
 import { localSource, recallHandle, rememberHandle } from "./local-folder.js";
 import { openFileAt } from "./file-actions.js";
+import { syncApplyButtons } from "./apply.js";
 
 export function closeFile() {
   state.openToken += 1;
@@ -24,6 +25,7 @@ export function closeFile() {
 export function renderFiles() {
   const files = state.allFiles;
   const cut = state.filesCut;
+  syncApplyButtons();
   const needle = fileFilter.value.trim().toLowerCase();
   const shown = needle ? files.filter((path) => path.toLowerCase().includes(needle)) : files;
   fileList.replaceChildren();

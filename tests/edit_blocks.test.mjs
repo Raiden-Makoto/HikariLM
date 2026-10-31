@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { fileFromReply, fitsOpenFile, isMarker, mergeEdit, parseInfo, resolvePath } =
+const { applyTarget, askedFiles, fileFromReply, fitsOpenFile, isMarker, mergeEdit, parseInfo, resolvePath } =
   await import(path.join(here, "..", "web", "js", "edit-blocks.js"));
 
 const cases = [];
@@ -241,6 +241,45 @@ for (const [name, file, edit, expect] of LANGUAGES) {
     else assert.equal(merged, expect(file));
   });
 }
+
+const project = { files: ["shop.py", "src/app.py", "web/app.js", "README.md"], folderName: "shop", root: "", openPath: "shop.py" };
+const general = { text: "how do decorators work in python?" };
+const aboutOpen = { text: "why does this fail?", files: [{ name: "shop/shop.py" }] };
+
+test("a general question gets no Apply, whatever the blocks are named", () => {
+  assert.equal(applyTarget({ lang: "python", path: "" }, general, project), "");
+  assert.equal(applyTarget({ lang: "python", path: "shop.py" }, general, project), "");
+  assert.equal(applyTarget({ lang: "python", path: "example.py" }, general, project), "");
+  assert.equal(applyTarget({ lang: "python", path: "src/app.py" }, undefined, project), "");
+});
+
+test("a question about the open file: its language goes there, named files go to themselves", () => {
+  assert.equal(applyTarget({ lang: "python", path: "" }, aboutOpen, project), "shop.py");
+  assert.equal(applyTarget({ lang: "javascript", path: "" }, aboutOpen, project), "");
+  assert.equal(applyTarget({ lang: "bash", path: "" }, aboutOpen, project), "");
+  assert.equal(applyTarget({ lang: "python", path: "src/app.py" }, aboutOpen, project), "src/app.py");
+  assert.equal(applyTarget({ lang: "python", path: "example.py" }, aboutOpen, project), "", "a new file nobody asked for");
+  assert.equal(applyTarget({ lang: "python", path: "shop.py", quote: { from: 1, to: 3 } }, aboutOpen, project), "");
+});
+
+test("lines from Cmd/Ctrl+L and a file named in the text count", () => {
+  const lines = { text: "tidy this", files: [{ name: "shop/shop.py lines 3–9" }] };
+  assert.deepEqual([...askedFiles(lines, project.files, "shop")], ["shop.py"]);
+  const named = { text: "the total in src/app.py is off by one" };
+  assert.deepEqual([...askedFiles(named, project.files, "shop")], ["src/app.py"]);
+  assert.equal(applyTarget({ lang: "python", path: "src/app.py" }, named, project), "src/app.py");
+  assert.equal(applyTarget({ lang: "python", path: "" }, named, project), "", "the open file was not asked about");
+  assert.deepEqual([...askedFiles({ text: "myshop.py and shop.pyc" }, project.files, "shop")], []);
+});
+
+test("a new file only when the question asks for one or names it", () => {
+  assert.equal(applyTarget({ lang: "python", path: "tests/test_shop.py" }, { text: "write tests for the shop" }, project),
+    "tests/test_shop.py");
+  assert.equal(applyTarget({ lang: "python", path: "utils.py" }, { text: "put the helpers in utils.py" }, project),
+    "utils.py");
+  assert.equal(applyTarget({ lang: "python", path: "utils.py" }, { text: "what does a utility do?" }, project), "");
+  assert.equal(applyTarget({ lang: "", path: "notes/todo.md" }, { text: "create a todo file" }, project), "notes/todo.md");
+});
 
 let failed = 0;
 for (const [name, run] of cases) {

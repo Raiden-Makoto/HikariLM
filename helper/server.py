@@ -105,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
             out = {"memory": None, "model": model}
             mem = budget.memory()
             if mem:
-                out["memory"] = {"total": mem[0], "available": mem[1]}
+                out["memory"] = {"total": mem[0], "available": mem[1], "cached": budget.cached()}
             try:
                 settings = context.load_settings()
                 room = self._room(model, settings)

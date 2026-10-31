@@ -312,7 +312,7 @@ async function send() {
     if (answer) finishMarkdown(reply.answer, answer);
     if (thought) drawThought();
     if (answer || thought) {
-      if (answer) updateApply(reply.answer);
+      if (answer) updateApply(reply.answer, { text: content, files });
       state.messages.push({
         role: "assistant", content: answer, thinking: thought || undefined, model, usage,
         thoughtSeconds: thought ? Math.round(thinkSeconds()) : undefined, thinkingCut: thinkingCut || undefined,
