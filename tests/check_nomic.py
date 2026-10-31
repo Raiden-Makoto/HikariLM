@@ -5,8 +5,11 @@ PyTorch model (their remote code, as the model card runs it), then compares.
 Run ./start.sh once first so the weights are in the Hugging Face cache, then:
 
     python3 -m venv /tmp/nomic-check
-    /tmp/nomic-check/bin/pip install mlx transformers torch einops
+    /tmp/nomic-check/bin/pip install mlx "transformers<5" torch einops
     /tmp/nomic-check/bin/python tests/check_nomic.py
+
+Nomic's code needs transformers 4: it calls get_extended_attention_mask, which
+transformers 5 removed.
 """
 
 import sys
@@ -46,6 +49,12 @@ def nomic_reference(folder: Path) -> list[list[float]]:
 
 
 def main() -> int:
+    import transformers
+
+    if int(transformers.__version__.split(".")[0]) >= 5:
+        print(f"transformers {transformers.__version__} cannot run Nomic's code. Install transformers 4 first:\n"
+              f"    {sys.executable} -m pip install \"transformers<5\"")
+        return 2
     folder = engine.embed_folder()
     if folder is None:
         print("nomic-embed-text is not downloaded. Run ./start.sh once, then this again.")
