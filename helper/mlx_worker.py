@@ -27,6 +27,51 @@ import time
 
 THINK_OPEN = "<think>"
 EMPTY_THINK = "<think>\n\n</think>\n\n"
+# Where a turn ends, in the text of the models we run. A model whose config names a different
+# end token (Qwen2.5 says <|endoftext|>) would otherwise write these and keep going.
+TURN_ENDS = ("<|im_end|>", "<|endoftext|>", "<|im_start|>", "<end_of_turn>", "<start_of_turn>",
+             "<｜end▁of▁sentence｜>", "<｜User｜>", "<|eot_id|>")
+
+
+class TurnEnd:
+    """Cuts a reply at the first turn marker in its text. A marker can arrive across
+    pieces, so text that could be the start of one is held back until the next piece."""
+
+    def __init__(self) -> None:
+        self.buffer = ""
+        self.ended = False
+
+    def feed(self, text: str) -> str:
+        self.buffer += text
+        found = [at for at in (self.buffer.find(marker) for marker in TURN_ENDS) if at >= 0]
+        if found:
+            out, self.buffer, self.ended = self.buffer[:min(found)], "", True
+            return out
+        keep = max((n for marker in TURN_ENDS for n in range(1, min(len(marker), len(self.buffer)) + 1)
+                    if self.buffer.endswith(marker[:n])), default=0)
+        out, self.buffer = self.buffer[:len(self.buffer) - keep], self.buffer[len(self.buffer) - keep:]
+        return out
+
+    def flush(self) -> str:
+        out, self.buffer = self.buffer, ""
+        return out
+
+
+def _stop_at_turn_ends(tokenizer) -> None:
+    """Add the tokenizer's own end token, and the turn markers it has, to what ends a reply."""
+    add = getattr(tokenizer, "add_eos_token", None)
+    vocab = getattr(tokenizer, "get_vocab", lambda: {})() or {}
+    wanted = [getattr(tokenizer, "eos_token", None)] + [marker for marker in TURN_ENDS if marker in vocab]
+    for token in wanted:
+        if not token:
+            continue
+        try:
+            if add:
+                add(token)
+            elif isinstance(getattr(tokenizer, "_eos_token_ids", None), set) and token in vocab:
+                tokenizer._eos_token_ids.add(vocab[token])
+        except (ValueError, KeyError, AttributeError):
+            pass
 
 _out_lock = threading.Lock()
 
@@ -76,6 +121,7 @@ class TextModel:
 
         self.mx, self.stream_generate, self.caches = mx, stream_generate, cache_module
         self.model, self.tokenizer = load(path)
+        _stop_at_turn_ends(self.tokenizer)
         sampling = _sampling(path)
         self.sampler = make_sampler(temp=sampling["temperature"], top_p=sampling["top_p"], top_k=sampling["top_k"])
         template = str(getattr(self.tokenizer, "chat_template", "") or "")
@@ -95,6 +141,11 @@ class TextModel:
             text += EMPTY_THINK
         elif text.rstrip().endswith(THINK_OPEN):
             # The template opens the reasoning itself; hand the tag on so it can be split off.
+            lead = THINK_OPEN + "\n"
+        elif think and not self.template_switch:
+            # R1 distills often start reasoning without writing <think>, so the helper could not
+            # tell it from the answer (or cut it at the limit). DeepSeek's advice: open it for them.
+            text += THINK_OPEN + "\n"
             lead = THINK_OPEN + "\n"
         return self.tokenizer.encode(text, add_special_tokens=False), lead
 
@@ -124,15 +175,20 @@ class TextModel:
         last = None
         pieces = self.stream_generate(self.model, self.tokenizer, fresh, max_tokens=_room(request, len(ids)),
                                       sampler=self.sampler, prompt_cache=self.cache)
+        turn = TurnEnd()
         try:
             for last in pieces:
                 made.append(last.token)
-                if last.text:
-                    yield {"text": last.text}
-                if stop.is_set():
+                text = turn.feed(last.text)
+                if text:
+                    yield {"text": text}
+                if stop.is_set() or turn.ended:
                     break
         finally:
             pieces.close()
+        rest = turn.flush()
+        if rest:
+            yield {"text": rest}
         offset = getattr(self.cache[0], "offset", None) if self.cache else None
         if isinstance(offset, int):
             self.cached = (self.cached + fresh + made)[:offset]
@@ -152,6 +208,7 @@ class VisionModel:
 
         self.mx, self.stream_generate, self.template = mx, stream_generate, apply_chat_template
         self.model, self.processor = load(path)
+        _stop_at_turn_ends(getattr(self.processor, "tokenizer", self.processor))
         self.sampling = _sampling(path)
 
     def chat(self, request: dict, stop: threading.Event):
@@ -170,14 +227,19 @@ class VisionModel:
             guess = sum(len(m["content"]) for m in chat) // 3 + 300 * len(paths)
             pieces = self.stream_generate(self.model, self.processor, prompt, image=paths or None,
                                           max_tokens=_room(request, guess), temperature=self.sampling["temperature"])
+            turn = TurnEnd()
             try:
                 for last in pieces:
-                    if last.text:
-                        yield {"text": last.text}
-                    if stop.is_set():
+                    text = turn.feed(last.text)
+                    if text:
+                        yield {"text": text}
+                    if stop.is_set() or turn.ended:
                         break
             finally:
                 pieces.close()
+            rest = turn.flush()
+            if rest:
+                yield {"text": rest}
         _clear_cache(self.mx)
         yield _counts(last, getattr(last, "prompt_tokens", 0), stop.is_set())
 

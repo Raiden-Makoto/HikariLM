@@ -197,17 +197,18 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
         return result
     total, available = mem
     leaving = sum(item["size"] for item in loaded if not item["name"].startswith("nomic-embed-text"))
-    room = total * SHARE
+    usable = total * SHARE
     if available is not None:
-        room = min(room, available + leaving)
-    room -= RESERVE + size
+        usable = min(usable, available + leaving)
+    size += int(shown.get("window_bytes") or 0)
+    room = usable - RESERVE - size
     cost = per_token(shown)
     fit = int(room // cost) // STEP * STEP if room > 0 else 0
     if trained:
         fit = min(fit, trained)
     result["max_fit"] = fit
     if fit < MIN_CONTEXT:
-        free = (available + leaving) if available is not None else total * SHARE
+        free = usable
         raise NoRoom(
             f"Not enough memory to run {model} safely. It needs about {_gb(size + RESERVE + cost * MIN_CONTEXT)}, "
             f"and about {_gb(max(0, free))} can be used now. Close some programs or choose a smaller model."

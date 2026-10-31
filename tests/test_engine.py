@@ -84,7 +84,10 @@ class EngineTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OLLAMA_NUM_PARALLEL": "4", "OLLAMA_KV_CACHE_TYPE": "q4_0"}):
             self.assertEqual(budget.per_token(coder), 28 * 4 * 256 * 2)
         self.assertEqual(budget.per_token(r1), 36 * 8 * 256 * 2)
-        self.assertEqual(budget.per_token(gemma), 48 * 8 * 512 * 2)
+        # Gemma 3: 8 of its 48 layers see the whole context; 40 keep only the last 1024 tokens.
+        self.assertEqual(budget.per_token(gemma), 8 * 8 * 512 * 2)
+        self.assertEqual(gemma["window_bytes"], 40 * 8 * 512 * 2 * 1024)
+        self.assertEqual(coder["window_bytes"], 0)
         self.assertEqual(budget.trained_context(coder), 32768)
         self.assertEqual(budget.trained_context(gemma), 131072)
         self.assertEqual(budget.default_source(coder), (8192, "model"))
@@ -133,10 +136,24 @@ class EngineTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 5)
         self.assertEqual("".join(e["message"]["content"] for e in self.chat(CODER, "after stop")), "echo: after stop")
 
-    def test_unload_ends_the_worker(self):
+    def test_unload_ends_the_worker_at_once(self):
         self.chat(CODER, "hi")
+        process = engine._worker.process
+        started = time.monotonic()
         models.unload(CODER)
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertIsNotNone(process.poll())
         self.assertEqual(engine.running(), [])
+
+    def test_memory_message_counts_what_can_really_be_used(self):
+        gib = budget.GIB
+        shown = engine.show(GEMMA)
+        with self.assertRaises(budget.NoRoom) as caught:
+            budget.plan(GEMMA, None, shown, int(11 * gib), [], (16 * gib, 15 * gib))
+        self.assertIn("about 12.0 GB can be used now", str(caught.exception))
+        room = budget.plan(GEMMA, None, shown, int(8 * gib), [], (16 * gib, 15 * gib))
+        expected = (12 * gib - budget.RESERVE - 8 * gib - shown["window_bytes"]) // budget.per_token(shown)
+        self.assertEqual(room["max_fit"], int(expected) // budget.STEP * budget.STEP)
 
     def test_crash_is_an_error_and_the_next_chat_starts_again(self):
         events = self.chat(CODER, "crash")
@@ -267,6 +284,43 @@ class WorkerPromptTest(unittest.TestCase):
         ids, _ = runner._prompt([{"role": "user", "content": "q"}], False)
         self.assertEqual(runner.tokenizer.extra, {"enable_thinking": False})
         self.assertEqual(self.text(ids), "q<A>")
+
+    def test_r1_told_to_think_has_its_reasoning_opened(self):
+        ids, lead = self.model("{{'<｜Assistant｜>'}}", "<A>")._prompt([{"role": "user", "content": "q"}], True)
+        self.assertEqual(self.text(ids), "q<A><think>\n")
+        self.assertEqual(lead, "<think>\n")
+        split = thinking.InlineThink()
+        thought, answer = split.feed(lead + "let me see")
+        self.assertEqual((thought, answer), ("\nlet me see", ""))
+
+    def test_turn_markers_end_the_reply(self):
+        turn = self.worker.TurnEnd()
+        self.assertEqual(turn.feed("def f():<|im"), "def f():")
+        self.assertEqual(turn.feed("_end|>\n<|im_start|>user"), "")
+        self.assertTrue(turn.ended)
+        turn = self.worker.TurnEnd()
+        self.assertEqual(turn.feed("if a <"), "if a ")
+        self.assertEqual(turn.feed(" b:"), "< b:")
+        self.assertFalse(turn.ended)
+        self.assertEqual(turn.feed("done<end_of_turn>"), "done")
+        turn = self.worker.TurnEnd()
+        turn.feed("x <")
+        self.assertEqual(turn.flush(), "<")
+
+    def test_tokenizer_end_tokens_are_added(self):
+        added = []
+
+        class Tokenizer:
+            eos_token = "<|im_end|>"
+
+            def add_eos_token(self, token):
+                added.append(token)
+
+            def get_vocab(self):
+                return {"<|im_end|>": 151645, "<|endoftext|>": 151643, "<|im_start|>": 151644, "hi": 1}
+
+        self.worker._stop_at_turn_ends(Tokenizer())
+        self.assertEqual(sorted(set(added)), ["<|endoftext|>", "<|im_end|>", "<|im_start|>"])
 
     def test_no_think_field_leaves_the_prompt_alone(self):
         ids, lead = self.model("x", "<A>")._prompt([{"role": "user", "content": "q"}], None)

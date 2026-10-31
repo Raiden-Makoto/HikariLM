@@ -32,7 +32,7 @@ STOP_SECONDS = 20
 DEFAULT_CONTEXT = 8192
 SCAN_SECONDS = 5
 # Settings a config leaves out because they are the library's defaults.
-DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072}}
+DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072, "sliding_window_pattern": 6}}
 # R1 distills write <think> themselves, so their templates do not show it.
 THINKERS = re.compile(r"deepseek-r1|qwq", re.IGNORECASE)
 SETUP = "MLX is not set up yet. Stop HikariLM and run ./start.sh again; it installs mlx-lm and mlx-vlm once."
@@ -197,6 +197,7 @@ def show(model: str) -> dict:
                        ("attention.key_length", "head_dim"), ("context_length", "max_position_embeddings")):
         if isinstance(text.get(field), int):
             info[f"{arch}.{key}"] = text[field]
+    window_bytes = _windowed(text, info, arch)
     capabilities = ["completion"]
     if "vision_config" in config:
         capabilities.append("vision")
@@ -204,7 +205,30 @@ def show(model: str) -> dict:
     if THINKERS.search(model) or "<think>" in template or "enable_thinking" in template:
         capabilities.append("thinking")
     default = min(trained, DEFAULT_CONTEXT) if trained else DEFAULT_CONTEXT
-    return {"model_info": info, "capabilities": capabilities, "parameters": f"num_ctx {default}", "mlx": True}
+    return {"model_info": info, "capabilities": capabilities, "parameters": f"num_ctx {default}", "mlx": True,
+            "window_bytes": window_bytes}
+
+
+def _windowed(text: dict, info: dict, arch: str) -> int:
+    """Layers that only look back a fixed window (most of Gemma 3's) keep at most that many
+    tokens, whatever the context length. They leave block_count, which budget.py multiplies by
+    the context, and come back as a fixed number of bytes instead."""
+    window = text.get("sliding_window")
+    layers = info.get(f"{arch}.block_count")
+    if not isinstance(window, int) or not isinstance(layers, int):
+        return 0
+    kinds = text.get("layer_types")
+    if isinstance(kinds, list) and kinds:
+        local = sum(1 for kind in kinds if kind == "sliding_attention")
+    elif isinstance(text.get("sliding_window_pattern"), int) and text["sliding_window_pattern"] > 0:
+        local = layers - layers // text["sliding_window_pattern"]
+    else:
+        return 0
+    heads = info.get(f"{arch}.attention.head_count") or 0
+    kv_heads = info.get(f"{arch}.attention.head_count_kv") or heads
+    key = info.get(f"{arch}.attention.key_length") or ((info.get(f"{arch}.embedding_length") or 0) // heads if heads else 0)
+    info[f"{arch}.block_count"] = layers - local
+    return int(local * kv_heads * key * 2 * 2 * window)
 
 
 class _Worker:
@@ -254,15 +278,15 @@ class _Worker:
             return {"error": "The MLX worker stopped answering."}
 
     def end(self) -> None:
+        """Kill it: it has nothing to save, and macOS takes all of its memory back at once,
+        sooner than a Python shutting down would hand it over."""
+        if self.process.poll() is None:
+            self.process.kill()
+        self.process.wait()
         try:
             self.process.stdin.close()
         except OSError:
             pass
-        try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait()
 
 
 _worker: _Worker | None = None
