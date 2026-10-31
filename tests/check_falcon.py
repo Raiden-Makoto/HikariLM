@@ -9,8 +9,8 @@ layer on random inputs, then the logits of whole prompts, MLX against PyTorch on
     /tmp/falcon-check/bin/pip install mlx mlx-lm "transformers>=4.48,<5" torch accelerate numpy
     /tmp/falcon-check/bin/python tests/check_falcon.py
 
-It needs about 9 GB free: each side holds the 4 GB model, one after the other. PyTorch on the CPU
-takes a minute or two.
+It needs about 5 GB free: the MLX model is freed before PyTorch loads its own, so only one 4 GB
+model is in memory at a time. PyTorch on the CPU takes a minute or two.
 """
 
 import gc
