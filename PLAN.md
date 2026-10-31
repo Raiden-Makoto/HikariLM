@@ -89,11 +89,12 @@ and long files fell back to shared words.
   `--embed` in a process of its own. Small (0.3 GB), so it sits beside the large model and never makes it
   leave; it is held to the same keepalive. `start.py` downloads its files once (no ONNX).
 - [x] Fake-worker tests for the embed path; notes and document vectors carry an embedder stamp.
-- [ ] On the Mac: `tests/check_nomic.py` matches Nomic's PyTorch vectors (cosine at least 0.999).
+- [x] On the Mac: `tests/check_nomic.py` matches Nomic's PyTorch vectors (cosine at least 0.999). Nomic's
+  code needs transformers 4 ([#5](https://github.com/Raiden-Makoto/HikariLM/issues/5)).
 - [x] Turn the notes back on: the indexer at start and on save, `/api/search`, `/api/notes`, and the Settings
   switch. Notes made with Ollama's nomic are indexed again once.
 - [x] Long files: the closest passages by meaning again.
-- [ ] `__version__ = "3.1.0"`, tag `v3.1.0`, once the Mac check passes.
+- [x] `__version__ = "3.1.0"`, tag `v3.1.0`, once the Mac check passes.
 
 ## v4.0.0: our own conversions, from official weights only
 
