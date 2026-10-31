@@ -22,6 +22,18 @@ IMPORT = re.compile(r'^import \{([^}]*)\} from "\./([\w-]+)\.js";\n', re.M)
 # A name not after a property dot; a spread (...name) is a real use.
 USE = r"(?<![\w$])(?:(?<=\.\.\.)|(?<!\.)){}(?![\w$])"
 BEFORE_REGEX = {"return", "typeof", "in", "of", "new", "delete", "void", "throw", "case", "else", "await", "yield"}
+KEYWORDS = {"if", "for", "while", "switch", "catch", "function", "return", "typeof", "await", "new", "import",
+            "super", "async", "yield", "void", "delete", "in", "of", "with"}
+# What the browser gives every page, as far as these modules call it.
+BROWSER = {"fetch", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "requestAnimationFrame",
+           "cancelAnimationFrame", "queueMicrotask", "structuredClone", "alert", "confirm", "prompt",
+           "encodeURIComponent", "decodeURIComponent", "encodeURI", "atob", "btoa", "parseInt", "parseFloat",
+           "isNaN", "isFinite", "String", "Number", "Boolean", "Array", "Object", "Date", "Error", "Promise", "Map",
+           "Set", "WeakMap", "RegExp", "Symbol", "JSON", "Math", "URL", "Blob", "File", "FileReader", "FormData",
+           "Option", "Image", "Event", "CustomEvent", "AbortController", "TextDecoder", "TextEncoder",
+           "ResizeObserver", "MutationObserver", "IntersectionObserver", "DOMParser", "Uint8Array", "Float64Array", "Int32Array", "BigInt", "DataView",
+           "DecompressionStream", "CompressionStream", "Response", "Headers", "Notification",
+           "getComputedStyle", "matchMedia", "open", "print", "scrollTo", "postMessage"}
 
 
 def code_only(src: str) -> str:
@@ -177,6 +189,28 @@ class ModuleImportsTest(unittest.TestCase):
                 if found:
                     line = body.count("\n", 0, found.start()) + 1
                     self.fail(f"{name}.js line {line} uses {exported} without importing it from {owners[0]}.js")
+
+    def test_every_function_called_is_defined_or_imported(self):
+        # The check above misses a name that no module defines any more (a helper removed
+        # from one file while a call to it stays), which fails only when that line runs.
+        missing = []
+        for name, text in self.files.items():
+            body = without_imports(text)
+            known = KEYWORDS | BROWSER | {part.strip().split(" as ")[-1].strip()
+                                          for names, _ in IMPORT.findall(text) for part in names.split(",") if part.strip()}
+            known |= set(re.findall(r"(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)", body))
+            for params in re.findall(r"function\s*\*?\s*[\w$]*\s*\(([^)]*)\)", body) + \
+                    re.findall(r"\(([^()]*)\)\s*=>", body) + re.findall(r"(?:const|let|var)\s*[{\[]([^}\]]*)[}\]]", body) + \
+                    re.findall(r"catch\s*\(([^)]*)\)", body):
+                known |= set(re.findall(r"[A-Za-z_$][\w$]*", params))
+            known |= set(re.findall(r"([A-Za-z_$][\w$]*)\s*=>", body))
+            for found in re.finditer(r"(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(", body):
+                called = found.group(1)
+                if called in known or re.match(r"[^()]*\)\s*\{", body[found.end():found.end() + 200]):
+                    continue  # a method being defined, e.g. `start() {`
+                line = body.count("\n", 0, found.start()) + 1
+                missing.append(f"{name}.js line {line} calls {called}, which is not defined or imported there")
+        self.assertEqual(missing, [])
 
     def test_each_name_is_exported_once(self):
         twice = {n: o for n, o in self.exports.items() if len(o) > 1 and n != "start"}

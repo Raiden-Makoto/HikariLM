@@ -241,7 +241,7 @@ class VisionModel:
             if rest:
                 yield {"text": rest}
         _clear_cache(self.mx)
-        yield _counts(last, getattr(last, "prompt_tokens", 0), stop.is_set())
+        yield _counts(last, 0, stop.is_set())
 
 
 def _room(request: dict, prompt_tokens: int) -> int:
@@ -254,7 +254,8 @@ def _room(request: dict, prompt_tokens: int) -> int:
 def _counts(last, prompt_tokens: int, stopped: bool) -> dict:
     return {"done": True, "stopped": stopped,
             "reason": getattr(last, "finish_reason", None) or ("stop" if stopped else "length"),
-            "prompt_tokens": int(getattr(last, "prompt_tokens", 0) or prompt_tokens),
+            # The whole prompt: with a kept cache, mlx-lm counts only the part it had to read.
+            "prompt_tokens": int(prompt_tokens or getattr(last, "prompt_tokens", 0) or 0),
             "tokens": int(getattr(last, "generation_tokens", 0) or 0),
             "prompt_tps": float(getattr(last, "prompt_tps", 0) or 0),
             "tps": float(getattr(last, "generation_tps", 0) or 0),

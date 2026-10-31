@@ -200,18 +200,22 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
     usable = total * SHARE
     if available is not None:
         usable = min(usable, available + leaving)
-    size += int(shown.get("window_bytes") or 0)
-    room = usable - RESERVE - size
+    fixed = int(shown.get("window_bytes") or 0)
+    room = usable - RESERVE - size - fixed
     cost = per_token(shown)
     fit = int(room // cost) // STEP * STEP if room > 0 else 0
     if trained:
         fit = min(fit, trained)
     result["max_fit"] = fit
     if fit < MIN_CONTEXT:
-        free = usable
+        cache = fixed + cost * MIN_CONTEXT
+        free = "" if available is None else f", {_gb(available)} free now" + (
+            f" plus {_gb(leaving)} from the model it replaces" if leaving else "")
         raise NoRoom(
-            f"Not enough memory to run {model} safely. It needs about {_gb(size + RESERVE + cost * MIN_CONTEXT)}, "
-            f"and about {_gb(max(0, free))} can be used now. Close some programs or choose a smaller model."
+            f"Not enough memory to run {model} safely. It needs about {_gb(size + cache + RESERVE)} "
+            f"({_gb(size)} model, {_gb(cache)} for {MIN_CONTEXT} tokens of context, {_gb(RESERVE)} kept spare), "
+            f"and about {_gb(max(0, usable))} can be used (at most {SHARE:.0%} of {_gb(total)}{free}). "
+            "Close some programs or choose a smaller model."
         )
     if want > fit:
         result["num_ctx"] = fit

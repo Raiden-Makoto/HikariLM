@@ -3,6 +3,8 @@ import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, status } from "./core.js";
 import { attachButton } from "./attachments.js";
 
+export const modelLabel = (name) => name.replace(/^mlx-community\//, "");
+
 // What the last send used, from the helper: the context length it ran
 // with, where compaction starts, and (after the reply) the tokens used.
 
@@ -132,7 +134,7 @@ export function fillModels(problem = modelProblem) {
   };
   const grouped = pictures.length || !inCodeView();
   const chatPlace = grouped && models.length ? group("Chat") : modelSelect;
-  for (const name of models) chatPlace.append(new Option(name.replace(/^mlx-community\//, ""), name));
+  for (const name of models) chatPlace.append(new Option(modelLabel(name), name));
   if (pictures.length) {
     const picturePlace = group("Make pictures");
     for (const item of pictures) picturePlace.append(new Option(item.label, item.id));

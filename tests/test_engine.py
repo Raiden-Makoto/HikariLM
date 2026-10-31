@@ -150,7 +150,8 @@ class EngineTest(unittest.TestCase):
         shown = engine.show(GEMMA)
         with self.assertRaises(budget.NoRoom) as caught:
             budget.plan(GEMMA, None, shown, int(11 * gib), [], (16 * gib, 15 * gib))
-        self.assertIn("about 12.0 GB can be used now", str(caught.exception))
+        self.assertIn("(11.0 GB model, 0.4 GB for 2048 tokens of context, 1.0 GB kept spare), and about 12.0 GB "
+                      "can be used (at most 75% of 16.0 GB, 15.0 GB free now)", str(caught.exception))
         room = budget.plan(GEMMA, None, shown, int(8 * gib), [], (16 * gib, 15 * gib))
         expected = (12 * gib - budget.RESERVE - 8 * gib - shown["window_bytes"]) // budget.per_token(shown)
         self.assertEqual(room["max_fit"], int(expected) // budget.STEP * budget.STEP)
