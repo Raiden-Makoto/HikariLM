@@ -14,7 +14,8 @@ model is in memory at a time (the float32 run makes PyTorch's embeddings twice a
 PyTorch on the CPU takes a few minutes.
 
 Passing means MLX is within 0.99 cosine and 95% same next tokens of TII's bf16 run, or no further
-from exact (TII's own code in float32) than TII's bf16 run is itself.
+from exact (TII's own code in float32) than TII's bf16 run is itself, with every next token it
+picks differently a near tie in the exact run (the two within 10 points of probability).
 """
 
 import gc
@@ -34,6 +35,7 @@ REPO = "tiiuae/Falcon3-10B-Instruct-1.58bit"
 MIN_LAYER = 0.9999     # cosine of one layer's outputs
 MIN_COSINE = 0.99      # lowest cosine of the logits at any position
 MIN_TOP1 = 0.95        # share of positions where both pick the same next token
+MAX_TIE = 0.10         # where MLX picks another token than exact, exact may favour its own by this much at most
 PROMPTS = [
     "What is the capital of France?",
     "Write a Python function that reverses a linked list.",
@@ -106,18 +108,18 @@ def main() -> int:
     exact = [run(hf, ids) for ids in prompts]
 
     print("\nMLX against TII (bf16):")
-    worst, top1 = compare(prompts, ours, tii, tokenizer, "MLX")
+    worst, top1, _ = compare(prompts, ours, tii, tokenizer, "MLX")
     print("\nTII (bf16) against TII (float32), the yardstick:")
-    floor_worst, floor_top1 = compare(prompts, tii, exact, tokenizer, "TII bf16")
+    floor_worst, floor_top1, _ = compare(prompts, tii, exact, tokenizer, "TII bf16")
     print("\nMLX against TII (float32):")
-    exact_worst, exact_top1 = compare(prompts, ours, exact, tokenizer, "MLX")
+    exact_worst, exact_top1, gap = compare(prompts, ours, exact, tokenizer, "MLX")
 
     close = worst >= MIN_COSINE and top1 >= MIN_TOP1
-    within = exact_worst >= floor_worst - 0.01 and exact_top1 >= floor_top1 - 0.02
+    within = exact_worst >= floor_worst - 0.01 and gap <= MAX_TIE
     ok = layer_cos >= MIN_LAYER and (close or within)
     print(f"\nMLX to TII bf16: lowest cosine {worst:.5f}, same next token {top1:.1%}")
-    print(f"MLX to exact: lowest cosine {exact_worst:.5f}, same next token {exact_top1:.1%}; "
-          f"TII's own bf16 to exact: {floor_worst:.5f}, {floor_top1:.1%}")
+    print(f"MLX to exact: lowest cosine {exact_worst:.5f}, same next token {exact_top1:.1%}, "
+          f"widest gap where they differ {gap:.1%}; TII's own bf16 to exact: {floor_worst:.5f}, {floor_top1:.1%}")
     print("OK: MLX matches TII's reference." if ok else "FAILED: MLX does not match TII's reference closely enough.")
     return 0 if ok else 1
 
@@ -129,21 +131,32 @@ def run(hf, ids):
         return hf(torch.tensor([ids])).logits[0].float().numpy()
 
 
-def compare(prompts, first, second, tokenizer, name) -> tuple[float, float]:
-    """Lowest cosine of the logits at any position, and the share of positions with the same next token."""
+def compare(prompts, first, second, tokenizer, name) -> tuple[float, float, float]:
+    """Lowest cosine of the logits at any position, the share of positions with the same next token,
+    and the widest gap where they differ: how much likelier `second` found its own pick than
+    `first`'s. A small gap is a near tie, which any change in rounding can flip."""
     import numpy as np
 
-    worst, agree, positions = 1.0, 0, 0
+    worst, agree, positions, widest = 1.0, 0, 0, 0.0
     for text, ids, a, b in zip(PROMPTS, prompts, first, second):
         cosines = [cosine(x, y) for x, y in zip(a, b)]
         low = int(np.argmin(cosines))
-        same = int((a.argmax(-1) == b.argmax(-1)).sum())
+        picks_a, picks_b = a.argmax(-1), b.argmax(-1)
+        same = int((picks_a == picks_b).sum())
         worst, agree, positions = min(worst, cosines[low]), agree + same, positions + len(ids)
         print(f"  {text[:46]:46}  lowest cosine {cosines[low]:.5f} at token {low} "
               f"({tokenizer.decode([ids[low]])!r}), same next token {same}/{len(ids)}")
+        for at in np.nonzero(picks_a != picks_b)[0]:
+            p = np.exp(b[at] - b[at].max())
+            p /= p.sum()
+            gap = float(p[picks_b[at]] - p[picks_a[at]])
+            widest = max(widest, gap)
+            print(f"      after token {at} ({tokenizer.decode([ids[at]])!r}): other picks "
+                  f"{tokenizer.decode([picks_b[at]])!r} at {p[picks_b[at]]:.1%}, {name} picks "
+                  f"{tokenizer.decode([picks_a[at]])!r}, which other gives {p[picks_a[at]]:.1%}")
         print(f"      next words, {name}: {[tokenizer.decode([t]) for t in np.argsort(-a[-1])[:5]]}")
         print(f"      next words, other: {[tokenizer.decode([t]) for t in np.argsort(-b[-1])[:5]]}")
-    return worst, agree / positions
+    return worst, agree / positions, widest
 
 
 if __name__ == "__main__":
