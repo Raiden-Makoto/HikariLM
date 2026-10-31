@@ -209,7 +209,7 @@ class TextModel:
 
 
 class VisionModel:
-    """mlx-vlm, for models that read pictures. Pictures come as base64, as Ollama takes them."""
+    """mlx-vlm, for models that read pictures. Pictures come as base64, as the page sends them."""
 
     def __init__(self, path: str) -> None:
         import mlx.core as mx

@@ -3,8 +3,11 @@
 What is indexed is text HikariLM already saved: the questions and answers in
 each chat, and the text Gemma wrote for each picture. Files in a workspace are
 not indexed; a small folder is sent whole. Vectors come from nomic-embed-text
-(through Ollama, passed in as `embed`), one small file per chat or picture in
+(passed in as `embed`), one small file per chat or picture in
 ~/.hikarilm/index/, so deleting a chat removes its notes and nothing else.
+
+Not used in 3.0: nomic ran in Ollama, which is gone. 3.1 runs it in MLX and
+turns this back on.
 """
 
 from __future__ import annotations

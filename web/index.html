@@ -51,7 +51,7 @@
         <img class="logo" src="/icon.svg" alt="" width="30" height="30">
         <div>
           <h1>HikariLM</h1>
-          <p id="status" role="status">Checking Ollama…</p>
+          <p id="status" role="status">Checking models…</p>
         </div>
       </div>
       <div class="tabs" role="tablist" aria-label="Sections">
@@ -210,13 +210,6 @@
         </label>
         <p class="note" id="notify-note" role="status"></p>
       </div>
-      <div class="setting">
-        <label class="switch-row">
-          <span class="setting-label">Use earlier chats and pictures</span>
-          <input class="switch" id="notes-toggle" type="checkbox" role="switch">
-        </label>
-        <p class="note" id="notes-note" role="status"></p>
-      </div>
       <div class="setting" id="keys-setting">
         <span class="setting-label">Keyboard shortcuts</span>
         <div class="field-row">
@@ -234,7 +227,7 @@
         <datalist id="context-choices"></datalist>
         <label class="field-row">
           <span>All models</span>
-          <input id="ctx-all" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Ollama's">
+          <input id="ctx-all" type="number" min="512" max="262144" step="256" list="context-choices" placeholder="Default">
         </label>
         <label class="field-row">
           <span id="ctx-model-label">This model</span>
@@ -251,7 +244,8 @@
             <option value="0">Full (16-bit)</option>
           </select>
         </label>
-        <p class="note">How the MLX models keep what they have read. 8-bit holds about twice as much context in the same memory with almost no change to answers; 4-bit about four times, and answers can change, mostly in long thinking. Gemma 3 always keeps a full cache.</p>
+        <p class="note">How the MLX models keep what they have read. 8-bit holds about twice as much context in the same memory with almost no change to answers; 4-bit about four times. Gemma 3 always keeps a full cache.</p>
+        <p class="note warning" id="kv-warning" hidden>4-bit may cause some accuracy loss, and model responses may degrade.</p>
       </div>
       <div class="setting">
         <label class="switch-row">
@@ -333,7 +327,7 @@
       </button>
     </div>
     <div class="dialog-body">
-      <p>Ollama no longer draws pictures. HikariLM draws them with <strong>FLUX.2 klein</strong>, a free picture model, run by <strong>sd-server</strong>, a small free program. This downloads both once, about 5 GB, into <code id="setup-folder"></code>. Nothing else on the computer changes, and no account is needed.</p>
+      <p>HikariLM draws pictures with <strong>FLUX.2 klein</strong>, a free picture model, run by <strong>sd-server</strong>, a small free program. This downloads both once, about 5 GB, into <code id="setup-folder"></code>. Nothing else on the computer changes, and no account is needed.</p>
       <ul class="setup-list" id="setup-list"></ul>
       <div class="setup-bar" id="setup-bar" hidden><div></div></div>
       <p class="note" id="setup-note" role="status"></p>

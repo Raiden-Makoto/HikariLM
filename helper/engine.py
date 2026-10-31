@@ -6,8 +6,9 @@ model folder in ~/.hikarilm/models). The worker runs with the Python in
 One model is loaded at a time. Unloading ends the worker, which gives all of
 its memory back at once.
 
-Answers are handed on as Ollama's chat lines, and a model's details in the shape
-of Ollama's /api/show, so the rest of the helper treats both alike.
+Answers are handed on as streamed chat lines ({"message": ..., "done": ...}), and
+a model's details as a small dict of its shape (`show`), which budget.py and
+thinking.py read.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from pathlib import Path
 
 from helper import store
 from helper.names import label
-from helper.ollama import OllamaError
 
 WORKER = Path(__file__).with_name("mlx_worker.py")
 LOAD_SECONDS = 600       # a large model read from a slow disk
@@ -39,7 +39,7 @@ THINKERS = re.compile(r"deepseek-r1|qwq", re.IGNORECASE)
 SETUP = "MLX is not set up yet. Stop HikariLM and run ./start.sh again; it installs mlx-lm and mlx-vlm once."
 
 
-class EngineError(OllamaError):
+class ModelError(Exception):
     """Worded for the user."""
 
 
@@ -69,7 +69,7 @@ def prepare(say, base_python: str = sys.executable) -> bool:
             subprocess.run([base_python, "-m", "venv", str(venv())], check=True)
         subprocess.run([str(python()), "-m", "pip", "install", "--upgrade", *PACKAGES], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
-        say(f"  MLX could not be set up ({error}). Ollama's models still work; run ./start.sh again to retry.")
+        say(f"  MLX could not be set up ({error}). Run ./start.sh again to retry.")
         return False
     mark.write_text(" ".join(PACKAGES) + "\n", encoding="utf-8")
     say("  MLX is ready.")
@@ -148,7 +148,7 @@ def owns(model: str) -> bool:
 def _folder(model: str) -> Path:
     folder = found().get(model)
     if folder is None:
-        raise EngineError(f"{label(model)} is not downloaded. Get it with:  ~/.hikarilm/venv/bin/hf download {model}")
+        raise ModelError(f"{label(model)} is not downloaded. Get it with:  ~/.hikarilm/venv/bin/hf download {model}")
     return folder
 
 
@@ -186,7 +186,7 @@ def _template(folder: Path) -> str:
 
 
 def show(model: str) -> dict:
-    """The model's shape as Ollama's /api/show gives it: what budget.py and thinking.py read."""
+    """The model's shape from its config.json: what budget.py and thinking.py read."""
     folder = _folder(model)
     config = _config(folder) or {}
     text = {**config, **(config.get("text_config") or {})}
@@ -214,7 +214,7 @@ class _Worker:
 
     def __init__(self, model: str, folder: Path, vision: bool) -> None:
         if not python().exists():
-            raise EngineError(SETUP)
+            raise ModelError(SETUP)
         self.model = model
         self.size = _size(folder)
         store.home().mkdir(parents=True, exist_ok=True)
@@ -224,7 +224,7 @@ class _Worker:
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
                                             text=True, encoding="utf-8", bufsize=1)
         except OSError as error:
-            raise EngineError(f"The MLX worker could not start: {error}") from error
+            raise ModelError(f"The MLX worker could not start: {error}") from error
         finally:
             log.close()
         self.lines: queue.Queue = queue.Queue()
@@ -247,7 +247,7 @@ class _Worker:
             self.process.stdin.write(json.dumps(command) + "\n")
             self.process.stdin.flush()
         except (OSError, ValueError) as error:
-            raise EngineError(f"The MLX worker stopped: {error}") from error
+            raise ModelError(f"The MLX worker stopped: {error}") from error
 
     def next(self, seconds: float) -> dict | None:
         try:
@@ -287,7 +287,7 @@ def _ready(model: str) -> _Worker:
     event = started.next(LOAD_SECONDS)
     if not event or not event.get("ready"):
         started.end()
-        raise EngineError((event or {}).get("error") or _died(model))
+        raise ModelError((event or {}).get("error") or _died(model))
     _worker = started
     return started
 
@@ -319,8 +319,8 @@ def unload(model: str | None = None) -> None:
 
 
 class Reply:
-    """A reply being written, read like Ollama's streamed /api/chat: readline() gives one JSON
-    line at a time and b"" at the end. close() stops it if it is not finished."""
+    """A reply being written: readline() gives one JSON line at a time and b"" at the end.
+    close() stops it if it is not finished."""
 
     def __init__(self, model: str, process: _Worker) -> None:
         self.model, self.process, self.finished, self.closed = model, process, False, False
@@ -359,7 +359,7 @@ class Reply:
                     event = self.process.next(max(0.1, deadline - time.monotonic()))
                     if event is None or "error" in event or event.get("done"):
                         break
-            except EngineError:
+            except ModelError:
                 pass
             if not self.process.alive() or time.monotonic() > deadline:
                 _forget(self.process)
@@ -374,7 +374,7 @@ def _forget(process: _Worker) -> None:
 
 
 def _kv_bits() -> int:
-    from helper import context  # context reaches imagegen and Ollama; only needed once a chat starts
+    from helper import context  # context imports imagegen; only needed once a chat starts
 
     return context.load_settings()["kv_cache"]["bits"]
 
@@ -382,7 +382,7 @@ def _kv_bits() -> int:
 def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict | None = None, think=None) -> Reply:
     """Start a reply. The caller closes it; closing it early stops the model."""
     if not _lock.acquire(timeout=WAIT_SECONDS):
-        raise EngineError("Another reply is still being written.")
+        raise ModelError("Another reply is still being written.")
     try:
         process = _ready(model)
         options = options or {}
@@ -413,7 +413,7 @@ def complete(model: str, messages: list[dict], options: dict, keep_alive=None, t
                 return text
             event = json.loads(line)
             if event.get("error"):
-                raise EngineError(event["error"])
+                raise ModelError(event["error"])
             text += (event.get("message") or {}).get("content", "")
     finally:
         reply.close()

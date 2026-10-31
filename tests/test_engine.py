@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from helper import budget, context, engine, models, thinking
-from helper.ollama import OllamaError
+from helper.engine import ModelError
 
 HERE = Path(__file__).resolve().parent
 CODER = "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit"
@@ -91,7 +91,7 @@ class EngineTest(unittest.TestCase):
         self.assertIn("vision", engine.show(GEMMA)["capabilities"])
         self.assertNotIn("vision", engine.show(CODER)["capabilities"])
 
-    def test_streams_like_ollama(self):
+    def test_streams_chat_lines(self):
         events = self.chat(CODER, "hello there")
         self.assertEqual("".join(e["message"]["content"] for e in events), "echo: hello there")
         self.assertTrue(events[-1]["done"])
@@ -156,31 +156,26 @@ class EngineTest(unittest.TestCase):
     def test_load_failure_is_worded(self):
         add_model(self.hub, "mlx-community/broken-4bit", real_config(CODER))
         engine.forget_scan()
-        with self.assertRaises(OllamaError) as caught:
+        with self.assertRaises(ModelError) as caught:
             engine.open_chat("mlx-community/broken-4bit", [{"role": "user", "content": "hi"}])
         self.assertIn("broken on purpose", str(caught.exception))
         self.assertEqual(self.chat(CODER, "still fine")[-1]["done"], True)
 
     def test_missing_venv_says_how_to_set_it_up(self):
         with mock.patch.dict(os.environ, {"HIKARILM_MLX_PYTHON": "/nowhere/python"}):
-            with self.assertRaises(OllamaError) as caught:
+            with self.assertRaises(ModelError) as caught:
                 engine.open_chat(CODER, [{"role": "user", "content": "hi"}])
         self.assertIn("run ./start.sh again", str(caught.exception))
 
     def test_complete_joins_the_answer(self):
         self.assertEqual(engine.complete(CODER, [{"role": "user", "content": "a b"}], {"num_ctx": 2048}), "echo: a b")
 
-    def test_models_route_by_name_and_work_without_ollama(self):
-        with mock.patch("helper.ollama.tags", side_effect=OllamaError("down")):
-            self.assertEqual(sorted(models.tags()), sorted([CODER, R1, GEMMA]))
-        with mock.patch("helper.ollama.tags", return_value=["gemma3:4b"]):
-            self.assertEqual(models.tags()[-1], "gemma3:4b")
-        with mock.patch("helper.ollama.show", return_value={"from": "ollama"}) as ollama_show:
-            self.assertEqual(models.show("gemma3:4b"), {"from": "ollama"})
-            self.assertTrue(models.show(CODER)["mlx"])
-            ollama_show.assert_called_once_with("gemma3:4b")
-        with mock.patch("helper.ollama.running", side_effect=OllamaError("down")):
-            self.assertEqual(models.running(), [])
+    def test_models_lists_the_mlx_models(self):
+        self.assertEqual(sorted(models.tags()), sorted([CODER, R1, GEMMA]))
+        self.assertTrue(models.show(CODER)["mlx"])
+        self.assertEqual(models.running(), [])
+        with self.assertRaises(ModelError):
+            models.show("gemma3:4b")
 
 
 class PrepareTest(unittest.TestCase):
@@ -224,7 +219,7 @@ class PrepareTest(unittest.TestCase):
     def test_failure_is_said_and_tried_again_next_time(self):
         ready, _ = self.run_prepare(fails=True)
         self.assertFalse(ready)
-        self.assertIn("Ollama's models still work", self.said[-1])
+        self.assertIn("Run ./start.sh again", self.said[-1])
         self.assertTrue(self.run_prepare()[0])
 
     def test_another_python_is_left_alone(self):

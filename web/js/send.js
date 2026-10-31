@@ -12,7 +12,6 @@ import {
 import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
 import { announce, askNotifyPermission } from "./page.js";
-import { notesOn } from "./settings.js";
 import { editorPrompt } from "./edit-blocks.js";
 
 // Ask the helper to have a vision model write one picture down as text. It
@@ -49,23 +48,6 @@ async function describePicture(file, model, signal, onText) {
     }
   }
   throw new Error("The picture was not described.");
-}
-
-async function findNotes(text, signal) {
-  if (!notesOn() || inCodeView() || text.length < 15) return [];
-  try {
-    const response = await fetch("/api/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: text, exclude: state.chatId || "" }),
-      signal,
-    });
-    if (!response.ok) return [];
-    return (await response.json()).notes || [];
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    return [];
-  }
 }
 
 async function send() {
@@ -125,18 +107,6 @@ async function send() {
   const thinkClock = setInterval(() => { if (thinkStart && !thinkEnd) drawThought(); }, 1000);
   state.lastContext = null;
   try {
-    // A few earlier notes close to the question go along with it, just for
-    // this send. They are not saved into the chat.
-    let notesPrefix = "";
-    const found = await findNotes(content, state.activeRequest.signal);
-    if (found.length) {
-      notesPrefix = "Notes from earlier chats and pictures (use them only if they help):\n" +
-        found.map((note) => "[" + note.title + "]\n" + note.text.slice(0, 800)).join("\n\n") + "\n\nMy question:\n";
-      const used = document.createElement("div");
-      used.className = "used-notes";
-      used.textContent = "Used earlier notes: " + found.map((note) => note.title).join(" · ");
-      sent.block.append(used);
-    }
     if (describer) {
       const converted = [];
       for (const file of files) {
@@ -166,7 +136,7 @@ async function send() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        // What the documents are searched with, without the earlier notes in front.
+        // What the documents are searched with.
         question: content,
         messages: [...system, ...state.messages.map((message, index) => {
           const out = {
@@ -174,7 +144,7 @@ async function send() {
             // A chat model cannot see a picture made earlier, only that it was made.
             content: message.picture
               ? "[A picture was made here from the prompt above, " + message.picture.width + " × " + message.picture.height + ".]"
-              : (index === state.messages.length - 1 ? notesPrefix : "") + message.content,
+              : message.content,
           };
           // The helper fits file text into the context: whole, as notes, or the closest passages.
           const texts = (message.files || []).filter((file) => typeof file.text === "string");

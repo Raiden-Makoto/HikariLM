@@ -2,7 +2,7 @@
 
 A model reads only what fits in its context, and that context also has to hold
 the conversation, the model's thinking, and its reply. A paper pasted whole
-into a 4,096-token context is silently cut by Ollama. So every send, the helper
+into a 4,096-token context would be cut short. So every send, the helper
 works out the room left for documents and then:
 
 - sends them whole when they fit;

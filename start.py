@@ -60,25 +60,11 @@ def port_is_free(host: str, port: int) -> bool:
         return probe.connect_ex((host, port)) != 0
 
 
-def report_ollama() -> None:
-    """Say what Ollama has. Never stops the start: it can be launched later."""
+def report_pictures() -> None:
+    """Say which picture models are ready."""
     from helper import context, imagegen
-    from helper.names import label
-    from helper.ollama import OLLAMA_HOST, OllamaError, show, tags
-    from helper.router import chat_models
 
-    image_models = []
-    try:
-        names, image_models, _ = imagegen.split(chat_models(tags()), show)
-        if names:
-            say("Ollama models: " + ", ".join(label(name) for name in names))
-        else:
-            say("Ollama is running but has no chat models yet. Try:  ollama pull gemma3")
-    except OllamaError:
-        say(f"Ollama is not running at {OLLAMA_HOST}.")
-        say("  Install it from https://ollama.com and start it, then reload the page.")
-        say("  The page will list your models as soon as Ollama answers.")
-    pictures, notes = imagegen.picture_models(context.load_settings(), image_models)
+    pictures, notes = imagegen.picture_models(context.load_settings())
     if pictures:
         say("Picture models: " + ", ".join(item["label"] for item in pictures))
     else:
@@ -137,7 +123,7 @@ def main() -> None:
     say("MLX models: " + ", ".join(names.label(name) for name in mlx) if mlx else
         "No MLX models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download "
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
-    report_ollama()
+    report_pictures()
     say("Press Ctrl+C to stop.")
     say()
 

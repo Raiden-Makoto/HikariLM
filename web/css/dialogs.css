@@ -73,6 +73,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .choice[aria-pressed="true"] { border-color: var(--you); background: var(--hover); }
 .choice:disabled { opacity: 0.4; cursor: default; }
 .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
+.note.warning { color: var(--danger); }
 #picture-setup { width: min(34rem, 92vw); }
 #picture-setup code { word-break: break-all; }
 .setup-list { list-style: none; padding: 0; margin: 0.75rem 0; }

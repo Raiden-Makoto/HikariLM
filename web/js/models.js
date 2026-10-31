@@ -58,7 +58,7 @@ export async function loadModels() {
     pictureNotes = body.picture_notes || [];
     fillPictureSizes(body.sizes || {});
     if (!response.ok) problem = plainError(body.error || "Could not list models.");
-    else if (models.length === 0 && allPictures.length === 0) problem = "No chat models installed in Ollama.";
+    else if (models.length === 0 && allPictures.length === 0) problem = "No models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit";
   } catch (error) {
     problem = "The helper is not responding.";
   }
@@ -105,8 +105,8 @@ let allModels = [];
 let modelProblem = "";
 export const CODE_MODEL_KEY = "hikarilm-model-code";
 export const inCodeView = () => document.body.classList.contains("view-files");
-// Models that can read pictures, as the helper found them (Ollama's "vision"
-// capability). A picture goes to the chosen one if it can, otherwise to the first.
+// Models that can read pictures, as the helper found them (a vision part in
+// their config). A picture goes to the chosen one if it can, otherwise to the first.
 let visionModels = [];
 export const isVision = (name) => visionModels.includes(name);
 export function visionModel() {

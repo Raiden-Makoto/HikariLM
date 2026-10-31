@@ -10,68 +10,38 @@ from helper.router import Work
 PNG = imagegen.PNG + b"rest of a picture"
 
 
-class SupportTest(unittest.TestCase):
-    def setUp(self):
-        old = os.environ.pop("HIKARILM_IMAGES", None)
-        if old is not None:
-            self.addCleanup(os.environ.__setitem__, "HIKARILM_IMAGES", old)
-        self.addCleanup(os.environ.pop, "HIKARILM_IMAGES", None)
-
-    def test_only_apple_silicon_by_default(self):
-        with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="x86_64"):
-            got = imagegen.support()
-        self.assertFalse(got["supported"])
-        self.assertEqual(got["reason"], "Image generation needs a Mac with Apple Silicon.")
+class AppleSiliconTest(unittest.TestCase):
+    def test_only_apple_silicon(self):
         with mock.patch("platform.system", return_value="Linux"), mock.patch("platform.machine", return_value="aarch64"):
-            self.assertFalse(imagegen.support()["supported"])
+            self.assertFalse(imagegen.apple_silicon())
         with mock.patch("platform.system", return_value="Darwin"), mock.patch("platform.machine", return_value="arm64"):
-            self.assertTrue(imagegen.support()["supported"])
+            self.assertTrue(imagegen.apple_silicon())
 
     def test_rosetta_asks_macos(self):
         answer = mock.Mock(stdout="1\n")
         with mock.patch("platform.system", return_value="Darwin"), \
                 mock.patch("platform.machine", return_value="x86_64"), \
                 mock.patch("subprocess.run", return_value=answer):
-            self.assertTrue(imagegen.support()["supported"])
+            self.assertTrue(imagegen.apple_silicon())
         answer.stdout = "0\n"
         with mock.patch("platform.system", return_value="Darwin"), \
                 mock.patch("platform.machine", return_value="x86_64"), \
                 mock.patch("subprocess.run", return_value=answer):
-            self.assertFalse(imagegen.support()["supported"])
-
-    def test_override(self):
-        os.environ["HIKARILM_IMAGES"] = "on"
-        self.assertTrue(imagegen.support()["supported"])
-        os.environ["HIKARILM_IMAGES"] = "off"
-        with mock.patch("platform.system", return_value="Darwin"), mock.patch("platform.machine", return_value="arm64"):
-            self.assertFalse(imagegen.support()["supported"])
+            self.assertFalse(imagegen.apple_silicon())
 
 
 class ModelsTest(unittest.TestCase):
-    def test_capabilities_win_and_names_are_the_fallback(self):
-        self.assertTrue(imagegen.is_image_model("anything", {"capabilities": ["image"]}))
-        self.assertFalse(imagegen.is_image_model("flux-named-chat", {"capabilities": ["completion"]}))
-        self.assertFalse(imagegen.is_image_model("gemma3:4b", {"capabilities": ["completion", "vision"]}))
-        self.assertTrue(imagegen.is_image_model("x/flux2-klein:4b", {}))
-        self.assertTrue(imagegen.is_image_model("x/z-image-turbo", None))
-        self.assertFalse(imagegen.is_image_model("qwen2.5-coder:7b", None))
+    def test_picture_models_are_named_by_where_they_run(self):
+        self.assertTrue(imagegen.is_picture_model("sd:flux2-klein"))
+        self.assertTrue(imagegen.is_picture_model("remote:sdxl"))
+        self.assertFalse(imagegen.is_picture_model("mlx-community/gemma-3-12b-it-4bit"))
 
-    def test_split_puts_unreadable_models_with_chat(self):
+    def test_vision_from_capabilities_and_unreadable_left_out(self):
         def show(name):
             if name == "broken":
                 raise RuntimeError("no")
-            return {"capabilities": ["image"] if name == "pic" else ["completion"]}
-        self.assertEqual(imagegen.split(["qwen", "pic", "broken"], show), (["qwen", "broken"], ["pic"], []))
-
-    def test_any_model_that_reports_vision_reads_pictures(self):
-        def show(name):
-            if name.startswith("named"):
-                return {}
-            return {"capabilities": ["completion", "vision"] if name in ("llava:7b", "my-own-model") else ["completion"]}
-        names = ["llava:7b", "my-own-model", "gemma3-text-only", "qwen3:8b", "named-qwen2.5vl:7b", "named-llama"]
-        chat, _, vision = imagegen.split(names, show)
-        self.assertEqual(chat, names)
-        self.assertEqual(vision, ["llava:7b", "my-own-model", "named-qwen2.5vl:7b"])
+            return {"capabilities": ["completion", "vision"] if name == "gemma" else ["completion"]}
+        self.assertEqual(imagegen.vision_models(["qwen", "gemma", "broken"], show), ["gemma"])
 
 
 class RequestTest(unittest.TestCase):
@@ -85,12 +55,6 @@ class RequestTest(unittest.TestCase):
                     {"model": "", "prompt": "x"}, {"model": "m", "prompt": "x", "seed": True}):
             with self.assertRaises(ValueError):
                 imagegen.clean_request(bad)
-
-    def test_payload_sends_size_and_seed(self):
-        request = imagegen.clean_request({"model": "m", "prompt": "x", "seed": 7, "steps": 4})
-        payload = imagegen.ollama_payload(request, "5m")
-        self.assertEqual((payload["width"], payload["height"], payload["steps"], payload["options"]),
-                         (1024, 1024, 4, {"seed": 7}))
 
 
 class FolderTest(unittest.TestCase):
@@ -154,46 +118,13 @@ class SdServerTest(unittest.TestCase):
 
     def test_picker_lists_every_source(self):
         settings = {"pictures": {"program": "", "models": "flux: -m /x.gguf", "address": ""}}
-        with mock.patch.object(sdserver, "find_program", return_value="/bin/sd-server"), \
-                mock.patch.dict(os.environ, {"HIKARILM_IMAGES": "off"}):
-            found, notes = imagegen.picture_models(settings, ["x/flux2-klein"])
-        self.assertEqual([item["id"] for item in found], ["sd:flux"])
-        self.assertTrue(any("hidden" in note for note in notes))
+        with mock.patch.object(sdserver, "find_program", return_value="/bin/sd-server"):
+            found, notes = imagegen.picture_models(settings)
+        self.assertEqual(([item["id"] for item in found], notes), (["sd:flux"], []))
         with mock.patch.object(sdserver, "find_program", return_value=None):
-            found, notes = imagegen.picture_models(settings, [])
+            found, notes = imagegen.picture_models(settings)
         self.assertEqual(found, [])
         self.assertIn("sd-server was not found", notes[0])
-
-
-class OllamaRefusesTest(unittest.TestCase):
-    ERROR = "image generation models are not currently supported"
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp.cleanup)
-        for patcher in (mock.patch.dict(os.environ, {"HIKARILM_HOME": self._tmp.name + "/home",
-                                                     "HIKARILM_IMAGES": "on"}),
-                        mock.patch("helper.ollama.version", side_effect=lambda: self.version)):
-            patcher.start()
-            self.addCleanup(patcher.stop)
-        self.version = "0.13.0"
-        self.settings = {"pictures": imagegen.PICTURE_DEFAULTS}
-
-    def test_points_to_sd_server_and_hides_ollama_until_it_updates(self):
-        self.assertEqual([item["id"] for item in imagegen.picture_models(self.settings, ["x/flux2-klein"])[0]],
-                         ["x/flux2-klein"])
-        message = imagegen.note_refusal(self.ERROR, self.version, "x/flux2-klein")
-        self.assertIn("Ollama 0.13.0 cannot make pictures with flux2 klein", message)
-        self.assertIn("sd-server", message)
-        found, notes = imagegen.picture_models(self.settings, ["x/flux2-klein"])
-        self.assertEqual(found, [])
-        self.assertIn("sd-server", notes[0])
-        self.version = "0.14.0"
-        self.assertEqual(len(imagegen.picture_models(self.settings, ["x/flux2-klein"])[0]), 1)
-
-    def test_other_errors_pass_through(self):
-        self.assertIsNone(imagegen.note_refusal("model requires more system memory", self.version, "x/flux2-klein"))
-        self.assertFalse(imagegen.ollama_refuses())
 
 
 class WorkTest(unittest.TestCase):

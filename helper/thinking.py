@@ -2,12 +2,12 @@
 
 A thinking model can reason for thousands of tokens before it answers, and a
 small local model can loop there until the context runs out. So the helper
-counts the thinking as it streams. At the limit it stops Ollama, then asks the
+counts the thinking as it streams. At the limit it stops the model, then asks the
 same model again with thinking turned off and the reasoning so far handed to
 it, so the model answers at once instead of starting to think from the top.
 
-Models that Ollama says can think get `think` set explicitly, so their
-reasoning arrives apart from the answer. Older templates (an R1 distill, say)
+Models that can think (their template says so) get `think` set explicitly, so
+their reasoning arrives apart from the answer. Older templates (an R1 distill, say)
 write it into the answer between <think> and </think>; that part is split off
 here, so the page sees one shape either way.
 """

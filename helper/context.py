@@ -245,7 +245,7 @@ def fallback_summary(previous: str | None, compacted: list[dict]) -> str:
 
 
 def with_summary(messages: list[dict], summary: str | None) -> list[dict]:
-    """Messages for Ollama: the summary appended to the system message, and no bookkeeping fields."""
+    """Messages for the model: the summary appended to the system message, and no bookkeeping fields."""
     out = []
     for message in messages:
         entry = {"role": message["role"], "content": message["content"]}

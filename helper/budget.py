@@ -7,7 +7,6 @@ work out memory: macOS manages that itself.
 
 from __future__ import annotations
 
-import os
 import re
 
 MIN_CONTEXT = 2048
@@ -31,18 +30,12 @@ def trained_context(shown: dict) -> int:
 
 
 def default_source(shown: dict) -> tuple[int, str]:
-    """What Ollama would use without being told, and where that comes from: the model's
-    own setting, OLLAMA_CONTEXT_LENGTH, or 4096."""
+    """The length used when Settings leaves it blank, and where it comes from: the
+    model's own default (engine.show), or 4096."""
     found = re.search(r"^\s*num_ctx\s+(\d+)", str(shown.get("parameters") or ""), re.M)
     if found:
         return int(found.group(1)), "model"
-    try:
-        value = int(os.environ.get("OLLAMA_CONTEXT_LENGTH", ""))
-        if value > 0:
-            return value, "OLLAMA_CONTEXT_LENGTH"
-    except ValueError:
-        pass
-    return DEFAULT_CONTEXT, "ollama"
+    return DEFAULT_CONTEXT, "default"
 
 
 def plan(requested: int | None, shown: dict) -> dict:

@@ -27,23 +27,13 @@ def chat(turns, chars=400):
 
 
 class BudgetTest(unittest.TestCase):
-    def setUp(self):
-        old = os.environ.pop("OLLAMA_CONTEXT_LENGTH", None)
-        if old is not None:
-            self.addCleanup(os.environ.__setitem__, "OLLAMA_CONTEXT_LENGTH", old)
-
     def test_default_context(self):
-        self.assertEqual(budget.default_source(QWEN)[0], 4096)
-        self.assertEqual(budget.default_source({"parameters": "num_ctx 8192\nstop x"})[0], 8192)
-        os.environ["OLLAMA_CONTEXT_LENGTH"] = "16384"
-        self.assertEqual(budget.default_source(QWEN), (16384, "OLLAMA_CONTEXT_LENGTH"))
-        self.assertEqual(budget.default_source({"parameters": "num_ctx 131072"}), (131072, "model"))
-        del os.environ["OLLAMA_CONTEXT_LENGTH"]
-        self.assertEqual(budget.default_source(QWEN), (4096, "ollama"))
+        self.assertEqual(budget.default_source(QWEN), (4096, "default"))
+        self.assertEqual(budget.default_source({"parameters": "num_ctx 8192\nstop x"}), (8192, "model"))
 
     def test_the_length_asked_for_is_sent(self):
         plan = budget.plan(12288, QWEN)
-        self.assertEqual((plan["num_ctx"], plan["default"], plan["default_from"]), (12288, 4096, "ollama"))
+        self.assertEqual((plan["num_ctx"], plan["default"], plan["default_from"]), (12288, 4096, "default"))
         self.assertEqual(budget.plan(None, QWEN)["num_ctx"], 4096)
 
     def test_never_past_what_the_model_was_trained_for(self):

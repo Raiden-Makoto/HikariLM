@@ -1,4 +1,4 @@
-"""Serve the page and stream one Ollama chat at a time."""
+"""Serve the page and stream one chat reply at a time."""
 
 from __future__ import annotations
 
@@ -14,12 +14,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, engine, imagegen, keepalive, names, notes, picsetup, sdserver,
-                    store, thinking, workspace)
-from helper.models import complete, open_chat, running, show, sizes, tags, unload
-from helper.ollama import KEEP_ALIVE, KEEPER, OllamaError, embed, open_generate
-from helper.ollama import version as ollama_version
-from helper.router import ModelRouter, Work, chat_models, is_nomic
+from helper import (budget, context, descriptions, documents, engine, imagegen, names, picsetup, sdserver, store,
+                    thinking, workspace)
+from helper.models import KEEP_ALIVE, KEEPER, ModelError, complete, open_chat, running, show, tags, unload
+from helper.router import ModelRouter, Work
 from helper.version import code_stamp
 
 HOST = os.environ.get("HIKARILM_HOST", "127.0.0.1")
@@ -42,7 +40,7 @@ managed = sdserver.Managed(KEEP_ALIVE)
 
 
 def unload_any(model: str) -> None:
-    """Free a large model, wherever it runs: sd-server is stopped, Ollama is asked."""
+    """Free a large model, wherever it runs: sd-server is stopped, an MLX worker ended."""
     if model.startswith(imagegen.SD_PREFIX):
         managed.stop()
     elif not model.startswith(imagegen.REMOTE_PREFIX):
@@ -51,7 +49,6 @@ def unload_any(model: str) -> None:
 
 router = ModelRouter(unload_any)
 work = Work()
-indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
 
 
@@ -108,26 +105,16 @@ class Handler(BaseHTTPRequestHandler):
                 room = self._room(model, settings)
                 out.update(room)
                 out["threshold"] = context.threshold_for(settings, room["num_ctx"])
-            except OllamaError as error:
+            except ModelError as error:
                 out["error"] = str(error)
             self._send_json(out)
             return
-        if self.path == "/api/notes":
-            self._send_json({**notes.count(), "error": indexer.last_error})
-            return
         if self.path == "/api/tags":
             # Picture models are listed apart: they answer with a picture, never with words.
-            settings = context.load_settings()
-            try:
-                chat, ollama_images, vision = imagegen.split(chat_models(tags()), show)
-            except OllamaError as error:
-                pictures, notes_ = imagegen.picture_models(settings, [])
-                self._send_json({"error": str(error), "pictures": pictures, "picture_notes": notes_,
-                                 "sizes": imagegen.SIZES}, status=502)
-                return
-            pictures, notes_ = imagegen.picture_models(settings, ollama_images)
-            self._send_json({"models": chat, "vision": vision, "pictures": pictures, "picture_notes": notes_,
-                             "sizes": imagegen.SIZES})
+            chat = tags()
+            pictures, notes_ = imagegen.picture_models(context.load_settings())
+            self._send_json({"models": chat, "vision": imagegen.vision_models(chat, show), "pictures": pictures,
+                             "picture_notes": notes_, "sizes": imagegen.SIZES})
             return
         if self.path == CHATS:
             self._send_json({"chats": store.listing()})
@@ -207,7 +194,6 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not save: {error.strerror or error}"}, status=500)
             return
-        indexer.chat(summary["id"])
         self._send_json(summary)
 
     def do_PATCH(self) -> None:
@@ -228,7 +214,6 @@ class Handler(BaseHTTPRequestHandler):
         try:
             payload = self._body(MAX_BODY)
             self._send_json(store.patch(self._chat_id(), payload))
-            indexer.chat(self._chat_id())
         except FileNotFoundError:
             self._send_json({"error": "chat not found"}, status=404)
         except ValueError as error:
@@ -266,7 +251,6 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not delete: {error.strerror or error}"}, status=500)
             return
-        indexer.forget_chat(self._chat_id())
         if removed:
             # The pictures a chat made belong to it, so they go with it.
             for image_id in made:
@@ -293,9 +277,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send_json(picsetup.SETUP.status())
             return
-        if self.path == "/api/search":
-            self._search()
-            return
         if self.path not in ("/api/chat", "/api/describe"):
             self._send_json({"error": "not found"}, status=404)
             return
@@ -314,14 +295,9 @@ class Handler(BaseHTTPRequestHandler):
             work.end_chat()
 
     def _refuse_picture_model(self, model: str) -> bool:
-        """Image models make pictures and never answer messages. True if refused."""
-        if not model.startswith((imagegen.SD_PREFIX, imagegen.REMOTE_PREFIX)):
-            try:
-                shown = show(model)
-            except OllamaError:
-                shown = None
-            if not imagegen.is_image_model(model, shown):
-                return False
+        """Picture models make pictures and never answer messages. True if refused."""
+        if not imagegen.is_picture_model(model):
+            return False
         self._send_json({"error": f"{names.label(model)} makes pictures and cannot answer messages. "
                                   "Pick a chat model to talk, or send it a description of a picture."},
                         status=400)
@@ -339,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
         settings = context.load_settings()
         try:
             room = self._room(model, settings)
-        except OllamaError as error:
+        except ModelError as error:
             self._send_json({"error": str(error)}, status=502)
             return
         num_ctx = room["num_ctx"]
@@ -376,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
                 first = cut
                 self._stream_line({"hikarilm": "compaction", "done": True, "checkpoint": cut,
                                    "summary": summary, "dropped": len(compacted), "kept": len(recent)})
-            except OllamaError as error:
+            except ModelError as error:
                 # Like Open WebUI: a failed compaction sends the whole active window instead.
                 self._stream_line({"hikarilm": "compaction", "done": True, "error": str(error)})
         if getattr(self, "_gone", False):
@@ -399,7 +375,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             router.begin(model)
             response = open_chat(model, sent, keep_alive, options, think)
-        except OllamaError as error:
+        except ModelError as error:
             if started:
                 self._stream_line({"error": str(error)})
             return
@@ -417,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             response = open_chat(model, thinking.answer_now(sent, thought), keep_alive, options,
                                  None if think is None else thinking.off(model))
-        except OllamaError as error:
+        except ModelError as error:
             self._stream_line({"error": str(error)})
             return
         if self._stream_reply(response, budget_tokens) is not None:
@@ -494,7 +470,7 @@ class Handler(BaseHTTPRequestHandler):
         sent = list(sent)
         last = len(sent) - 1
         if sum(documents.tokens(documents.block(doc["name"], doc["text"])) for doc in docs) <= room:
-            # Each file stays in the message it came with, so Ollama can reuse what it already read.
+            # Each file stays in the message it came with, so the kept prompt cache still matches.
             placed: dict[int, list[str]] = {}
             for doc in docs:
                 target = at(doc["message"])
@@ -518,7 +494,7 @@ class Handler(BaseHTTPRequestHandler):
 
             try:
                 got = documents.notes(docs, model, num_ctx, room, ask, progress)
-            except OllamaError as error:
+            except ModelError as error:
                 self._stream_line({"hikarilm": "reading", "error": str(error)})
                 got = ()
             if got is None or getattr(self, "_gone", False):
@@ -526,7 +502,7 @@ class Handler(BaseHTTPRequestHandler):
             if got:
                 text, info = got
         if text is None:
-            text, info = documents.excerpts(self._question, docs, room, embed)
+            text, info = documents.excerpts(self._question, docs, room, None)
         self._stream_line({"hikarilm": "documents", **info})
         sent[last] = {**sent[last], "content": text + "\n\n" + sent[last]["content"]}
         return sent
@@ -538,9 +514,9 @@ class Handler(BaseHTTPRequestHandler):
     def _describe(self) -> None:
         """Have a vision model write a picture down as text, once.
 
-        Streams what Ollama sends so the page can show progress and stop, then
+        Streams what the model writes so the page can show progress and stop, then
         one last line, {"description": ...}. A picture already described is
-        answered from descriptions/ without touching Ollama at all.
+        answered from descriptions/ without loading a model at all.
         """
         try:
             payload = self._body(MAX_BODY)
@@ -568,7 +544,7 @@ class Handler(BaseHTTPRequestHandler):
             response = open_chat(
                 model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE,
                 {"num_ctx": room["num_ctx"]})
-        except OllamaError as error:
+        except ModelError as error:
             self._send_json({"error": str(error)}, status=502)
             return
         router.commit(model)
@@ -596,7 +572,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": "The model sent no description of the picture."})
                 return
             descriptions.save(key, text, model, name)
-            indexer.picture(key)
             self._stream_line({"description": text[:descriptions.MAX_TEXT], "cached": False, "model": model})
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -610,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
         then {"image": notes} once it is saved. Stop (the page going away) saves nothing.
 
         The model id says where the picture is made: "sd:<name>" is an sd-server the
-        helper starts, "remote:<name>" a picture server the user runs, anything else Ollama.
+        helper starts, "remote:<name>" a picture server the user runs.
         """
         try:
             request = imagegen.clean_request(self._body(MAX_BODY))
@@ -636,19 +611,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not pictures["address"]:
                     raise ValueError("No picture server address is set in Settings.")
             else:
-                allowed = imagegen.support()
-                if not allowed["supported"]:
-                    self._send_json({"error": allowed["reason"], "unsupported": True}, status=403)
-                    return
-                if model not in chat_models(tags()):
-                    raise ValueError(f"{names.label(model)} is not installed in Ollama.")
-                if not imagegen.is_image_model(model, show(model)):
-                    raise ValueError(f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model.")
+                raise ValueError(f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model.")
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
-            return
-        except OllamaError as error:
-            self._send_json({"error": str(error)}, status=502)
             return
         busy = work.start_picture()
         if busy:
@@ -658,11 +623,7 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_start()
             self._stream_line({"hikarilm": "loading", "model": model, "unloading": router.large
                                if router.large and router.large != model else None})
-            if spec is not None or model.startswith(imagegen.REMOTE_PREFIX):
-                self._picture_from_server(request, spec, program, pictures["address"])
-            else:
-                with KEEPER.using(model):
-                    self._picture_from_ollama(request)
+            self._picture_from_server(request, spec, program, pictures["address"])
         finally:
             work.end_picture()
 
@@ -697,71 +658,19 @@ class Handler(BaseHTTPRequestHandler):
             if spec is not None:
                 managed.touch()
 
-    @staticmethod
-    def _picture_refusal(error: str, model: str) -> str:
-        """Ollama's error, or, when it says it does not make pictures, what to do instead."""
-        return imagegen.note_refusal(error, ollama_version(), model) or error
-
-    def _picture_from_ollama(self, request: dict) -> None:
-        model = request["model"]
-        try:
-            router.begin(model)
-            response = open_generate(imagegen.ollama_payload(request, KEEP_ALIVE))
-        except OllamaError as error:
-            self._stream_line({"error": self._picture_refusal(str(error), model)})
-            return
-        router.commit(model)
-        try:
-            while True:
-                line = response.readline()
-                if not line:
-                    break
-                try:
-                    event = json.loads(line)
-                except ValueError:
-                    continue
-                if event.get("error"):
-                    self._stream_line({"error": self._picture_refusal(str(event["error"]), model)})
-                    return
-                if event.get("image"):
-                    if getattr(self, "_gone", False) or not self._stream_line({"progress": -1, "total": 0}):
-                        return
-                    record = imagegen.save(imagegen.decode(event["image"]), request)
-                    self._stream_line({"image": record})
-                    return
-                if event.get("done"):
-                    self._stream_line({"error": "Ollama finished without sending a picture. "
-                                                "This Ollama may not make pictures with " + model + "."})
-                    return
-                if not self._stream_line({"progress": int(event.get("completed") or 0),
-                                          "total": int(event.get("total") or 0)}):
-                    return
-            self._stream_line({"error": "Ollama stopped before the picture was finished."})
-        except ValueError as error:
-            self._stream_line({"error": str(error)})
-        except OSError as error:
-            self._stream_line({"error": f"The picture could not be saved: {error.strerror or error}"})
-        finally:
-            response.close()
-
     def _loaded(self) -> dict:
-        """What is really in memory, asked of Ollama and sd-server rather than remembered,
-        since models leave on their own when the keepalive runs out."""
+        """What is really in memory, asked of the MLX worker and sd-server rather than
+        remembered, since models leave on their own when the keepalive runs out."""
         large = router.large or ""
         if large.startswith(imagegen.SD_PREFIX):
             running_sd = managed.running()
             return {"large_model": large if running_sd else None,
                     "unloads_at": managed.stops_at if running_sd else None}
-        try:
-            loaded = [item for item in running() if item["name"] and not is_nomic(item["name"])]
-        except OllamaError:
-            return {"large_model": None, "unloads_at": None}
+        loaded = [item for item in running() if item["name"]]
         if not loaded:
             return {"large_model": None, "unloads_at": None}
-        ours = keepalive.key(large) if large else None
-        pick = next((item for item in loaded if keepalive.key(item["name"]) == ours), loaded[0])
-        unloads_at = pick["expires"] if pick["expires"] is not None else KEEPER.leaves_at(pick["name"])
-        return {"large_model": pick["name"], "unloads_at": unloads_at, "also_loaded": len(loaded) - 1}
+        pick = loaded[0]
+        return {"large_model": pick["name"], "unloads_at": KEEPER.leaves_at(pick["name"])}
 
     def _picture_setup(self) -> dict:
         """What Settings shows under Pictures: what was found and what is wrong."""
@@ -777,26 +686,7 @@ class Handler(BaseHTTPRequestHandler):
             except sdserver.PictureError as error:
                 server = {"error": str(error)}
         return {"program": program, "models": [model["name"] for model in models], "problems": problems + missing,
-                "server": server, "ollama": imagegen.support(), "program_dir": str(sdserver.program_dir())}
-
-    def _search(self) -> None:
-        """A few earlier notes close to a question. Never an error: a send must not wait on this."""
-        try:
-            payload = self._body(MAX_BODY)
-            query = payload.get("query")
-            exclude = payload.get("exclude")
-            if not isinstance(query, str):
-                raise ValueError("query is required")
-            source = notes.chat_source(exclude) if isinstance(exclude, str) and exclude else ""
-        except ValueError as error:
-            self._send_json({"error": str(error)}, status=400)
-            return
-        try:
-            found = notes.search(query, embed, exclude=source)
-        except (OllamaError, ValueError, OSError) as error:
-            self._send_json({"notes": [], "error": str(error)})
-            return
-        self._send_json({"notes": found})
+                "server": server, "program_dir": str(sdserver.program_dir())}
 
     def send_response(self, code: int, message: str | None = None) -> None:
         self._answered = True
@@ -981,9 +871,7 @@ def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     stopping = threading.Event()
     KEEPER.watch(running, unload, stopping, on_unload=router.forget)
-    indexer.everything()
     print(f"HikariLM at http://{HOST}:{PORT}", flush=True)
-    print(f"Ollama at {os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,27 +1,12 @@
 """Decide when a large model has to leave memory.
 
-Follow-ups reuse the loaded model. nomic-embed-text is small enough to sit
-beside it, so loading nomic never forces the large model out. A different
-large model does.
+Follow-ups reuse the loaded model. A different large model makes it leave first.
 """
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-
-from helper import keepalive
-
-NOMIC = "nomic-embed-text"
-
-
-def is_nomic(model: str) -> bool:
-    return model.split(":", 1)[0] == NOMIC
-
-
-def chat_models(names: list[str]) -> list[str]:
-    """Models you can chat with. nomic-embed-text only indexes text."""
-    return [name for name in names if not is_nomic(name)]
 
 
 class Work:
@@ -67,8 +52,6 @@ class ModelRouter:
 
     def begin(self, model: str) -> None:
         """Unload the previous large model when this request needs a different one."""
-        if is_nomic(model):
-            return
         with self._lock:
             previous = self.large
             if previous is not None and previous != model:
@@ -78,12 +61,10 @@ class ModelRouter:
     def forget(self, model: str) -> None:
         """The model has left memory on its own (keepalive), so there is nothing to unload."""
         with self._lock:
-            if self.large is not None and keepalive.key(self.large) == keepalive.key(model):
+            if self.large == model:
                 self.large = None
 
     def commit(self, model: str) -> None:
-        """Remember the large model only after Ollama has accepted the request."""
-        if is_nomic(model):
-            return
+        """Remember the large model only once it has accepted the request."""
         with self._lock:
             self.large = model

@@ -1,9 +1,9 @@
 """Pictures from stable-diffusion.cpp's sd-server, or another server with the same API.
 
-sd-server keeps its model in its own memory, apart from Ollama's. So the helper
-starts it only when a picture is asked for, after the chat model has left
+sd-server keeps its model in its own memory, apart from the chat model's. So the
+helper starts it only when a picture is asked for, after the chat model has left
 memory, and stops it before the next chat model loads, or when the keepalive
-runs out. That keeps one large model in memory, the same rule as Ollama's.
+runs out. That keeps one large model in memory, the same rule as for chat models.
 
 A server the user started themselves (sd-server, AUTOMATIC1111, Forge, Draw
 Things) is reached by its address with the same /sdapi/v1 calls. Its memory is
@@ -266,7 +266,7 @@ class Managed:
         raise PictureError("sd-server took too long to load the model.")
 
     def touch(self) -> None:
-        """Keep it for the keepalive after a picture, then stop it, like Ollama does."""
+        """Keep it for the keepalive after a picture, then stop it, as chat models are."""
         with self._lock:
             self._cancel_timer()
             if self.running():

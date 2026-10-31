@@ -1,9 +1,7 @@
-"""Making pictures: where it works, which models make them, and the images/ folder.
+"""Making pictures: which models make them, the requests, and the images/ folder.
 
-Ollama runs image generation models such as flux.2 only on Apple Silicon. Newer Ollama builds refuse even there; once
-one says so, its picture models are hidden until Ollama is updated, and the
-user is pointed to sd-server. Image models never answer messages, so
-they are kept out of chat everywhere, supported or not.
+Pictures are made by sd-server, which the helper starts, or by a picture server
+the user runs. Their models are listed apart and never answer messages.
 """
 
 from __future__ import annotations
@@ -21,12 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from helper import names, store
-
-# Names that make pictures, for when Ollama does not say what a model can do.
-IMAGE_NAMES = ("flux", "z-image", "stable-diffusion", "sdxl", "sd3", "qwen-image", "hidream")
-# What Ollama's /api/show lists for a model that makes pictures (vision models say "vision").
-IMAGE_CAPABILITIES = {"image", "imagegen", "image_generation"}
+from helper import store
 
 SIZES = {
     "square": (1024, 1024),
@@ -40,16 +33,7 @@ MAX_SEED = 2 ** 31 - 1
 MAX_STEPS = 100
 ID_PATTERN = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 PNG = b"\x89PNG\r\n\x1a\n"
-# What Ollama answers once a build no longer makes pictures, e.g. "image generation
-# models are not currently supported" (ollama/ollama#14306).
-REFUSAL = re.compile(r"not (currently )?supported|unsupported", re.IGNORECASE)
-REFUSED_FILE = "ollama-pictures.json"
-SD_ALTERNATIVE = ("HikariLM can make the same pictures with stable-diffusion.cpp's sd-server, which runs FLUX.2 klein: "
-                  "pick \"Set up picture making…\" in the model list, which downloads "
-                  "and sets it up once.")
 
-
-# --- where it works ---------------------------------------------------------
 
 def apple_silicon() -> bool:
     if platform.system() != "Darwin":
@@ -62,18 +46,6 @@ def apple_silicon() -> bool:
         return answer.stdout.strip() == "1"
     except (OSError, subprocess.SubprocessError):
         return False
-
-
-def support() -> dict:
-    """{"supported": bool, "reason": str}. HIKARILM_IMAGES=on or off wins over the test."""
-    forced = os.environ.get("HIKARILM_IMAGES", "").strip().lower()
-    if forced == "on":
-        return {"supported": True, "reason": ""}
-    if forced == "off":
-        return {"supported": False, "reason": "Image generation is turned off (HIKARILM_IMAGES=off)."}
-    if apple_silicon():
-        return {"supported": True, "reason": ""}
-    return {"supported": False, "reason": "Image generation needs a Mac with Apple Silicon."}
 
 
 # FLUX.2 klein 4B for sd-server, as stable-diffusion.cpp's docs/flux2.md sets it up. None
@@ -107,77 +79,26 @@ def klein_setup() -> dict:
     return {"folder": str(folder), "files": files, "line": f"{line} {KLEIN_OPTIONS}"}
 
 
-def ollama_refuses() -> bool:
-    """Whether the running Ollama already said it does not make pictures. After an
-    update it is asked again."""
-    from helper.ollama import version
-
-    try:
-        saved = json.loads((store.home() / REFUSED_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    return isinstance(saved, dict) and saved.get("version") == version()
-
-
-def note_refusal(error: str, ollama_version: str, model: str) -> str | None:
-    """If Ollama's error says it does not make pictures, remember that for this version
-    and return the message to show instead; otherwise None."""
-    if not REFUSAL.search(error):
-        return None
-    try:
-        store.home().mkdir(parents=True, exist_ok=True)
-        _write(store.home() / REFUSED_FILE, json.dumps({"version": ollama_version, "error": error}).encode())
-    except OSError:
-        pass
-    which = f"Ollama {ollama_version}" if ollama_version else "This Ollama"
-    return (f"{which} cannot make pictures with {names.label(model)}: it says \"{error}\". Ollama has taken image generation "
-            f"out for now. {SD_ALTERNATIVE} Ollama's picture models are hidden until Ollama is updated.")
-
-
-# --- which models make pictures -----------------------------------------------
-
-def is_image_model(name: str, shown: dict | None = None) -> bool:
-    capabilities = (shown or {}).get("capabilities")
-    if isinstance(capabilities, list) and capabilities:
-        return any(str(item).lower() in IMAGE_CAPABILITIES for item in capabilities)
-    base = name.lower().rsplit("/", 1)[-1].split(":", 1)[0]
-    return any(part in base for part in IMAGE_NAMES)
-
-
-VISION_NAMES = re.compile(r"gemma3|llava|vision|minicpm-v|moondream|pixtral|mllama|qwen[\d.]*-?vl|[-_.:]vl\b")
-
-
-def reads_pictures(name: str, shown: dict | None = None) -> bool:
-    """Whether a chat model can be sent a picture: Ollama's "vision" capability, or the
-    usual names when Ollama does not say."""
-    capabilities = (shown or {}).get("capabilities")
-    if isinstance(capabilities, list) and capabilities:
-        return "vision" in [str(item).lower() for item in capabilities]
-    return bool(VISION_NAMES.search(name.lower()))
-
-
-def split(names: list[str], show) -> tuple[list[str], list[str], list[str]]:
-    """(models that answer messages, models that make pictures, the message models that
-    can also read pictures). A model that cannot be placed answers messages."""
-    chat, images, vision = [], [], []
+def vision_models(names: list[str], show) -> list[str]:
+    """The chat models that can read pictures. One whose details cannot be read is left out."""
+    vision = []
     for name in names:
         try:
-            shown = show(name)
-        except Exception:  # an unreadable model is placed by its name
-            shown = None
-        if is_image_model(name, shown):
-            images.append(name)
-            continue
-        chat.append(name)
-        if reads_pictures(name, shown):
-            vision.append(name)
-    return chat, images, vision
+            if "vision" in (show(name).get("capabilities") or []):
+                vision.append(name)
+        except Exception:
+            pass
+    return vision
 
 
 # --- where pictures come from -------------------------------------------------------
 
 SD_PREFIX = "sd:"          # an sd-server model the helper starts and stops
 REMOTE_PREFIX = "remote:"  # a picture server the user runs, reached by its address
+
+
+def is_picture_model(model: str) -> bool:
+    return model.startswith((SD_PREFIX, REMOTE_PREFIX))
 PICTURE_DEFAULTS = {"program": "", "models": "", "address": ""}
 
 
@@ -192,20 +113,12 @@ def clean_picture_settings(raw) -> dict:
     return out
 
 
-def picture_models(settings: dict, ollama_images: list[str]) -> tuple[list[dict], list[str]]:
+def picture_models(settings: dict) -> tuple[list[dict], list[str]]:
     """Every model that can make a picture now, for the picker, and a plain note for each
     source that is set up but not usable."""
     from helper import sdserver
 
     found, notes = [], []
-    if ollama_images:
-        allowed = support()
-        if allowed["supported"] and ollama_refuses():
-            notes.append("This Ollama says it does not make pictures, so its picture models are hidden. " + SD_ALTERNATIVE)
-        elif allowed["supported"]:
-            found += [{"id": name, "label": name, "kind": "ollama"} for name in ollama_images]
-        else:
-            notes.append(allowed["reason"] + " Ollama's image models are hidden.")
     pictures = settings.get("pictures") or PICTURE_DEFAULTS
     models, problems = sdserver.parse_models(pictures["models"])
     notes += problems
@@ -273,14 +186,6 @@ def clean_request(payload: dict) -> dict:
             "seed": seed, "steps": steps}
 
 
-def ollama_payload(request: dict, keep_alive: str) -> dict:
-    payload = {"model": request["model"], "prompt": request["prompt"], "stream": True, "keep_alive": keep_alive,
-               "width": request["width"], "height": request["height"], "options": {"seed": request["seed"]}}
-    if request["steps"]:
-        payload["steps"] = request["steps"]
-    return payload
-
-
 # --- images/ -----------------------------------------------------------------------
 
 def images_dir() -> Path:
@@ -309,13 +214,13 @@ def _write(path: Path, data: bytes) -> None:
 
 def decode(image_b64) -> bytes:
     if not isinstance(image_b64, str) or not image_b64:
-        raise ValueError("Ollama sent no picture.")
+        raise ValueError("The picture server sent no picture.")
     try:
         data = base64.b64decode(image_b64, validate=True)
     except (binascii.Error, ValueError):
-        raise ValueError("Ollama sent a picture that could not be read.") from None
+        raise ValueError("The picture server sent a picture that could not be read.") from None
     if not data.startswith(PNG):
-        raise ValueError("Ollama sent something that is not a PNG picture.")
+        raise ValueError("The picture server sent something that is not a PNG picture.")
     return data
 
 

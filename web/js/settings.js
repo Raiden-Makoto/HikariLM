@@ -1,28 +1,8 @@
 // The Settings window, and the one-time picture setup window.
 import { state } from "./state.js";
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { allPictures, isPictureModel, loadModels, modelLabel, pictureNotes } from "./models.js";
+import { allPictures, isPictureModel, loadModels, modelLabel } from "./models.js";
 import { applyBackground } from "./page.js";
-
-// Earlier chats and pictures: the helper keeps small notes of what was
-// answered and read, and a few close to a new question go along with it.
-const NOTES_KEY = "hikarilm-notes";
-export const notesOn = () => localStorage.getItem(NOTES_KEY) !== "off";
-
-async function showNotesSetting() {
-  document.querySelector("#notes-toggle").checked = notesOn();
-  const note = document.querySelector("#notes-note");
-  note.textContent = notesOn()
-    ? "A few notes from earlier chats and pictures that match your question are sent along with it. Not used in the code editor."
-    : "Off. Each question is sent on its own.";
-  try {
-    const body = await (await fetch("/api/notes")).json();
-    note.textContent += " " + body.notes + (body.notes === 1 ? " note" : " notes") + " kept so far." +
-      (body.error ? " Not indexed yet: " + plainError(body.error) : "");
-  } catch (error) {
-    // The count is only a courtesy.
-  }
-}
 
 // Context length and compaction live in the helper, which enforces them.
 let serverSettings = null;
@@ -54,6 +34,7 @@ async function showContextSetting() {
   document.querySelector("#think-toggle").checked = serverSettings.thinking.enabled;
   document.querySelector("#think-limit").value = serverSettings.thinking.budget ?? "";
   document.querySelector("#kv-bits").value = String(serverSettings.kv_cache.bits);
+  showKvWarning();
   const pictures = serverSettings.pictures;
   document.querySelector("#pic-program").value = pictures.program;
   document.querySelector("#pic-models").value = pictures.models;
@@ -83,9 +64,6 @@ async function showPictureSetup(saved = false) {
   }
   if (body.server) parts.push(body.server.error ? plainError(body.server.error) : "Picture server: " + body.server.model + ".");
   parts.push(...body.problems);
-  // Said only when an Ollama image model is installed but cannot run here.
-  const hidden = pictureNotes.find((line) => line.includes("picture models are hidden") || line.endsWith("image models are hidden."));
-  if (hidden) parts.push(hidden);
   note.textContent = parts.join(" ");
 }
 
@@ -194,7 +172,7 @@ function fillContextChoices(body) {
   list.replaceChildren(...CONTEXT_CHOICES.filter((size) => !body.trained || size <= body.trained).map((size) => {
     const option = document.createElement("option");
     option.value = size;
-    if (size === body.default) option.label = "Ollama's default";
+    if (size === body.default) option.label = "Default";
     return option;
   }));
 }
@@ -206,22 +184,25 @@ async function showContext() {
     const body = await (await fetch("/api/context?model=" + encodeURIComponent(model))).json();
     const parts = [];
     if (body.default) {
-      const from = { model: "set by the model", OLLAMA_CONTEXT_LENGTH: "from OLLAMA_CONTEXT_LENGTH", ollama: "Ollama's built-in" }[body.default_from];
       const own = body.default.toLocaleString();
       document.querySelector("#ctx-model").placeholder = serverSettings?.context.all
-        ? "Same: " + serverSettings.context.all.toLocaleString() : "Ollama's: " + own;
-      document.querySelector("#ctx-all").placeholder = "Ollama's: " + own;
-      parts.push("Ollama's default for " + modelLabel(model) + " is " + own + " tokens (" + from + ").");
+        ? "Same: " + serverSettings.context.all.toLocaleString() : "Default: " + own;
+      document.querySelector("#ctx-all").placeholder = "Default: " + own;
+      parts.push("The default for " + modelLabel(model) + " is " + own + " tokens.");
     }
     if (body.error) parts.push(plainError(body.error));
     else if (model) {
       parts.push(modelLabel(model) + " will use " + body.num_ctx.toLocaleString() + " tokens.");
     }
     fillContextChoices(body);
-    note.textContent = parts.join(" ") || "Blank uses Ollama's own setting.";
+    note.textContent = parts.join(" ") || "Blank uses each model's default.";
   } catch (error) {
     note.textContent = "";
   }
+}
+
+function showKvWarning() {
+  document.querySelector("#kv-warning").hidden = document.querySelector("#kv-bits").value !== "4";
 }
 
 async function saveContextSetting() {
@@ -248,6 +229,7 @@ async function saveContextSetting() {
     kv_cache: { bits: Number(document.querySelector("#kv-bits").value) },
     pictures: serverSettings.pictures,
   };
+  showKvWarning();
   const note = document.querySelector("#compact-note");
   const response = await fetch("/api/settings", {
     method: "PUT",
@@ -268,10 +250,6 @@ async function saveContextSetting() {
 
 // Listeners and first steps, run by main.js once every part is loaded.
 export function start() {
-  document.querySelector("#notes-toggle").addEventListener("change", (event) => {
-    localStorage.setItem(NOTES_KEY, event.target.checked ? "on" : "off");
-    showNotesSetting();
-  });
   pictureSetup.addEventListener("close", () => clearInterval(setupTimer));
   document.querySelector("#close-picture-setup").addEventListener("click", () => pictureSetup.close());
   document.querySelector("#setup-start").addEventListener("click", () => { setupReloaded = false; setupAction("start"); });
@@ -290,13 +268,12 @@ export function start() {
     for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
   }
 
-  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
+  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
   document.querySelectorAll("#picture-setting input, #pic-models")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) savePictureSetting(); }));
 
   document.querySelector("#open-settings").addEventListener("click", () => {
-    showNotesSetting();
     showContextSetting();
     settings.showModal();
   });

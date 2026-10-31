@@ -141,7 +141,7 @@ def clean_summary(value) -> str:
 
 
 def clean_usage(value) -> dict:
-    """The token counts Ollama reported for a reply."""
+    """The token counts the model reported for a reply."""
     if not isinstance(value, dict):
         return {}
     kept = {}
