@@ -75,7 +75,14 @@ class BudgetTest(unittest.TestCase):
         self.assertLessEqual(plan["num_ctx"], 32768)  # never past what the model was trained for
         self.assertEqual(plan["num_ctx"] % budget.STEP, 0)
         used = int(4.5 * GIB) + plan["num_ctx"] * budget.per_token(QWEN) + budget.RESERVE
-        self.assertLessEqual(used, 8 * GIB * budget.SHARE)
+        self.assertLessEqual(used, 6 * GIB)
+
+    def test_free_memory_counts_in_full(self):
+        # 15 of 16 GB free (cached files included): a 12 GB model fits, with no share of the total held back.
+        plan = budget.plan("qwen", 4096, QWEN, 12 * GIB, [], (16 * GIB, 15 * GIB))
+        used = 12 * GIB + plan["max_fit"] * budget.per_token(QWEN) + budget.RESERVE
+        self.assertGreaterEqual(plan["max_fit"], budget.MIN_CONTEXT)
+        self.assertLessEqual(used, 15 * GIB)
 
     def test_a_model_that_does_not_fit_is_refused(self):
         with self.assertRaises(budget.NoRoom) as caught:

@@ -4,8 +4,8 @@ Ollama keeps a cache for every token of context (the KV cache), and its size
 grows with the context length. A context length that is too big for the
 machine makes Ollama push the system into swap, or fail. So before every
 request the helper works out how much context fits: the model's weights plus
-its cache must stay under a share of the memory, and leave room for everything
-else. A context length the user asked for is cut down to what fits, and a
+its cache must fit in the free memory (cached files count as free, since macOS
+drops them when a program needs the room) with a little left for the system. A context length the user asked for is cut down to what fits, and a
 model that does not fit at all is refused before it is loaded.
 """
 
@@ -19,7 +19,6 @@ import sys
 from urllib.parse import urlparse
 
 GIB = 1024 ** 3
-SHARE = 0.75            # at most this much of all memory for Ollama's model and cache
 RESERVE = 1 * GIB       # always left free for the system, the browser and Ollama itself
 MIN_CONTEXT = 2048
 STEP = 256
@@ -182,6 +181,11 @@ def default_source(shown: dict) -> tuple[int, str]:
     return DEFAULT_CONTEXT, "ollama"
 
 
+def _usable(total: int, available: int | None, leaving: int) -> int:
+    """Free memory (macOS's cached files count as free) plus what the model being replaced gives back."""
+    return total if available is None else min(total, available + leaving)
+
+
 PICTURE_WORK = 2 * GIB   # what a picture model needs beyond its weights while it draws
 
 
@@ -191,9 +195,7 @@ def check_picture(model: str, size: int, loaded: list[dict], mem: tuple[int, int
         return
     total, available = mem
     leaving = sum(item["size"] for item in loaded if not item["name"].startswith("nomic-embed-text"))
-    room = total * SHARE
-    if available is not None:
-        room = min(room, available + leaving)
+    room = _usable(total, available, leaving)
     needed = size + PICTURE_WORK + RESERVE
     if needed > room:
         raise NoRoom(f"Not enough memory to run {model} safely. It needs about {_gb(needed)}, and about "
@@ -219,9 +221,7 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
         return result
     total, available = mem
     leaving = sum(item["size"] for item in loaded if not item["name"].startswith("nomic-embed-text"))
-    usable = total * SHARE
-    if available is not None:
-        usable = min(usable, available + leaving)
+    usable = _usable(total, available, leaving)
     fixed = int(shown.get("window_bytes") or 0)
     room = usable - RESERVE - size - fixed
     cost = per_token(shown)
@@ -231,12 +231,12 @@ def plan(model: str, requested: int | None, shown: dict, size: int, loaded: list
     result["max_fit"] = fit
     if fit < MIN_CONTEXT:
         cache = fixed + cost * MIN_CONTEXT
-        free = "" if available is None else f", {_gb(available)} free now counting cached files" + (
+        free = f"{_gb(total)} in all" if available is None else f"{_gb(available)} free now counting cached files" + (
             f" plus {_gb(leaving)} from the model it replaces" if leaving else "")
         raise NoRoom(
             f"Not enough memory to run {model} safely. It needs about {_gb(size + cache + RESERVE)} "
             f"({_gb(size)} model, {_gb(cache)} for {MIN_CONTEXT} tokens of context, {_gb(RESERVE)} kept spare), "
-            f"and about {_gb(max(0, usable))} can be used (at most {SHARE:.0%} of {_gb(total)}{free}). "
+            f"and about {_gb(max(0, usable))} can be used ({free}). "
             "Close some programs or choose a smaller model."
         )
     if want > fit:
