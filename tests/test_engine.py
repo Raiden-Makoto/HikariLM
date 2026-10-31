@@ -88,6 +88,14 @@ class EngineTest(unittest.TestCase):
         self.assertIn("tiiuae/Falcon3-10B-Instruct-1.58bit", engine.names())
         self.assertNotIn("tiiuae/Falcon3-10B-Instruct", engine.names())
 
+    def test_microsofts_bitnet_is_listed_packed_or_as_master_weights(self):
+        for name, mode in (("microsoft/bitnet-b1.58-2B-4T", "offline"), ("microsoft/bitnet-b1.58-2B-4T-bf16", "online")):
+            add_model(self.hub, name, {"model_type": "bitnet", "quantization_config": {
+                "quant_method": "bitnet", "linear_class": "autobitlinear", "quantization_mode": mode}})
+        engine.forget_scan()
+        self.assertIn("microsoft/bitnet-b1.58-2B-4T", engine.names())
+        self.assertIn("microsoft/bitnet-b1.58-2B-4T-bf16", engine.names())
+
     def test_any_mlx_model_is_listed_quantized_or_not(self):
         full = {k: v for k, v in real_config(CODER).items() if k != "quantization"}
         add_model(self.hub, "mlx-community/Llama-3.2-3B-Instruct-bf16", full)
@@ -261,16 +269,42 @@ class WorkerPromptTest(unittest.TestCase):
         import mlx_worker
         self.worker = mlx_worker
 
-    def test_bitnet_inputs_are_rounded_only_for_tiis_bitlinear(self):
+    def test_every_bitnet_form_is_recognized(self):
+        tii = {"modules_to_not_convert": ["lm_head"], "quant_method": "bitnet"}
+        microsoft = {"quant_method": "bitnet", "linear_class": "autobitlinear", "quantization_mode": "offline"}
+        mlx_copy = {"group_size": 64, "bits": 4, "quant_method": "bitnet"}
         with tempfile.TemporaryDirectory() as folder:
-            def config(quantization):
-                Path(folder, "config.json").write_text(json.dumps({"quantization_config": quantization}))
-                return self.worker._is_bitnet(folder)
+            def settings(config):
+                Path(folder, "config.json").write_text(json.dumps(config))
+                return self.worker.bitnet_config(folder)
 
-            self.assertTrue(config({"quant_method": "bitnet"}))
-            self.assertFalse(config({"quant_method": "bitnet", "linear_class": "autobitlinear"}))
-            self.assertFalse(config({"quant_method": "fp8"}))
-            self.assertFalse(config(None))
+            self.assertEqual(settings({"quantization_config": tii}), tii)
+            self.assertEqual(settings({"model_type": "bitnet", "quantization_config": microsoft}), microsoft)
+            self.assertEqual(settings({"quantization": mlx_copy}), mlx_copy)
+            self.assertIsNone(settings({"quantization": {"group_size": 64, "bits": 4}}))
+            self.assertIsNone(settings({"quantization_config": {"quant_method": "fp8"}}))
+            self.assertIsNone(settings({"model_type": "llama"}))
+
+    def test_full_weights_are_packed_the_way_transformers_unpacks_them(self):
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy is not installed")
+
+        weight = np.random.default_rng(1).standard_normal((16, 12)).astype(np.float32) * 0.02
+        for divided in (True, False):
+            packed, scale = self.worker.pack_ternary(weight, np, divided)
+            self.assertEqual((packed.dtype, packed.shape), (np.uint8, (4, 12)))
+            # transformers' unpack_weights: value i of each byte is row i * rows + r, minus 1.
+            unpacked = np.concatenate([((packed >> (2 * i)) & 3).astype(np.int8) - 1 for i in range(4)])
+            # transformers' WeightQuant: scale by 1 / mean size, round, clamp to -1..1, scale back.
+            per = np.float32(1) / max(np.abs(weight).mean(), np.float32(1e-5))
+            ternary = np.clip(np.round(weight * per), -1, 1)
+            np.testing.assert_array_equal(unpacked, ternary)
+            expected = per if divided else np.float32(1) / per
+            self.assertAlmostEqual(float(scale), float(expected), places=7)
+        with self.assertRaises(ValueError):
+            self.worker.pack_ternary(np.ones((6, 4), np.float32), np, False)
 
     def model(self, template, ending):
         class Tokenizer:

@@ -108,24 +108,100 @@ def _sampling(path: str) -> dict:
     return out
 
 
-def _is_bitnet(path: str) -> bool:
+# --- BitNet ------------------------------------------------------------------
+# Every BitNet model on Hugging Face that transformers runs comes in one of three forms, all with
+# quant_method "bitnet" in its config:
+#   - TII's BitLinear (Falcon3 and Falcon-E 1.58-bit, Llama3-8B-1.58): ternary weights packed four
+#     to a byte, one scale per matrix that the output is divided by;
+#   - Microsoft's AutoBitLinear, offline (bitnet-b1.58-2B-4T): packed the same way, the output
+#     multiplied by the scale;
+#   - AutoBitLinear, online (bitnet-b1.58-2B-4T-bf16): the full bf16 weights, made ternary on
+#     every call.
+# mlx-community's copies add a "quantization" block for their 4- or 8-bit embeddings.
+
+def bitnet_config(path: str) -> dict | None:
+    """The BitNet settings of a model folder, or None if it is not BitNet."""
     try:
         with open(os.path.join(path, "config.json"), encoding="utf-8") as handle:
-            quantization = json.load(handle).get("quantization_config")
-    except (OSError, ValueError, AttributeError):
-        return False
-    return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet" \
-        and quantization.get("linear_class", "bitlinear") != "autobitlinear"
+            config = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    for key in ("quantization_config", "quantization"):
+        settings = config.get(key)
+        if isinstance(settings, dict) and settings.get("quant_method") == "bitnet":
+            return settings
+    return None
+
+
+def pack_ternary(weight, xp, divided: bool):
+    """Full weights made ternary the way transformers' WeightQuant does (in float32, scaled by
+    their mean size), packed the way TII and Microsoft ship them: value i of each byte, bits 2i
+    and 2i+1, holds row i * rows/4 + r, stored as 0, 1, 2 for -1, 0, 1. Returns the packed
+    weights and the matrix's scale, as a divisor when `divided` (TII's BitLinear) else a factor.
+    `xp` is mlx.core, or numpy in the tests."""
+    wide = weight.astype(xp.float32)
+    if wide.shape[0] % 4:
+        raise ValueError("a BitNet layer needs a number of outputs divisible by 4")
+    scale = 1.0 / xp.maximum(xp.abs(wide).mean(), 1e-5)
+    levels = (xp.clip(xp.round(wide * scale), -1, 1) + 1).astype(xp.uint8)
+    rows = levels.shape[0] // 4
+    packed = levels[:rows] | (levels[rows:2 * rows] << 2) | (levels[2 * rows:3 * rows] << 4) | (levels[3 * rows:] << 6)
+    return packed, (scale if divided else 1.0 / scale)
+
+
+def load_bitnet(path: str, settings: dict):
+    """mlx-lm's load, with every BitNet form in place before the weights are read. mlx-lm turns
+    linear layers into BitLinear only when a config has no "quantization" block, so mlx-community's
+    4- and 8-bit copies of llama-shaped BitNet models do not load without this; and it reads
+    only packed weights, so full ones are packed here, once, in memory."""
+    import mlx.core as mx
+    import mlx.nn as nn
+    from mlx.utils import tree_flatten
+    from mlx_lm import load, utils
+    from mlx_lm.models.bitlinear_layers import BitLinear, bitnet_quantize
+
+    if settings.get("use_rms_norm"):
+        raise ValueError("this BitNet model norms each layer's inputs (use_rms_norm), which HikariLM does not run")
+    round_bitnet_activations()
+    with open(os.path.join(path, "config.json"), encoding="utf-8") as handle:
+        model_class, _ = utils.get_model_classes(config=json.load(handle))
+    own = vars(model_class).get("sanitize")
+    inherited = getattr(model_class, "sanitize", None)
+
+    def sanitize(self, weights):
+        if inherited is not None:
+            weights = inherited(self, weights)
+        bitnet_quantize(self, settings)
+        for name, module in tree_flatten(self.leaf_modules(), is_leaf=nn.Module.is_module):
+            weight = weights.get(name + ".weight")
+            if isinstance(module, BitLinear) and weight is not None and weight.dtype != mx.uint8:
+                packed, scale = pack_ternary(weight, mx, module.invert_weight_scales)
+                weights[name + ".weight"] = packed
+                weights[name + ".weight_scale"] = mx.reshape(scale, (1,)).astype(weight.dtype)
+        return weights
+
+    model_class.sanitize = sanitize
+    try:
+        return load(path)
+    finally:
+        if own is not None:
+            model_class.sanitize = own
+        else:
+            del model_class.sanitize
 
 
 def round_bitnet_activations() -> None:
-    """Make mlx-lm's BitLinear compute what transformers' BitLinear does, the code Falcon3
-    1.58-bit was trained and published with: each token's inputs are rounded to 8-bit levels
-    (127 / its largest value), the packed ternary weights multiply those whole numbers, and
-    the result is divided by both scales. mlx-lm's kernel alone multiplies the inputs unrounded.
+    """Make mlx-lm's BitLinear compute what transformers' code does for each form. mlx-lm's
+    kernel alone multiplies each layer's inputs unrounded; transformers rounds every token's
+    inputs to 8-bit levels (127 / its largest value) first, as these models were trained.
 
-    Each step is in the weights' dtype (bf16) and in transformers' order, since a scale or a
-    product rounded differently moves inputs across a rounding step, and that grows over 40 layers."""
+    TII's BitLinear (the scale divides) rounds in bf16, multiplies the whole numbers, and divides
+    by both scales at once. Microsoft's AutoBitLinear (the scale multiplies) rounds in float32,
+    turns the inputs back into bf16 values, multiplies, adds the bias, then the weight scale.
+    Each step is in the same dtype and order as there, since a scale or product rounded
+    differently moves inputs across a rounding step, and that grows over the layers."""
     import mlx.core as mx
     from mlx_lm.models.bitlinear_layers import BitLinear, _bitlinear_kernel
 
@@ -147,15 +223,27 @@ def round_bitnet_activations() -> None:
         )[0]
         return out.reshape(*shape[:-1], self.out_features)
 
-    def __call__(self, x):
+    def bitlinear(self, x):
         dtype = self.weight_scale.dtype
         x = x.astype(dtype)
         largest = mx.maximum(mx.abs(x).max(axis=-1, keepdims=True), mx.array(1e-5, dtype))
         scale = mx.array(127, dtype) / largest
         whole = mx.clip(mx.round(x * scale), -128, 127)
-        scales = scale * self.weight_scale if self.invert_weight_scales else scale / self.weight_scale
-        y = ternary_product(self, whole) / scales
+        y = ternary_product(self, whole) / (scale * self.weight_scale)
         return y if self.bias is None else y + self.bias
+
+    def autobitlinear(self, x):
+        dtype = self.weight_scale.dtype
+        wide = x.astype(mx.float32)
+        scale = 127.0 / mx.maximum(mx.abs(wide).max(axis=-1, keepdims=True), 1e-5)
+        rounded = (mx.clip(mx.round(wide * scale), -128, 127) / scale).astype(dtype)
+        y = ternary_product(self, rounded)
+        if self.bias is not None:
+            y = y + self.bias
+        return y * self.weight_scale
+
+    def __call__(self, x):
+        return bitlinear(self, x) if self.invert_weight_scales else autobitlinear(self, x)
 
     BitLinear.__call__ = __call__
     BitLinear._rounds_inputs = True
@@ -177,9 +265,8 @@ class TextModel:
         from mlx_lm.sample_utils import make_sampler
 
         self.mx, self.stream_generate, self.caches = mx, stream_generate, cache_module
-        if _is_bitnet(path):
-            round_bitnet_activations()
-        self.model, self.tokenizer = load(path)
+        settings = bitnet_config(path)
+        self.model, self.tokenizer = load_bitnet(path, settings) if settings else load(path)
         _stop_at_turn_ends(self.tokenizer)
         sampling = _sampling(path)
         self.sampler = make_sampler(temp=sampling["temperature"], top_p=sampling["top_p"], top_k=sampling["top_k"])

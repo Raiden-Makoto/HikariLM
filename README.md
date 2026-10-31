@@ -31,7 +31,9 @@ If you are not sure where to start, these fit a Mac with less than 18 GB of RAM 
 | Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
 | General chat, the smallest | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
 
-Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM runs TII's files as they are and computes each layer the way TII's code does; `tests/check_falcon.py` compares the two.
+Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM runs TII's files as they are and computes each layer the way TII's code does.
+
+Other BitNet models work the same way: the rest of the Falcon3 and Falcon-E 1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T` (and its `-bf16` master weights, packed when loaded), `HF1BitLLM/Llama3-8B-1.58-100B-tokens`, and mlx-community's copies of them. `tests/check_bitnet.py` compares any of them with its makers' code. GGUF files (for bitnet.cpp) and BitNet experiments with their own code, such as `1bitLLM/bitnet_b1_58-large`, are not MLX models and are not listed.
 
 With more memory, take bigger ones or less quantized ones (8-bit instead of 4-bit, say) from [mlx-community](https://huggingface.co/mlx-community).
 

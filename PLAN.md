@@ -106,11 +106,23 @@ Each one is checked against its makers' own code before it is used.
 - [x] mlx-lm multiplies a layer's inputs unrounded; TII's reference (transformers' BitLinear) rounds each
   token's inputs to 8-bit levels first, as the model was trained. The worker does the same
   (`round_bitnet_activations`).
-- [x] On the Mac: `tests/check_falcon.py` matches TII's reference (one layer, then whole-prompt logits).
+- [x] On the Mac: `tests/check_falcon.py` (now `check_bitnet.py`) matches TII's reference (one layer, then whole-prompt logits).
   MLX is closer to TII's code in float32 than TII's own bf16 run is; the few next tokens it picks
   differently are near ties ([#6](https://github.com/Raiden-Makoto/HikariLM/issues/6)).
 - [x] Add it to the suggested models once it passes.
 - [x] Released on its own as v3.5.0, ahead of the rest of v4.
+
+### Every BitNet model, not just Falcon3
+
+- [x] TII's BitLinear (all Falcon3 and Falcon-E 1.58-bit, Llama3-8B-1.58): as above.
+- [x] Microsoft's AutoBitLinear, offline (`microsoft/bitnet-b1.58-2B-4T`): inputs rounded in float32,
+  the output multiplied by the weight scale, as transformers does.
+- [x] AutoBitLinear, online (`-bf16` master weights): made ternary and packed once when loaded, the
+  same rounding transformers' WeightQuant does on every call.
+- [x] mlx-community's 4- and 8-bit copies: mlx-lm skips its BitNet layers when a config has a
+  `quantization` block, so llama-shaped ones did not load; `load_bitnet` puts them in first.
+- [ ] On the Mac: `tests/check_bitnet.py` passes for `microsoft/bitnet-b1.58-2B-4T`, its `-bf16`, and one
+  mlx-community 4-bit copy, besides Falcon3.
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
   Picture setup in the page downloads and converts it, with progress.
 - [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.
