@@ -121,7 +121,7 @@ def main() -> None:
     engine.prepare(say)
     mlx = engine.names()
     say("MLX models: " + ", ".join(names.label(name) for name in mlx) if mlx else
-        "No MLX models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download "
+        "No MLX models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download "
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
     report_pictures()
     say("Press Ctrl+C to stop.")

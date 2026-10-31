@@ -69,7 +69,7 @@ async function send() {
   if (state.attached.some((file) => file.image) && !isVision(model)) {
     describer = visionModel();
     if (!describer) {
-      notify("Pictures need a model that can read them, such as Gemma 3. Remove the picture or install one.");
+      notify("Pictures need a model that can read them, such as Gemma 3 or Qwen2.5-VL. Remove the picture or download one.");
       return;
     }
   }

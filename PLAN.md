@@ -1,8 +1,8 @@
 # HikariLM plan
 
 - **v2**: Macs with Apple Silicon only. Released.
-- **v3**: every model inside the HikariLM helper with Apple's MLX, starting with the
-  big three from ready-made MLX weights. No Ollama, no sd-server, no LM Studio.
+- **v3**: every model inside the HikariLM helper with Apple's MLX. Any MLX model works; the
+  big three below are only suggestions for Macs with less than 18 GB of RAM. No Ollama, no LM Studio.
 - **v3.1**: nomic-embed-text in MLX, and with it RAG: earlier chats and pictures found again.
 - **v4**: the models we convert ourselves, from their makers' official weights.
 
@@ -70,7 +70,9 @@ Ollama's chat lines, so the rest of the helper is unchanged.
   `models.py`, `server.py` and `start.py`. Errors are `engine.ModelError`.
 - [x] Settings that only mattered for Ollama go: "Use earlier chats and pictures" (nomic ran in Ollama; back in
   v3.1), Ollama's context defaults, Ollama's picture models.
-- [x] README: what `start.sh` installs, the three models and their sizes.
+- [x] README: what `start.sh` installs, the three suggested models and their sizes.
+- [x] v3.0.1: any MLX model is listed, full precision too (mlx-community, a repo named for MLX, or
+  `~/.hikarilm/models`); the docs say the three are suggestions for under 18 GB of RAM.
 
 ### 4. Release v3.0.0
 

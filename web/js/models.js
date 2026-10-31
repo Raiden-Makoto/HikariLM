@@ -58,7 +58,7 @@ export async function loadModels() {
     pictureNotes = body.picture_notes || [];
     fillPictureSizes(body.sizes || {});
     if (!response.ok) problem = plainError(body.error || "Could not list models.");
-    else if (models.length === 0 && allPictures.length === 0) problem = "No models downloaded yet. Get one with:  ~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit";
+    else if (models.length === 0 && allPictures.length === 0) problem = "No models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit";
   } catch (error) {
     problem = "The helper is not responding.";
   }

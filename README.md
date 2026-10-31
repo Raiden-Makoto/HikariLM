@@ -20,26 +20,28 @@ Options: `--port 9000` for another port, `--no-browser` to skip opening the page
 
 ## Models
 
-Download them from Hugging Face with the `hf` tool the venv has. These three are what each part is tuned for:
+Any MLX model works: whatever you download from Hugging Face is listed in the page, quantized or full precision. mlx-lm runs text models and mlx-vlm the ones that read pictures. Pick what fits your Mac's memory.
 
-| For | Model | Size |
+If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time):
+
+| For | Suggested model | Size |
 |---|---|---|
 | Questions about code | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
 | General chat, with thinking | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
 
+With more memory, take bigger ones or less quantized ones (8-bit instead of 4-bit, say) from [mlx-community](https://huggingface.co/mlx-community).
+
 ```bash
-~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit
-~/.hikarilm/venv/bin/hf download mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit
-~/.hikarilm/venv/bin/hf download mlx-community/gemma-3-12b-it-4bit
+~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit   # or any other MLX model
 ```
 
-Any other MLX model in the Hugging Face cache, or in a folder of its own in `~/.hikarilm/models`, is listed too. Reload the page after a download.
+Models are found in the Hugging Face cache, and in folders of their own in `~/.hikarilm/models` (for ones you converted yourself). Reload the page after a download.
 
 ## What it does
 
 - **Chat** with any of your models. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
-- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it, such as Gemma 3. Long documents are read in parts so they fit the model's context.
+- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it (any vision model mlx-vlm runs, such as Gemma 3 or Qwen2.5-VL). Long documents are read in parts so they fit the model's context.
 - **Make pictures** with your own picture models. Pick *Set up picture making…* in the model list for a one-click start with FLUX.2 klein: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made. In Settings you can add any other model `sd-server` runs, or point HikariLM at a picture server you already run (AUTOMATIC1111, Forge, Draw Things).
 - **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Apply works like Cursor's. The model labels code meant for a file with that file's path, and Apply puts it into that file, or creates the file if it is new. A block can leave out unchanged code with `... existing code ...` comments. If it can't be placed exactly, the chosen model writes the file with the change in it. Each change then shows in red and green to accept or reject. Commands, output and examples get no Apply button. Nothing is written until you press Save.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved. Settings sets the context length, and how the model keeps what it has read (the KV cache: 8-bit by default, which holds about twice as much).

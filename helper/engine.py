@@ -96,9 +96,12 @@ def _config(folder: Path) -> dict | None:
     return config if isinstance(config, dict) else None
 
 
-def _is_mlx(folder: Path) -> bool:
+def _is_mlx(folder: Path, trusted: bool = False) -> bool:
+    """Quantized weights are MLX's own. Full-precision ones look like any Hugging Face model,
+    so those count only from mlx-community, a repo named for MLX, or ~/.hikarilm/models."""
     config = _config(folder)
-    return config is not None and "quantization" in config and any(folder.glob("*.safetensors"))
+    return (config is not None and ("quantization" in config or trusted)
+            and any(folder.glob("*.safetensors")))
 
 
 def _snapshot(repo: Path) -> Path | None:
@@ -125,11 +128,13 @@ def found() -> dict[str, Path]:
             if any(repo.glob("blobs/*.incomplete")):
                 continue
             snapshot = _snapshot(repo)
-            if snapshot and _is_mlx(snapshot):
-                out[repo.name[len("models--"):].replace("--", "/", 1)] = snapshot
+            name = repo.name[len("models--"):].replace("--", "/", 1)
+            trusted = name.startswith("mlx-community/") or "mlx" in re.split(r"[-_.]", name.split("/")[-1].lower())
+            if snapshot and _is_mlx(snapshot, trusted):
+                out[name] = snapshot
         own = store.home() / "models"
         for folder in sorted(own.iterdir()) if own.is_dir() else []:
-            if folder.is_dir() and _is_mlx(folder):
+            if folder.is_dir() and _is_mlx(folder, trusted=True):
                 out[folder.name] = folder
         _scan = (time.monotonic(), out)
         return out

@@ -68,7 +68,7 @@ class EngineTest(unittest.TestCase):
 
     def test_finds_finished_mlx_downloads_only(self):
         add_model(self.hub, "mlx-community/still-coming-4bit", real_config(CODER), incomplete=True)
-        add_model(self.hub, "Qwen/not-mlx", {k: v for k, v in real_config(CODER).items() if k != "quantization"})
+        add_model(self.hub, "Qwen/Qwen2.5-Coder-7B-Instruct", {k: v for k, v in real_config(CODER).items() if k != "quantization"})
         engine.forget_scan()
         self.assertEqual(sorted(engine.names()), sorted([CODER, R1, GEMMA]))
         self.assertEqual(engine.sizes()[GEMMA], 2000)
@@ -78,6 +78,22 @@ class EngineTest(unittest.TestCase):
         (own / "weights.safetensors").write_bytes(b"x")
         engine.forget_scan()
         self.assertIn("falcon3-10b-mlx", engine.names())
+
+    def test_any_mlx_model_is_listed_quantized_or_not(self):
+        full = {k: v for k, v in real_config(CODER).items() if k != "quantization"}
+        add_model(self.hub, "mlx-community/Llama-3.2-3B-Instruct-bf16", full)
+        add_model(self.hub, "someone/phi-4-mini-mlx", full)
+        add_model(self.hub, "someone/mistral-7b-instruct", full)
+        engine.forget_scan()
+        self.assertIn("mlx-community/Llama-3.2-3B-Instruct-bf16", engine.names())
+        self.assertIn("someone/phi-4-mini-mlx", engine.names())
+        self.assertNotIn("someone/mistral-7b-instruct", engine.names())
+        own = Path(os.environ["HIKARILM_HOME"]) / "models" / "my-own-bf16"
+        own.mkdir(parents=True)
+        (own / "config.json").write_text(json.dumps(full))
+        (own / "weights.safetensors").write_bytes(b"x")
+        engine.forget_scan()
+        self.assertIn("my-own-bf16", engine.names())
 
     def test_context_lengths(self):
         coder, gemma = engine.show(CODER), engine.show(GEMMA)
