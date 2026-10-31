@@ -98,10 +98,16 @@ def _config(folder: Path) -> dict | None:
 
 def _is_mlx(folder: Path, trusted: bool = False) -> bool:
     """Quantized weights are MLX's own. Full-precision ones look like any Hugging Face model,
-    so those count only from mlx-community, a repo named for MLX, or ~/.hikarilm/models."""
+    so those count only from mlx-community, a repo named for MLX, or ~/.hikarilm/models.
+    BitNet weights (Falcon3 1.58-bit) are packed the way mlx-lm reads them, so they count too."""
     config = _config(folder)
-    return (config is not None and ("quantization" in config or trusted)
+    return (config is not None and ("quantization" in config or trusted or is_bitnet(config))
             and any(folder.glob("*.safetensors")))
+
+
+def is_bitnet(config: dict | None) -> bool:
+    quantization = (config or {}).get("quantization_config")
+    return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet"
 
 
 def _snapshot(repo: Path) -> Path | None:

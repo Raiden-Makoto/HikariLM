@@ -11,7 +11,7 @@
 | Qwen2.5-Coder 7B | v3 | mlx-lm | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
 | DeepSeek-R1 8B | v3 | mlx-lm | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Gemma 3 12B (reads pictures) | v3 | mlx-vlm | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
-| Falcon3 10B BitNet | v4 | mlx-lm | converted by us from `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+| Falcon3 10B BitNet | v4 | mlx-lm | `tiiuae/Falcon3-10B-Instruct-1.58bit`, TII's own files | 4 GB |
 | nomic-embed-text | v3.1 | our own MLX port | `nomic-ai/nomic-embed-text-v1.5` | 0.3 GB |
 | FLUX.2 klein 4B | v4 | mflux | `black-forest-labs/FLUX.2-klein-4B`, made 4-bit by us | 15 GB download, 4.6 GB kept |
 
@@ -100,8 +100,13 @@ and long files fell back to shared words.
 
 Each one is checked against its makers' own code before it is used.
 
-- [ ] Falcon3 BitNet: `mlx_lm.convert --hf-path tiiuae/Falcon3-10B-Instruct-1.58bit`, kept in `~/.hikarilm/models/`.
-  Compare a few answers with TII's reference (transformers) once. Add it to the model list.
+- [x] Falcon3 BitNet needs no conversion: TII ships ternary weights packed four to a byte with one scale per
+  matrix, the layout mlx-lm's BitLinear reads (`quant_method: bitnet`). HikariLM lists that repo as it is.
+- [x] mlx-lm multiplies a layer's inputs unrounded; TII's reference (transformers' BitLinear) rounds each
+  token's inputs to 8-bit levels first, as the model was trained. The worker does the same
+  (`round_bitnet_activations`).
+- [ ] On the Mac: `tests/check_falcon.py` matches TII's reference (one layer, then whole-prompt logits).
+- [ ] Add it to the suggested models once it passes.
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
   Picture setup in the page downloads and converts it, with progress.
 - [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.

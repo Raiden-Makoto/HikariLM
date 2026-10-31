@@ -79,6 +79,15 @@ class EngineTest(unittest.TestCase):
         engine.forget_scan()
         self.assertIn("falcon3-10b-mlx", engine.names())
 
+    def test_falcon3_bitnet_is_listed_from_tiis_own_repo(self):
+        config = {"model_type": "llama", "architectures": ["LlamaForCausalLM"],
+                  "quantization_config": {"modules_to_not_convert": ["lm_head"], "quant_method": "bitnet"}}
+        add_model(self.hub, "tiiuae/Falcon3-10B-Instruct-1.58bit", config)
+        add_model(self.hub, "tiiuae/Falcon3-10B-Instruct", {"model_type": "llama"})
+        engine.forget_scan()
+        self.assertIn("tiiuae/Falcon3-10B-Instruct-1.58bit", engine.names())
+        self.assertNotIn("tiiuae/Falcon3-10B-Instruct", engine.names())
+
     def test_any_mlx_model_is_listed_quantized_or_not(self):
         full = {k: v for k, v in real_config(CODER).items() if k != "quantization"}
         add_model(self.hub, "mlx-community/Llama-3.2-3B-Instruct-bf16", full)
@@ -251,6 +260,17 @@ class WorkerPromptTest(unittest.TestCase):
         self.addCleanup(sys.path.remove, str(HERE.parent / "helper"))
         import mlx_worker
         self.worker = mlx_worker
+
+    def test_bitnet_inputs_are_rounded_only_for_tiis_bitlinear(self):
+        with tempfile.TemporaryDirectory() as folder:
+            def config(quantization):
+                Path(folder, "config.json").write_text(json.dumps({"quantization_config": quantization}))
+                return self.worker._is_bitnet(folder)
+
+            self.assertTrue(config({"quant_method": "bitnet"}))
+            self.assertFalse(config({"quant_method": "bitnet", "linear_class": "autobitlinear"}))
+            self.assertFalse(config({"quant_method": "fp8"}))
+            self.assertFalse(config(None))
 
     def model(self, template, ending):
         class Tokenizer:

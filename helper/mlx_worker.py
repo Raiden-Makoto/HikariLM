@@ -108,6 +108,39 @@ def _sampling(path: str) -> dict:
     return out
 
 
+def _is_bitnet(path: str) -> bool:
+    try:
+        with open(os.path.join(path, "config.json"), encoding="utf-8") as handle:
+            quantization = json.load(handle).get("quantization_config")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet" \
+        and quantization.get("linear_class", "bitlinear") != "autobitlinear"
+
+
+def round_bitnet_activations() -> None:
+    """Make mlx-lm's BitLinear compute what transformers' BitLinear does, the code Falcon3
+    1.58-bit was trained and published with: each token's inputs are rounded to 8-bit levels
+    (127 / its largest value), the packed ternary weights multiply those whole numbers, and
+    the result is divided by both scales. mlx-lm's kernel alone multiplies the inputs unrounded."""
+    import mlx.core as mx
+    from mlx_lm.models.bitlinear_layers import BitLinear
+
+    if getattr(BitLinear, "_rounds_inputs", False):
+        return
+
+    def __call__(self, x):
+        dtype = self.weight_scale.dtype
+        wide = x.astype(mx.float32)
+        scale = 127.0 / mx.maximum(mx.abs(wide).max(axis=-1, keepdims=True), 1e-5)
+        whole = mx.clip(mx.round(wide * scale), -128, 127).astype(dtype)
+        y = (self.execute_matmul_kernel(whole, self.weight).astype(mx.float32) / scale).astype(dtype)
+        return y if self.bias is None else y + self.bias
+
+    BitLinear.__call__ = __call__
+    BitLinear._rounds_inputs = True
+
+
 def _text(content) -> str:
     if isinstance(content, list):
         return "".join(part.get("text", "") for part in content if isinstance(part, dict))
@@ -124,6 +157,8 @@ class TextModel:
         from mlx_lm.sample_utils import make_sampler
 
         self.mx, self.stream_generate, self.caches = mx, stream_generate, cache_module
+        if _is_bitnet(path):
+            round_bitnet_activations()
         self.model, self.tokenizer = load(path)
         _stop_at_turn_ends(self.tokenizer)
         sampling = _sampling(path)
