@@ -3,11 +3,17 @@
 The last message picks what it does: "crash" ends the process mid-reply, "slow"
 writes many pieces until it is stopped, "options" answers with what it was sent,
 anything else is echoed back word by word.
+
+With --embed it stands in for nomic: each text becomes a unit vector of its
+words, hashed, so texts sharing words are close. A text "crash" ends it.
 """
 
 import argparse
+import hashlib
 import json
+import math
 import os
+import re
 import queue
 import sys
 import threading
@@ -19,15 +25,38 @@ def send(event):
     sys.stdout.flush()
 
 
+DIM = 64
+
+
+def vector(text):
+    out = [0.0] * DIM
+    for word in re.findall(r"[a-z0-9]+", text.split(": ", 1)[-1].lower()):
+        out[int(hashlib.sha1(word.encode()).hexdigest(), 16) % DIM] += 1.0
+    size = math.sqrt(sum(x * x for x in out)) or 1.0
+    return [x / size for x in out]
+
+
+def embed_loop():
+    for line in sys.stdin:
+        command = json.loads(line)
+        if "crash" in command.get("texts", []):
+            os._exit(1)
+        send({"vectors": [vector(text) for text in command["texts"]], "pid": os.getpid()})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--vision", action="store_true")
+    parser.add_argument("--embed", action="store_true")
     args = parser.parse_args()
     if "broken" in args.model:
         send({"error": "The model could not be loaded: broken on purpose"})
         return
     send({"ready": True, "seconds": 0.1})
+    if args.embed:
+        embed_loop()
+        return
     commands, stop = queue.Queue(), threading.Event()
 
     def read():

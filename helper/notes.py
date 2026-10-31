@@ -6,8 +6,9 @@ not indexed; a small folder is sent whole. Vectors come from nomic-embed-text
 (passed in as `embed`), one small file per chat or picture in
 ~/.hikarilm/index/, so deleting a chat removes its notes and nothing else.
 
-Not used in 3.0: nomic ran in Ollama, which is gone. 3.1 runs it in MLX and
-turns this back on.
+Each file says which embedder made its vectors. Notes from before 3.0 were made
+by Ollama's nomic, whose numbers differ a little from the MLX one's, so those
+are embedded again once and left out of searches until they are.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ BATCH = 16
 TOP = 3
 MIN_SCORE = 0.6
 MAX_CHUNKS = 20_000
+EMBEDDER = "nomic-embed-text-v1.5/mlx"
 
 Embed = Callable[[list[str]], list[list[float]]]
 
@@ -128,6 +130,8 @@ def sync(source: str, title: str, texts: list[str], embed: Embed) -> int:
         remove(source)
         return 0
     old = _load(source) or {}
+    if old.get("embedder") != EMBEDDER:
+        old = {}
     known = {chunk["hash"]: chunk["vector"] for chunk in old.get("chunks", []) if "hash" in chunk and "vector" in chunk}
     fresh = [text for text in texts if _hash(text) not in known]
     for start in range(0, len(fresh), BATCH):
@@ -137,6 +141,7 @@ def sync(source: str, title: str, texts: list[str], embed: Embed) -> int:
             known[_hash(text)] = _unit(vector)
     body = {
         "source": source,
+        "embedder": EMBEDDER,
         "title": title,
         "chunks": [{"hash": _hash(text), "text": text, "vector": known[_hash(text)]} for text in texts],
     }
@@ -182,7 +187,7 @@ def search(query: str, embed: Embed, exclude: str = "", top: int = TOP, min_scor
     seen = 0
     for path in files:
         data = _load(path.stem)
-        if not data:
+        if not data or data.get("embedder") != EMBEDDER:
             continue
         for chunk in data.get("chunks", []):
             seen += 1

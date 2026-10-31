@@ -9,6 +9,10 @@ and writes JSON lines on stdout:
         -> {"text": "..."} as it is written, then {"done": true, ...counts}
     {"op": "stop"}   ends the reply being written; its "done" line still comes.
 
+Started with --embed, it runs nomic-embed-text (nomic_mlx.py) instead:
+
+    {"op": "embed", "texts": ["search_document: ...", ...]}  -> {"vectors": [[...], ...]}
+
 A failure is {"error": "..."}. To free the model the helper ends this process,
 which hands all of its memory back at once.
 """
@@ -272,18 +276,43 @@ def _counts(last, prompt_tokens: int, stopped: bool) -> dict:
             "peak": float(getattr(last, "peak_memory", 0) or 0)}
 
 
+def _embed_loop(embedder) -> None:
+    for line in sys.stdin:
+        try:
+            command = json.loads(line)
+        except ValueError:
+            continue
+        texts = command.get("texts")
+        if command.get("op") != "embed" or not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
+            send({"error": "embed needs a list of texts"})
+            continue
+        try:
+            send({"vectors": embedder.embed(texts)})
+        except Exception as error:  # noqa: BLE001 - the helper shows it; the next batch still works
+            send({"error": str(error) or type(error).__name__})
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--vision", action="store_true")
+    parser.add_argument("--embed", action="store_true")
     args = parser.parse_args()
     started = time.monotonic()
     try:
-        runner = (VisionModel if args.vision else TextModel)(args.model)
+        if args.embed:
+            from nomic_mlx import Embedder
+
+            runner = Embedder(args.model)
+        else:
+            runner = (VisionModel if args.vision else TextModel)(args.model)
     except Exception as error:  # noqa: BLE001 - any load failure is reported, then the process ends
         send({"error": f"The model could not be loaded: {error}"})
         return
     send({"ready": True, "seconds": round(time.monotonic() - started, 1)})
+    if args.embed:
+        _embed_loop(runner)
+        return
 
     commands: queue.Queue = queue.Queue()
     stop = threading.Event()

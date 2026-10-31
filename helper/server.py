@@ -14,9 +14,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, engine, imagegen, names, picsetup, sdserver, store,
-                    thinking, workspace)
-from helper.models import KEEP_ALIVE, KEEPER, ModelError, complete, open_chat, running, show, tags, unload
+from helper import (budget, context, descriptions, documents, engine, imagegen, names, notes, picsetup, sdserver,
+                    store, thinking, workspace)
+from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
+                           tags, unload)
 from helper.router import ModelRouter, Work
 from helper.version import code_stamp
 
@@ -49,6 +50,7 @@ def unload_any(model: str) -> None:
 
 router = ModelRouter(unload_any)
 work = Work()
+indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
 
 
@@ -108,6 +110,9 @@ class Handler(BaseHTTPRequestHandler):
             except ModelError as error:
                 out["error"] = str(error)
             self._send_json(out)
+            return
+        if self.path == "/api/notes":
+            self._send_json({**notes.count(), "error": indexer.last_error})
             return
         if self.path == "/api/tags":
             # Picture models are listed apart: they answer with a picture, never with words.
@@ -194,6 +199,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not save: {error.strerror or error}"}, status=500)
             return
+        indexer.chat(summary["id"])
         self._send_json(summary)
 
     def do_PATCH(self) -> None:
@@ -214,6 +220,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             payload = self._body(MAX_BODY)
             self._send_json(store.patch(self._chat_id(), payload))
+            indexer.chat(self._chat_id())
         except FileNotFoundError:
             self._send_json({"error": "chat not found"}, status=404)
         except ValueError as error:
@@ -251,6 +258,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self._send_json({"error": f"could not delete: {error.strerror or error}"}, status=500)
             return
+        indexer.forget_chat(self._chat_id())
         if removed:
             # The pictures a chat made belong to it, so they go with it.
             for image_id in made:
@@ -276,6 +284,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "action must be start or stop"}, status=400)
                 return
             self._send_json(picsetup.SETUP.status())
+            return
+        if self.path == "/api/search":
+            self._search()
             return
         if self.path not in ("/api/chat", "/api/describe"):
             self._send_json({"error": "not found"}, status=404)
@@ -502,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
             if got:
                 text, info = got
         if text is None:
-            text, info = documents.excerpts(self._question, docs, room, None)
+            text, info = documents.excerpts(self._question, docs, room, embed)
         self._stream_line({"hikarilm": "documents", **info})
         sent[last] = {**sent[last], "content": text + "\n\n" + sent[last]["content"]}
         return sent
@@ -572,6 +583,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": "The model sent no description of the picture."})
                 return
             descriptions.save(key, text, model, name)
+            indexer.picture(key)
             self._stream_line({"description": text[:descriptions.MAX_TEXT], "cached": False, "model": model})
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -666,7 +678,7 @@ class Handler(BaseHTTPRequestHandler):
             running_sd = managed.running()
             return {"large_model": large if running_sd else None,
                     "unloads_at": managed.stops_at if running_sd else None}
-        loaded = [item for item in running() if item["name"]]
+        loaded = [item for item in running() if item["name"] and item["name"] != EMBED_NAME]
         if not loaded:
             return {"large_model": None, "unloads_at": None}
         pick = loaded[0]
@@ -687,6 +699,25 @@ class Handler(BaseHTTPRequestHandler):
                 server = {"error": str(error)}
         return {"program": program, "models": [model["name"] for model in models], "problems": problems + missing,
                 "server": server, "program_dir": str(sdserver.program_dir())}
+
+    def _search(self) -> None:
+        """A few earlier notes close to a question. Never an error: a send must not wait on this."""
+        try:
+            payload = self._body(MAX_BODY)
+            query = payload.get("query")
+            exclude = payload.get("exclude")
+            if not isinstance(query, str):
+                raise ValueError("query is required")
+            source = notes.chat_source(exclude) if isinstance(exclude, str) and exclude else ""
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        try:
+            found = notes.search(query, embed, exclude=source)
+        except (ModelError, ValueError, OSError) as error:
+            self._send_json({"notes": [], "error": str(error)})
+            return
+        self._send_json({"notes": found})
 
     def send_response(self, code: int, message: str | None = None) -> None:
         self._answered = True
@@ -871,6 +902,7 @@ def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     stopping = threading.Event()
     KEEPER.watch(running, unload, stopping, on_unload=router.forget)
+    indexer.everything()
     print(f"HikariLM at http://{HOST}:{PORT}", flush=True)
     try:
         server.serve_forever()

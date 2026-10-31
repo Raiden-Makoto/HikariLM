@@ -31,6 +31,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from helper import store, thinking
+from helper.notes import EMBEDDER
 
 CHUNK = 1200            # characters in one passage
 BATCH = 16
@@ -215,7 +216,7 @@ def _unit(vector: list[float]) -> list[float]:
 def _by_meaning(question: str, entries: list[tuple], embed: Embed) -> list[float]:
     """Cosine scores from nomic. Vectors are made once per document and kept."""
     for doc, data in {id(e[0]): (e[0], e[1]) for e in entries}.values():
-        if data.get("vectors") and len(data["vectors"]) == len(data["chunks"]):
+        if data.get("vectors") and len(data["vectors"]) == len(data["chunks"]) and data.get("embedder") == EMBEDDER:
             continue
         vectors = []
         texts = [chunk["text"] for chunk in data["chunks"]]
@@ -223,6 +224,7 @@ def _by_meaning(question: str, entries: list[tuple], embed: Embed) -> list[float
             got = embed(["search_document: " + text for text in texts[start:start + BATCH]])
             vectors += [[round(x, 5) for x in _unit(vector)] for vector in got]
         data["vectors"] = vectors
+        data["embedder"] = EMBEDDER
         save(doc, data)
     query = _unit(embed(["search_query: " + question])[0])
     return [sum(a * b for a, b in zip(query, data["vectors"][index])) for _, data, index in entries]

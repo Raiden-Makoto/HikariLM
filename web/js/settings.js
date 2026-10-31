@@ -4,6 +4,26 @@ import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js
 import { allPictures, isPictureModel, loadModels, modelLabel } from "./models.js";
 import { applyBackground } from "./page.js";
 
+// Earlier chats and pictures: the helper keeps small notes of what was
+// answered and read, and a few close to a new question go along with it.
+const NOTES_KEY = "hikarilm-notes";
+export const notesOn = () => localStorage.getItem(NOTES_KEY) !== "off";
+
+async function showNotesSetting() {
+  document.querySelector("#notes-toggle").checked = notesOn();
+  const note = document.querySelector("#notes-note");
+  note.textContent = notesOn()
+    ? "A few notes from earlier chats and pictures that match your question are sent along with it. Not used in the code editor."
+    : "Off. Each question is sent on its own.";
+  try {
+    const body = await (await fetch("/api/notes")).json();
+    note.textContent += " " + body.notes + (body.notes === 1 ? " note" : " notes") + " kept so far." +
+      (body.error ? " Not indexed yet: " + plainError(body.error) : "");
+  } catch (error) {
+    // The count is only a courtesy.
+  }
+}
+
 // Context length and compaction live in the helper, which enforces them.
 let serverSettings = null;
 const gigabytes = (bytes) => (bytes / 1024 ** 3).toFixed(1) + " GB";
@@ -250,6 +270,10 @@ async function saveContextSetting() {
 
 // Listeners and first steps, run by main.js once every part is loaded.
 export function start() {
+  document.querySelector("#notes-toggle").addEventListener("change", (event) => {
+    localStorage.setItem(NOTES_KEY, event.target.checked ? "on" : "off");
+    showNotesSetting();
+  });
   pictureSetup.addEventListener("close", () => clearInterval(setupTimer));
   document.querySelector("#close-picture-setup").addEventListener("click", () => pictureSetup.close());
   document.querySelector("#setup-start").addEventListener("click", () => { setupReloaded = false; setupAction("start"); });
@@ -268,12 +292,13 @@ export function start() {
     for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
   }
 
-  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
+  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
   document.querySelectorAll("#picture-setting input, #pic-models")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) savePictureSetting(); }));
 
   document.querySelector("#open-settings").addEventListener("click", () => {
+    showNotesSetting();
     showContextSetting();
     settings.showModal();
   });

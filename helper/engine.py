@@ -217,14 +217,14 @@ def show(model: str) -> dict:
 class _Worker:
     """The worker process and the lines it writes, read by a thread into a queue."""
 
-    def __init__(self, model: str, folder: Path, vision: bool) -> None:
+    def __init__(self, model: str, folder: Path, flags: list[str], log_name: str = "mlx-worker.log") -> None:
         if not python().exists():
             raise ModelError(SETUP)
         self.model = model
         self.size = _size(folder)
         store.home().mkdir(parents=True, exist_ok=True)
-        log = open(store.home() / "mlx-worker.log", "wb")
-        command = [str(python()), str(worker()), "--model", str(folder)] + (["--vision"] if vision else [])
+        log = open(store.home() / log_name, "wb")
+        command = [str(python()), str(worker()), "--model", str(folder)] + flags
         try:
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
                                             text=True, encoding="utf-8", bufsize=1)
@@ -288,7 +288,7 @@ def _ready(model: str) -> _Worker:
         return _worker
     _end()
     folder = _folder(model)
-    started = _Worker(model, folder, "vision_config" in (_config(folder) or {}))
+    started = _Worker(model, folder, ["--vision"] if "vision_config" in (_config(folder) or {}) else [])
     event = started.next(LOAD_SECONDS)
     if not event or not event.get("ready"):
         started.end()
@@ -405,6 +405,87 @@ def _plain(message: dict) -> dict:
     if message.get("images"):
         out["images"] = list(message["images"])
     return out
+
+
+# --- nomic-embed-text ----------------------------------------------------------------
+# A worker of its own, so it sits beside the chat model (0.3 GB) and never makes it leave.
+
+EMBED_REPO = "nomic-ai/nomic-embed-text-v1.5"
+EMBED_NAME = "nomic-embed-text"
+EMBED_FILES = ("config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json",
+               "special_tokens_map.json", "vocab.txt")
+EMBED_SECONDS = 120
+_embedder: _Worker | None = None
+_embed_lock = threading.Lock()
+
+
+def embed_folder() -> Path | None:
+    """Where Nomic's files are, once all of them are downloaded."""
+    snapshot = _snapshot(_hub() / ("models--" + EMBED_REPO.replace("/", "--")))
+    if snapshot and all((snapshot / name).is_file() for name in EMBED_FILES):
+        return snapshot
+    return None
+
+
+def prepare_embed(say) -> bool:
+    """Download Nomic's files into the Hugging Face cache, once. True when they are there."""
+    if embed_folder() is not None or os.environ.get("HIKARILM_MLX_PYTHON"):
+        return embed_folder() is not None
+    if not python().exists():
+        return False
+    say(f"Getting {EMBED_NAME} for finding earlier chats (about 0.55 GB, once)…")
+    script = ("from huggingface_hub import snapshot_download; "
+              f"snapshot_download({EMBED_REPO!r}, allow_patterns={list(EMBED_FILES)!r})")
+    try:
+        subprocess.run([str(python()), "-c", script], check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        say(f"  {EMBED_NAME} could not be downloaded ({error}). Earlier chats are not searched until it is; "
+            "run ./start.sh again to retry.")
+        return False
+    say(f"  {EMBED_NAME} is ready.")
+    return embed_folder() is not None
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    """Unit vectors for texts that already carry nomic's search_document: or search_query: prefix."""
+    global _embedder
+    with _embed_lock:
+        if _embedder is None or not _embedder.alive():
+            folder = embed_folder()
+            if folder is None:
+                raise ModelError(f"{EMBED_NAME} is not downloaded yet, so earlier chats cannot be searched. "
+                                 "Run ./start.sh again; it downloads it once.")
+            started = _Worker(EMBED_NAME, folder, ["--embed"], "embed-worker.log")
+            event = started.next(LOAD_SECONDS)
+            if not event or not event.get("ready"):
+                started.end()
+                raise ModelError((event or {}).get("error") or
+                                 f"{EMBED_NAME} could not start. What it said is in {store.home() / 'embed-worker.log'}.")
+            _embedder = started
+        _embedder.send({"op": "embed", "texts": list(texts)})
+        event = _embedder.next(EMBED_SECONDS)
+        if not event or "error" in event or not isinstance(event.get("vectors"), list) \
+                or len(event["vectors"]) != len(texts):
+            # A late answer would be taken for the next batch's, so this worker is done.
+            _embedder.end()
+            _embedder = None
+            raise ModelError((event or {}).get("error") or f"{EMBED_NAME} stopped.")
+        return event["vectors"]
+
+
+def embed_running() -> list[dict]:
+    current = _embedder
+    if current is None or not current.alive():
+        return []
+    return [{"name": EMBED_NAME, "size": current.size, "expires": None}]
+
+
+def unload_embed() -> None:
+    global _embedder
+    with _embed_lock:
+        if _embedder is not None:
+            _embedder.end()
+            _embedder = None
 
 
 def complete(model: str, messages: list[dict], options: dict, keep_alive=None, think=None) -> str:

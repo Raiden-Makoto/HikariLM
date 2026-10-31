@@ -82,16 +82,18 @@ Ollama's chat lines, so the rest of the helper is unchanged.
 ## v3.1.0: nomic-embed-text and RAG
 
 `notes.py` (the index of earlier chats and picture descriptions) and `documents.excerpts` (the passages of a
-long file closest to the question) already take an `embed` function; in v3.0 there is none, so notes are off
-and long files fall back to shared words.
+long file closest to the question) take an `embed` function; in v3.0 there was none, so notes were off
+and long files fell back to shared words.
 
-- [ ] `helper/embed.py`: nomic-embed-text v1.5 in MLX, run in the worker's venv. Small (0.3 GB), so it sits
-  beside the large model and never makes it leave.
-- [ ] A test checks its vectors against Nomic's published ones.
-- [ ] Turn the notes back on: the indexer at start and on save, `/api/search`, `/api/notes`, and the Settings
+- [x] `helper/nomic_mlx.py`: nomic-embed-text v1.5 in MLX from Nomic's own weights, run by the worker with
+  `--embed` in a process of its own. Small (0.3 GB), so it sits beside the large model and never makes it
+  leave; it is held to the same keepalive. `start.py` downloads its files once (no ONNX).
+- [x] Fake-worker tests for the embed path; notes and document vectors carry an embedder stamp.
+- [ ] On the Mac: `tests/check_nomic.py` matches Nomic's PyTorch vectors (cosine at least 0.999).
+- [x] Turn the notes back on: the indexer at start and on save, `/api/search`, `/api/notes`, and the Settings
   switch. Notes made with Ollama's nomic are indexed again once.
-- [ ] Long files: the closest passages by meaning again.
-- [ ] `__version__ = "3.1.0"`, tag `v3.1.0`.
+- [x] Long files: the closest passages by meaning again.
+- [ ] `__version__ = "3.1.0"`, tag `v3.1.0`, once the Mac check passes.
 
 ## v4.0.0: our own conversions, from official weights only
 

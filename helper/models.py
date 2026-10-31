@@ -1,5 +1,6 @@
 """The one way the rest of the helper reaches a model. Every model runs in MLX
-(engine.py); this keeps the keepalive next to it."""
+(engine.py); this keeps the keepalive next to it. nomic-embed-text has a worker
+of its own and is held to the same keepalive."""
 
 from __future__ import annotations
 
@@ -12,8 +13,10 @@ KEEP_ALIVE = os.environ.get("HIKARILM_KEEP_ALIVE", "5m")
 # Every request HikariLM makes with a model runs inside KEEPER.using(model).
 KEEPER = keepalive.Keeper(keepalive.seconds(KEEP_ALIVE))
 
-__all__ = ["KEEP_ALIVE", "KEEPER", "ModelError", "complete", "open_chat", "running", "show", "sizes", "tags",
-           "unload"]
+EMBED_NAME = engine.EMBED_NAME
+
+__all__ = ["EMBED_NAME", "KEEP_ALIVE", "KEEPER", "ModelError", "complete", "embed", "open_chat", "running", "show",
+           "sizes", "tags", "unload"]
 
 
 def tags() -> list[str]:
@@ -25,7 +28,8 @@ def sizes() -> dict[str, int]:
 
 
 def running() -> list[dict]:
-    return engine.running()
+    """What is in memory: the chat model, and nomic beside it when it has been used."""
+    return engine.running() + engine.embed_running()
 
 
 def show(model: str) -> dict:
@@ -33,7 +37,15 @@ def show(model: str) -> dict:
 
 
 def unload(model: str) -> None:
-    engine.unload(model)
+    if model == EMBED_NAME:
+        engine.unload_embed()
+    else:
+        engine.unload(model)
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    with KEEPER.using(EMBED_NAME):
+        return engine.embed(texts)
 
 
 def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None,

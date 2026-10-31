@@ -118,7 +118,8 @@ def main() -> None:
     say(f"  saved:  {store.home()}")
     from helper import engine, names
 
-    engine.prepare(say)
+    if engine.prepare(say):
+        engine.prepare_embed(say)
     mlx = engine.names()
     say("MLX models: " + ", ".join(names.label(name) for name in mlx) if mlx else
         "No MLX models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download "

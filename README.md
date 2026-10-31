@@ -14,7 +14,7 @@ HikariLM runs only on a Mac with Apple Silicon (M1 or newer). You need Python 3.
 ./start.sh            # or: python3 start.py
 ```
 
-The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once). Then it lists your models and opens http://127.0.0.1:8787. Press Ctrl+C to stop. Running it again while it is running just opens the page.
+The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. Then it lists your models and opens http://127.0.0.1:8787. Press Ctrl+C to stop. Running it again while it is running just opens the page.
 
 Options: `--port 9000` for another port, `--no-browser` to skip opening the page, `--version`.
 
@@ -41,7 +41,8 @@ Models are found in the Hugging Face cache, and in folders of their own in `~/.h
 ## What it does
 
 - **Chat** with any of your models. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
-- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it (any vision model mlx-vlm runs, such as Gemma 3 or Qwen2.5-VL). Long documents are read in parts so they fit the model's context.
+- **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it (any vision model mlx-vlm runs, such as Gemma 3 or Qwen2.5-VL). Long documents are read in parts so they fit the model's context, or only the passages closest to the question are sent.
+- **Remembers earlier chats**: a few notes from earlier chats and pictures that match your question are sent along with it. They are found by meaning with nomic-embed-text, which HikariLM runs in MLX beside the chat model (0.3 GB). Settings can turn this off.
 - **Make pictures** with your own picture models. Pick *Set up picture making…* in the model list for a one-click start with FLUX.2 klein: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made. In Settings you can add any other model `sd-server` runs, or point HikariLM at a picture server you already run (AUTOMATIC1111, Forge, Draw Things).
 - **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Apply works like Cursor's. The model labels code meant for a file with that file's path, and Apply puts it into that file, or creates the file if it is new. A block can leave out unchanged code with `... existing code ...` comments. If it can't be placed exactly, the chosen model writes the file with the change in it. Each change then shows in red and green to accept or reject. Commands, output and examples get no Apply button. Nothing is written until you press Save.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved. Settings sets the context length, and how the model keeps what it has read (the KV cache: 8-bit by default, which holds about twice as much).
@@ -61,7 +62,7 @@ Models are found in the Hugging Face cache, and in folders of their own in `~/.h
 
 ## Where things are saved
 
-Everything is in `~/.hikarilm`: chats, drafts, settings, pictures you made, and the MLX venv. The models are in the Hugging Face cache (`~/.cache/huggingface/hub`). Your project folders stay where they are.
+Everything is in `~/.hikarilm`: chats, drafts, settings, pictures you made, the notes of earlier chats (`index/`), and the MLX venv. The models are in the Hugging Face cache (`~/.cache/huggingface/hub`). Your project folders stay where they are.
 
 ## Settings from the environment
 
@@ -74,7 +75,7 @@ Everything is in `~/.hikarilm`: chats, drafts, settings, pictures you made, and 
 
 ## Development
 
-The helper is Python with the standard library only; the models run in a separate worker process with the venv's Python. The page is plain HTML, CSS, and JavaScript modules, so there is no build step. Run the tests from this folder with `python3 -m unittest`. The code editor is a CodeMirror bundle in `web/vendor/`; `tools/editor/build.sh` rebuilds it (only needed to change it).
+The helper is Python with the standard library only; the models run in a separate worker process with the venv's Python. The page is plain HTML, CSS, and JavaScript modules, so there is no build step. Run the tests from this folder with `python3 -m unittest`. `tests/check_nomic.py` checks the MLX nomic-embed-text against Nomic's own code; how to run it is at its top. The code editor is a CodeMirror bundle in `web/vendor/`; `tools/editor/build.sh` rebuilds it (only needed to change it).
 
 ## License
 
