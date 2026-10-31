@@ -151,45 +151,62 @@ def pack_ternary(weight, xp, divided: bool):
     return packed, (scale if divided else 1.0 / scale)
 
 
-def load_bitnet(path: str, settings: dict):
+def load_bitnet(path: str, settings: dict, tokenizer: bool = True):
     """mlx-lm's load, with every BitNet form in place before the weights are read. mlx-lm turns
     linear layers into BitLinear only when a config has no "quantization" block, so mlx-community's
     4- and 8-bit copies of llama-shaped BitNet models do not load without this; and it reads
-    only packed weights, so full ones are packed here, once, in memory."""
+    only packed weights, so full ones are packed here, once, in memory. Returns (model, tokenizer),
+    the tokenizer None when not asked for."""
+    import inspect
+    from pathlib import Path
+
     import mlx.core as mx
     import mlx.nn as nn
     from mlx.utils import tree_flatten
-    from mlx_lm import load, utils
+    from mlx_lm import utils
     from mlx_lm.models.bitlinear_layers import BitLinear, bitnet_quantize
 
     if settings.get("use_rms_norm"):
         raise ValueError("this BitNet model norms each layer's inputs (use_rms_norm), which HikariLM does not run")
     round_bitnet_activations()
-    with open(os.path.join(path, "config.json"), encoding="utf-8") as handle:
-        model_class, _ = utils.get_model_classes(config=json.load(handle))
-    own = vars(model_class).get("sanitize")
-    inherited = getattr(model_class, "sanitize", None)
 
-    def sanitize(self, weights):
-        if inherited is not None:
-            weights = inherited(self, weights)
-        bitnet_quantize(self, settings)
-        for name, module in tree_flatten(self.leaf_modules(), is_leaf=nn.Module.is_module):
-            weight = weights.get(name + ".weight")
-            if isinstance(module, BitLinear) and weight is not None and weight.dtype != mx.uint8:
-                packed, scale = pack_ternary(weight, mx, module.invert_weight_scales)
-                weights[name + ".weight"] = packed
-                weights[name + ".weight_scale"] = mx.reshape(scale, (1,)).astype(weight.dtype)
-        return weights
+    def bitnet_class(model_class):
+        class BitNetModel(model_class):
+            def sanitize(self, weights):
+                parent = getattr(super(), "sanitize", None)
+                if parent is not None:
+                    weights = parent(weights)
+                bitnet_quantize(self, settings)
+                for name, module in tree_flatten(self.leaf_modules(), is_leaf=nn.Module.is_module):
+                    weight = weights.get(name + ".weight")
+                    if isinstance(module, BitLinear) and weight is not None and weight.dtype != mx.uint8:
+                        packed, scale = pack_ternary(weight, mx, module.invert_weight_scales)
+                        weights[name + ".weight"] = packed
+                        weights[name + ".weight_scale"] = mx.reshape(scale, (1,)).astype(weight.dtype)
+                return weights
 
-    model_class.sanitize = sanitize
-    try:
-        return load(path)
-    finally:
-        if own is not None:
-            model_class.sanitize = own
-        else:
-            del model_class.sanitize
+        return BitNetModel
+
+    finder_name = "_get_classes" if hasattr(utils, "_get_classes") else "get_model_classes"
+    finder = getattr(utils, finder_name)
+
+    def classes(config):
+        model_class, args_class = finder(config=config)
+        return bitnet_class(model_class), args_class
+
+    folder = Path(path)
+    if "get_model_classes" in inspect.signature(utils.load_model).parameters:
+        model, config = utils.load_model(folder, get_model_classes=classes)
+    else:
+        # Older mlx-lm looks the classes up by name in its utils module.
+        setattr(utils, finder_name, classes)
+        try:
+            model, config = utils.load_model(folder)
+        finally:
+            setattr(utils, finder_name, finder)
+    if not tokenizer:
+        return model, None
+    return model, utils.load_tokenizer(folder, None, eos_token_ids=config.get("eos_token_id", None))
 
 
 def round_bitnet_activations() -> None:
