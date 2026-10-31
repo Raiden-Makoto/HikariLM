@@ -4,6 +4,7 @@
 - **v3**: every model inside the HikariLM helper with Apple's MLX. Any MLX model works; the
   big three below are only suggestions for Macs with less than 18 GB of RAM. No Ollama, no LM Studio.
 - **v3.1**: nomic-embed-text in MLX, and with it RAG: earlier chats and pictures found again.
+- **v3.5**: Falcon3 1.58-bit from TII's own files, checked against TII's code. Released.
 - **v4**: the models we convert ourselves, from their makers' official weights.
 
 | Model | Version | Runs with | Weights | About |
@@ -11,7 +12,7 @@
 | Qwen2.5-Coder 7B | v3 | mlx-lm | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
 | DeepSeek-R1 8B | v3 | mlx-lm | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Gemma 3 12B (reads pictures) | v3 | mlx-vlm | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
-| Falcon3 10B BitNet | v4 | mlx-lm | `tiiuae/Falcon3-10B-Instruct-1.58bit`, TII's own files | 4 GB |
+| Falcon3 10B BitNet | v3.5 | mlx-lm | `tiiuae/Falcon3-10B-Instruct-1.58bit`, TII's own files | 4 GB |
 | nomic-embed-text | v3.1 | our own MLX port | `nomic-ai/nomic-embed-text-v1.5` | 0.3 GB |
 | FLUX.2 klein 4B | v4 | mflux | `black-forest-labs/FLUX.2-klein-4B`, made 4-bit by us | 15 GB download, 4.6 GB kept |
 
@@ -109,6 +110,7 @@ Each one is checked against its makers' own code before it is used.
   MLX is closer to TII's code in float32 than TII's own bf16 run is; the few next tokens it picks
   differently are near ties ([#6](https://github.com/Raiden-Makoto/HikariLM/issues/6)).
 - [x] Add it to the suggested models once it passes.
+- [x] Released on its own as v3.5.0, ahead of the rest of v4.
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
   Picture setup in the page downloads and converts it, with progress.
 - [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.
