@@ -98,7 +98,8 @@ def main() -> int:
     tii = [run(hf, ids) for ids in prompts]
 
     # TII's own code in float32: how far its bf16 run is from exact, the most MLX can be expected to match.
-    hf.float()
+    # transformers refuses .float() on quantized models; torch's own leaves the packed uint8 weights as they are.
+    torch.nn.Module.float(hf)
     for module in hf.modules():
         if isinstance(module, BitLinear):
             module.dtype = torch.float32
