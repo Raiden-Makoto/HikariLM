@@ -31,9 +31,9 @@ Ollama's files are GGUF and MLX cannot use them, so these come again from
 Hugging Face. About 17 GB.
 
 - [x] `python3 -m venv ~/.hikarilm/venv && ~/.hikarilm/venv/bin/pip install mlx-lm mlx-vlm`
-- [ ] `~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit`
-- [ ] `~/.hikarilm/venv/bin/hf download mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit`
-- [ ] `~/.hikarilm/venv/bin/hf download mlx-community/gemma-3-12b-it-4bit`
+- [x] `~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit`
+- [x] `~/.hikarilm/venv/bin/hf download mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit`
+- [x] `~/.hikarilm/venv/bin/hf download mlx-community/gemma-3-12b-it-4bit`
 - [ ] Each one answers: `~/.hikarilm/venv/bin/mlx_lm.generate --model <repo> --prompt "hi"`
   (Gemma: `mlx_vlm.generate --model <repo> --image <a picture> --prompt "what is this"`)
 - [ ] Note tokens per second for each, to compare with Ollama later.
