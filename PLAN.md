@@ -56,7 +56,7 @@ Ollama's chat lines, so the rest of the helper is unchanged.
 - [x] Gemma's picture reading through mlx-vlm (pictures go to the worker as files).
 - [x] Model list in the page: MLX models first, with vision and thinking from their configs.
 - [x] Tests with a fake worker (`tests/fake_mlx_worker.py`) and the three real `config.json` files.
-- [ ] A run on the Mac with the real three: chat, stop, follow-up, thinking cut. (A picture read works.)
+- [x] A run on the Mac with the real three: chat, stop, follow-up, thinking cut. (A picture read works.)
 - [x] `start.sh`: make `~/.hikarilm/venv` on the first run and install the packages, once.
 - [x] Speed check: fast enough. Speculative decoding is not needed.
 - [x] KV cache quantization, a Settings choice (8-bit by default, 4-bit, or full): mlx-lm's `kv_bits`,
