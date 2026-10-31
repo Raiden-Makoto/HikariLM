@@ -29,7 +29,7 @@ BROWSER = {"fetch", "setTimeout", "clearTimeout", "setInterval", "clearInterval"
            "cancelAnimationFrame", "queueMicrotask", "structuredClone", "alert", "confirm", "prompt",
            "encodeURIComponent", "decodeURIComponent", "encodeURI", "atob", "btoa", "parseInt", "parseFloat",
            "isNaN", "isFinite", "String", "Number", "Boolean", "Array", "Object", "Date", "Error", "Promise", "Map",
-           "Set", "WeakMap", "RegExp", "Symbol", "JSON", "Math", "URL", "Blob", "File", "FileReader", "FormData",
+           "Set", "WeakMap", "RegExp", "Symbol", "JSON", "Math", "URL", "URLSearchParams", "Blob", "File", "FileReader", "FormData",
            "Option", "Image", "Event", "CustomEvent", "AbortController", "TextDecoder", "TextEncoder",
            "ResizeObserver", "MutationObserver", "IntersectionObserver", "DOMParser", "Uint8Array", "Float64Array", "Int32Array", "BigInt", "DataView",
            "DecompressionStream", "CompressionStream", "Response", "Headers", "Notification",

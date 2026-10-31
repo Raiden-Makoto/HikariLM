@@ -269,6 +269,23 @@ async function saveContextSetting() {
 }
 
 // Listeners and first steps, run by main.js once every part is loaded.
+const ISSUES = "https://github.com/Raiden-Makoto/HikariLM/issues/new";
+
+// Read ahead of the click: Safari blocks a window opened after an await.
+let version = "unknown";
+
+function reportIssue() {
+  const model = modelSelect.value;
+  const body = [
+    "**What happened**", "", "", "**What you expected**", "", "",
+    "**Details**",
+    "- HikariLM: " + version,
+    "- Model: " + (model ? modelLabel(model) + " (`" + model + "`)" : "none chosen"),
+    "- Browser: " + navigator.userAgent,
+  ].join("\n");
+  window.open(ISSUES + "?" + new URLSearchParams({ body }), "_blank", "noopener");
+}
+
 export function start() {
   document.querySelector("#notes-toggle").addEventListener("change", (event) => {
     localStorage.setItem(NOTES_KEY, event.target.checked ? "on" : "off");
@@ -302,6 +319,9 @@ export function start() {
     showContextSetting();
     settings.showModal();
   });
+  fetch("/api/state").then((response) => response.json())
+    .then((body) => { version = body.version || version; }, () => {});
+  document.querySelector("#report-issue").addEventListener("click", reportIssue);
   document.querySelector("#close-settings").addEventListener("click", () => settings.close());
   settings.addEventListener("click", (event) => {
     if (event.target === settings) settings.close();

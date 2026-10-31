@@ -121,7 +121,7 @@ Each one is checked against its makers' own code before it is used.
   same rounding transformers' WeightQuant does on every call.
 - [x] mlx-community's 4- and 8-bit copies: mlx-lm skips its BitNet layers when a config has a
   `quantization` block, so llama-shaped ones did not load; `load_bitnet` puts them in first.
-- [ ] On the Mac: `tests/check_bitnet_forms.py` passes. It needs no downloads: it writes a tiny random
+- [x] On the Mac: `tests/check_bitnet_forms.py` passes. Released in v3.5.1, with a "Report a problem" button in Settings. It needs no downloads: it writes a tiny random
   model in each form and compares MLX with transformers on it. (`tests/check_bitnet.py` does the same
   for a real repo, for anyone who has one.)
 - [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).

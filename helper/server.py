@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (budget, context, descriptions, documents, engine, imagegen, names, notes, picsetup, sdserver,
+from helper import (__version__, budget, context, descriptions, documents, engine, imagegen, names, notes, picsetup, sdserver,
                     store, thinking, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
@@ -82,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin() or self._workspace("GET"):
             return
         if self.path == "/api/state":
-            self._send_json({**self._loaded(), "code": STARTED_WITH})
+            self._send_json({**self._loaded(), "code": STARTED_WITH, "version": __version__})
             return
         if self.path == "/api/pictures":
             self._send_json(self._picture_setup())
