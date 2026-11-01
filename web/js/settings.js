@@ -66,7 +66,7 @@ function pictureStanding(body) {
   if (body.models.length) {
     parts.push("Downloaded: " + body.models.join(", ") + ".");
     parts.push(body.ready ? "Ready: pick it under Make pictures in the model list."
-      : "Next, run ./start.sh again to install mflux.");
+      : "Next, run  hikarilm restart  in Terminal to install mflux.");
   } else {
     parts.push("No FLUX.2 klein is downloaded yet.");
   }
@@ -256,7 +256,7 @@ async function runUpdate() {
     }
   }
   delete button.dataset.restarting;
-  note.textContent = "It has not come back yet. In Terminal, ./start.sh log shows what it is doing, and ./start.sh starts it.";
+  note.textContent = "It has not come back yet. In Terminal, hikarilm log shows what it is doing, and hikarilm start starts it.";
 }
 
 function reportIssue() {

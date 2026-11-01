@@ -12,7 +12,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from helper import daemon, server, update
+from helper import command, daemon, server, update
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -89,6 +89,46 @@ class ProcessTest(HomeCase):
         daemon.pid_path().write_text("1")
         daemon.forget_pid()
         self.assertTrue(daemon.pid_path().exists())
+
+
+class CommandTest(HomeCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.tmp / "user"
+        self.user.mkdir()
+        patcher = mock.patch.dict(os.environ, {"HOME": str(self.user), "SHELL": "/bin/zsh", "PATH": "/usr/bin:/bin"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_command_is_linked_and_put_on_the_path_once(self):
+        said = command.install()
+        link = self.user / ".local" / "bin" / "hikarilm"
+        self.assertEqual(link.resolve(), command.SCRIPT.resolve())
+        self.assertIn("Installed the hikarilm command", said[0])
+        self.assertIn("Open a new Terminal window", said[1])
+        rc = (self.user / ".zshrc").read_text()
+        self.assertEqual(rc.count(command.MARK), 1)
+        self.assertIn('export PATH="$HOME/.local/bin:$PATH"', rc)
+        self.assertEqual(command.install(), [])
+        self.assertEqual((self.user / ".zshrc").read_text(), rc)
+
+    def test_it_runs_start_py_from_any_folder(self):
+        command.install()
+        run = subprocess.run([str(self.user / ".local" / "bin" / "hikarilm"), "--version"], cwd=self.tmp,
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("HikariLM", run.stdout)
+
+    def test_another_program_of_that_name_is_left_alone(self):
+        (self.user / ".local" / "bin").mkdir(parents=True)
+        (self.user / ".local" / "bin" / "hikarilm").write_text("#!/bin/sh\n")
+        self.assertIn("another program", command.install()[0])
+        self.assertFalse((self.user / ".local" / "bin" / "hikarilm").is_symlink())
+
+    def test_nothing_is_added_when_the_folder_is_on_the_path(self):
+        with mock.patch.dict(os.environ, {"PATH": str(self.user / ".local" / "bin") + ":/usr/bin"}):
+            command.install()
+        self.assertFalse((self.user / ".zshrc").exists())
 
 
 def git(folder: Path, *arguments: str) -> str:

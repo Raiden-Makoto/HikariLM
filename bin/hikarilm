@@ -1,0 +1,17 @@
+#!/bin/sh
+# The hikarilm command: hikarilm start | stop | restart | status | log | update
+# The first ./start.sh links it into ~/.local/bin, so it works from any folder.
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+root=$(cd "$(dirname "$self")/.." && pwd) || exit 1
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$root/start.py" "$@"
+fi
+echo "Python is not installed. Get it from https://www.python.org/downloads/" >&2
+exit 1

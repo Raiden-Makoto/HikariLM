@@ -37,8 +37,8 @@ SCAN_SECONDS = 5
 DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072, "sliding_window_pattern": 6}}
 # R1 distills write <think> themselves, so their templates do not show it.
 THINKERS = re.compile(r"deepseek-r1|qwq", re.IGNORECASE)
-SETUP = "MLX is not set up yet. Stop HikariLM and run ./start.sh again; it installs mlx-lm and mlx-vlm once."
-PICTURE_SETUP = ("mflux, which draws the pictures, is not set up yet. Stop HikariLM and run ./start.sh again; "
+SETUP = "MLX is not set up yet. Run  hikarilm restart  in Terminal; it installs mlx-lm and mlx-vlm once."
+PICTURE_SETUP = ("mflux, which draws the pictures, is not set up yet. Run  hikarilm restart  in Terminal; "
                  "it installs mflux once a FLUX.2 model is downloaded.")
 
 
@@ -72,7 +72,7 @@ def _prepare_venv(folder: Path, interpreter: Path, packages: tuple[str, ...], wh
             subprocess.run([base_python, "-m", "venv", str(folder)], check=True)
         subprocess.run([str(interpreter), "-m", "pip", "install", "--upgrade", *packages], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
-        say(f"  {what} could not be set up ({error}). Run ./start.sh again to retry.")
+        say(f"  {what} could not be set up ({error}). Run  hikarilm restart  to retry.")
         return False
     mark.write_text(" ".join(packages) + "\n", encoding="utf-8")
     say(f"  {what} is ready.")
@@ -557,7 +557,7 @@ def prepare_embed(say) -> bool:
         subprocess.run([str(python()), "-c", script], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
         say(f"  {EMBED_NAME} could not be downloaded ({error}). Earlier chats are not searched until it is; "
-            "run ./start.sh again to retry.")
+            "run  hikarilm restart  to retry.")
         return False
     say(f"  {EMBED_NAME} is ready.")
     return embed_folder() is not None
@@ -571,7 +571,7 @@ def embed(texts: list[str]) -> list[list[float]]:
             folder = embed_folder()
             if folder is None:
                 raise ModelError(f"{EMBED_NAME} is not downloaded yet, so earlier chats cannot be searched. "
-                                 "Run ./start.sh again; it downloads it once.")
+                                 "Run  hikarilm restart  in Terminal; it downloads it once.")
             started = _Worker(EMBED_NAME, folder, ["--embed"], "embed-worker.log")
             event = started.next(LOAD_SECONDS)
             if not event or not event.get("ready"):

@@ -47,7 +47,7 @@ async function check() {
   try {
     body = await (await fetch("/api/pictures")).json();
   } catch (error) {
-    text.textContent = "Could not reach the HikariLM helper. Is ./start.sh running?";
+    text.textContent = "Could not reach the HikariLM helper. Is it running? hikarilm start starts it.";
     return;
   }
   document.querySelector("#checked").textContent = "Checked at " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }) + ".";
@@ -60,7 +60,7 @@ async function check() {
   standing.classList.toggle("ready", ready);
   const parts = [];
   if (ready) parts.push("Ready. " + body.models.join(", ") + (body.models.length > 1 ? " are" : " is") + " set up.");
-  else if (downloaded) parts.push("Downloaded: " + body.models.join(", ") + ". Next, step 2: start HikariLM again to install mflux.");
+  else if (downloaded) parts.push("Downloaded: " + body.models.join(", ") + ". Next, step 2: run  hikarilm restart  to install mflux.");
   else parts.push("Nothing downloaded yet. Start with step 1. This page notices the download by itself.");
   parts.push(...body.notes);
   text.textContent = parts.join(" ");

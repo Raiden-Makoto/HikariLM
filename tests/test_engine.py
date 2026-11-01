@@ -198,7 +198,7 @@ class EngineTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"HIKARILM_MLX_PYTHON": "/nowhere/python"}):
             with self.assertRaises(ModelError) as caught:
                 engine.open_chat(CODER, [{"role": "user", "content": "hi"}])
-        self.assertIn("run ./start.sh again", str(caught.exception))
+        self.assertIn("hikarilm restart", str(caught.exception))
 
     def test_complete_joins_the_answer(self):
         self.assertEqual(engine.complete(CODER, [{"role": "user", "content": "a b"}], {"num_ctx": 2048}), "echo: a b")
@@ -252,7 +252,7 @@ class PrepareTest(unittest.TestCase):
     def test_failure_is_said_and_tried_again_next_time(self):
         ready, _ = self.run_prepare(fails=True)
         self.assertFalse(ready)
-        self.assertIn("Run ./start.sh again", self.said[-1])
+        self.assertIn("hikarilm restart", self.said[-1])
         self.assertTrue(self.run_prepare()[0])
 
     def test_another_python_is_left_alone(self):

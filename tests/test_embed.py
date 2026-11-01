@@ -45,7 +45,7 @@ class EmbedWorkerTest(unittest.TestCase):
     def test_not_downloaded_says_how_to_get_it(self):
         with self.assertRaises(ModelError) as caught:
             engine.embed(["search_query: hello"])
-        self.assertIn("./start.sh", str(caught.exception))
+        self.assertIn("hikarilm restart", str(caught.exception))
 
     def test_a_partial_download_is_not_used(self):
         add_nomic(self.hub, files=("config.json", "vocab.txt"))

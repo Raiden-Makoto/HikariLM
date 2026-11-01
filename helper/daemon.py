@@ -1,7 +1,7 @@
 """Running HikariLM in the background, so it keeps running after the terminal is closed.
 
-./start.sh starts it and returns, ./start.sh stop stops it, and Update in Settings pulls the
-new code and restarts it. What it prints goes to ~/.hikarilm/hikarilm.log, which keeps only
+hikarilm start starts it and returns, hikarilm stop stops it, and Update in Settings (or
+hikarilm update) pulls the new code and restarts it. What it prints goes to ~/.hikarilm/hikarilm.log, which keeps only
 its last MAX_LINES lines.
 """
 

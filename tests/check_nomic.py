@@ -2,7 +2,7 @@
 
 It embeds the same texts twice: with HikariLM's MLX port, and with Nomic's
 PyTorch model (their remote code, as the model card runs it), then compares.
-Run ./start.sh once first so the weights are in the Hugging Face cache, then:
+Run  hikarilm start  once first so the weights are in the Hugging Face cache, then:
 
     python3 -m venv /tmp/nomic-check
     /tmp/nomic-check/bin/pip install mlx "transformers<5" torch einops
@@ -57,7 +57,7 @@ def main() -> int:
         return 2
     folder = engine.embed_folder()
     if folder is None:
-        print("nomic-embed-text is not downloaded. Run ./start.sh once, then this again.")
+        print("nomic-embed-text is not downloaded. Run  hikarilm start  once, then this again.")
         return 2
     from nomic_mlx import Embedder
 

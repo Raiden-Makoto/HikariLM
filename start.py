@@ -1,14 +1,16 @@
 """Start HikariLM: check the basics, run the helper in the background, open the page.
 
-    ./start.sh                start it and open the browser; the terminal can be closed after
-    ./start.sh stop           stop it
-    ./start.sh restart        stop it and start it again
-    ./start.sh status         say whether it runs, and where
-    ./start.sh log            the last lines of its log, ~/.hikarilm/hikarilm.log
-    ./start.sh --foreground   run it in this terminal instead, until Ctrl+C
-    ./start.sh --no-browser   start without opening a browser
-    ./start.sh --port 9000    use another port
+    hikarilm start              start it and open the browser; the terminal can be closed after
+    hikarilm stop               stop it
+    hikarilm restart            stop it and start it again
+    hikarilm status             say whether it runs, and what is loaded
+    hikarilm log                the last lines of its log, ~/.hikarilm/hikarilm.log
+    hikarilm update             git pull, and restart it if that brought anything
+    hikarilm start --foreground run it in this terminal instead, until Ctrl+C
+    hikarilm start --no-browser start without opening a browser
+    hikarilm start --port 9000  use another port
 
+The first ./start.sh installs the hikarilm command; ./start.sh takes the same words.
 Python 3.9 or newer is all it needs. No packages to install.
 """
 
@@ -159,9 +161,40 @@ def show_log(lines: int = 40) -> None:
     say(f"\n(the last {lines} lines of {daemon.log_path()}; follow it with:  tail -f {daemon.log_path()})")
 
 
+def install_command() -> None:
+    from helper import command
+
+    try:
+        for line in command.install():
+            say(line)
+    except OSError as error:
+        say(f"The hikarilm command could not be installed ({error}). ./start.sh does the same.")
+
+
+def update_here(args) -> None:
+    """hikarilm update: git pull, then restart with the new code if it brought anything."""
+    from helper import update
+
+    try:
+        pulled = update.pull()
+    except update.UpdateError as error:
+        sys.exit(str(error))
+    if not pulled["updated"]:
+        say(f"HikariLM {__version__} is up to date.")
+        return
+    say(f"Updated {pulled['from']} to {pulled['to']}.")
+    if running_state(args.host, args.port) is None:
+        say("Start it with:  hikarilm start")
+        return
+    # This process still has the old code loaded; the new start.py does the restart.
+    os.execv(sys.executable, [sys.executable, str(ROOT / "start.py"), "restart", "--host", args.host,
+                              "--port", str(args.port), "--no-browser"])
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Start HikariLM.")
-    parser.add_argument("action", nargs="?", default="start", choices=("start", "stop", "restart", "status", "log"))
+    parser = argparse.ArgumentParser(prog="hikarilm", description="Run HikariLM.")
+    parser.add_argument("action", nargs="?", default="start",
+                        choices=("start", "stop", "restart", "status", "log", "update"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("HIKARILM_PORT", "8787")))
     parser.add_argument("--host", default=os.environ.get("HIKARILM_HOST", "127.0.0.1"))
     parser.add_argument("--no-browser", action="store_true", help="do not open the page")
@@ -198,6 +231,11 @@ def main() -> None:
     if args.action == "stop":
         stop_running(args.host, args.port)
         return
+    if args.action == "update":
+        update_here(args)
+        return
+    if not args.after:
+        install_command()
     if args.action == "restart":
         stop_running(args.host, args.port, quiet=True)
 
@@ -211,7 +249,7 @@ def main() -> None:
     if not port_is_free(args.host, args.port):
         state = running_state(args.host, args.port)
         if state is None:
-            sys.exit(f"Port {args.port} is used by another program. Try:  ./start.sh --port {args.port + 1}")
+            sys.exit(f"Port {args.port} is used by another program. Try:  hikarilm start --port {args.port + 1}")
         from helper.version import code_stamp
 
         if state.get("code") == code_stamp():
@@ -245,8 +283,10 @@ def main() -> None:
         return
     say()
     say(f"HikariLM is running in the background at {url}. You can close this window.")
-    say("  ./start.sh stop     stops it")
-    say(f"  ./start.sh log      shows its log ({daemon.log_path()}, at most {daemon.MAX_LINES} lines)")
+    say("  hikarilm stop       stops it")
+    say("  hikarilm status     says whether it runs, and what is loaded")
+    say(f"  hikarilm log        shows its log ({daemon.log_path()}, at most {daemon.MAX_LINES} lines)")
+    say("  hikarilm update     gets the newest HikariLM and restarts it")
     if not args.no_browser:
         webbrowser.open(url)
 
