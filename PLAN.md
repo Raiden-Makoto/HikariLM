@@ -6,7 +6,7 @@
 - **v3.1**: nomic-embed-text in MLX, and with it RAG: earlier chats and pictures found again.
 - **v3.5**: Falcon3 1.58-bit from TII's own files, checked against TII's code. Released.
 - **v4**: the models from their makers' official weights, and pictures with FLUX.2 klein through mflux.
-  Only the models themselves: no LoRA, no fine-tunes.
+  Only the models themselves: no LoRA, no fine-tunes. Released.
 
 | Model | Version | Runs with | Weights | About |
 |---|---|---|---|---|
@@ -125,6 +125,7 @@ Each one is checked against its makers' own code before it is used.
 - [x] On the Mac: `tests/check_bitnet_forms.py` passes. Released in v3.5.1, with a "Report a problem" button in Settings. It needs no downloads: it writes a tiny random
   model in each form and compares MLX with transformers on it. (`tests/check_bitnet.py` does the same
   for a real repo, for anyone who has one.)
+
 ### Pictures with mflux
 
 - [x] Every FLUX.2 klein mflux runs (4B, 9B, 9B-KV, base 4B, base 9B), from Black Forest Labs or
@@ -138,6 +139,16 @@ Each one is checked against its makers' own code before it is used.
 - [x] Delete `sdserver.py` and `picsetup.py`, the setup window, the picture server address, and the
   picture settings.
 - [x] Tests with a fake picture worker.
-- [ ] On the Mac: `python3 tests/check_flux.py` passes (it makes the picture venv if needed) (mflux's table, then
-  a picture from each downloaded model), and a picture made in the page.
-- [ ] `__version__ = "4.0.0"`, tag `v4.0.0`.
+- [x] On the Mac: FLUX.2 klein makes pictures in the page. (`python3 tests/check_flux.py` checks mflux's
+  table and draws with each downloaded model; it makes the picture venv if needed.)
+- [x] `__version__ = "4.0.0"`, tag `v4.0.0`. Released.
+
+## v4.0.1: prompt rewriting
+
+FLUX.2 klein draws what a prompt describes far better than what it names: "Usagi from Chiikawa"
+gets a generic rabbit. Black Forest Labs suggests rewriting prompts for FLUX.2.
+
+- [ ] A Settings switch: before drawing, the chat model rewrites the request into a visual
+  description, which is shown with the picture and kept in its notes.
+- [ ] The chat model leaves memory before the picture model loads (one large model at a time).
+- [ ] `__version__ = "4.0.1"`, tag `v4.0.1`.
