@@ -14,8 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (__version__, budget, context, descriptions, documents, engine, flux, imagegen, names, notes,
-                    rewrite, store, thinking, workspace)
+from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, names,
+                    notes, rewrite, store, thinking, update, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -72,7 +72,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin() or self._workspace("GET"):
             return
         if self.path == "/api/state":
-            self._send_json({**self._loaded(), "code": STARTED_WITH, "version": __version__})
+            self._send_json({**self._loaded(), "code": STARTED_WITH, "version": __version__, "pid": os.getpid(),
+                             "background": bool(os.environ.get("HIKARILM_BACKGROUND"))})
+            return
+        if self.path == "/api/update":
+            try:
+                self._send_json(update.status())
+            except update.UpdateError as error:
+                self._send_json({"git": True, "error": str(error)})
             return
         if self.path == "/api/pictures":
             pictures, notes_ = imagegen.picture_models()
@@ -278,6 +285,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/search":
             self._search()
+            return
+        if self.path == "/api/update":
+            self._update()
             return
         if self.path not in ("/api/chat", "/api/describe", "/api/rewrite"):
             self._send_json({"error": "not found"}, status=404)
@@ -591,6 +601,22 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"error": f"The description could not be saved: {error.strerror or error}"})
         finally:
             response.close()
+
+    def _update(self) -> None:
+        """git pull, and when it brought anything, restart with the new code."""
+        busy = "A reply is still being written." if work.chats else "A picture is being made." if work.picture else ""
+        if busy:
+            self._send_json({"error": busy + " Wait for it to finish, then update."}, status=409)
+            return
+        try:
+            pulled = update.pull()
+        except update.UpdateError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        self._send_json({**pulled, "restarting": pulled["updated"]})
+        if pulled["updated"]:
+            print(f"Updated {pulled['from']} to {pulled['to']}. Restarting.", flush=True)
+            daemon.restart_later(HOST, PORT)
 
     @staticmethod
     def _loaded_line(model: str, previous: str | None) -> dict:
@@ -913,6 +939,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"{self.address_string()} {fmt % args}", flush=True)
+
+    def log_request(self, code="-", size="-") -> None:
+        # The page asks for its state every few seconds; only what went wrong is worth a line.
+        if str(getattr(code, "value", code)).isdigit() and int(getattr(code, "value", code)) >= 400:
+            super().log_request(code, size)
 
 
 for _verb in ("GET", "PUT", "PATCH", "DELETE", "POST"):

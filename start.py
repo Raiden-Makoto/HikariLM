@@ -1,8 +1,13 @@
-"""Start HikariLM: check the basics, run the helper, open the page.
+"""Start HikariLM: check the basics, run the helper in the background, open the page.
 
-    python3 start.py              start and open the browser
-    python3 start.py --no-browser start without opening a browser
-    python3 start.py --port 9000  use another port
+    ./start.sh                start it and open the browser; the terminal can be closed after
+    ./start.sh stop           stop it
+    ./start.sh restart        stop it and start it again
+    ./start.sh status         say whether it runs, and where
+    ./start.sh log            the last lines of its log, ~/.hikarilm/hikarilm.log
+    ./start.sh --foreground   run it in this terminal instead, until Ctrl+C
+    ./start.sh --no-browser   start without opening a browser
+    ./start.sh --port 9000    use another port
 
 Python 3.9 or newer is all it needs. No packages to install.
 """
@@ -15,6 +20,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -74,42 +80,10 @@ def report_pictures() -> None:
         say("  " + note)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Start HikariLM.")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("HIKARILM_PORT", "8787")))
-    parser.add_argument("--host", default=os.environ.get("HIKARILM_HOST", "127.0.0.1"))
-    parser.add_argument("--no-browser", action="store_true", help="do not open the page")
-    parser.add_argument("--version", action="version", version="HikariLM " + __version__)
-    args = parser.parse_args()
-
-    check_python()
-    check_files()
-
-    url = f"http://{args.host}:{args.port}"
-    if not port_is_free(args.host, args.port):
-        state = running_state(args.host, args.port)
-        if state is not None:
-            from helper.version import code_stamp
-
-            if state.get("code") != code_stamp():
-                # A copy started before the files changed keeps running its old
-                # code, so pages added since would show "not found".
-                sys.exit(
-                    f"An older copy of HikariLM is still running at {url}, started before the files were updated.\n"
-                    "Stop it (Ctrl+C in the window where it runs, or close that window) and run this again."
-                )
-            say(f"HikariLM is already running at {url}")
-            if not args.no_browser:
-                webbrowser.open(url)
-            return
-        sys.exit(f"Port {args.port} is used by another program. Try:  python3 start.py --port {args.port + 1}")
-
-    # The helper reads these when it is imported, so set them first.
-    os.environ["HIKARILM_HOST"] = args.host
-    os.environ["HIKARILM_PORT"] = str(args.port)
-
-    from helper import store
-    from helper.server import main as serve
+def prepare(url: str) -> None:
+    """The first-start steps: the venvs, the notes model, what models there are. Shown in the
+    terminal, since the first time installs packages."""
+    from helper import engine, names, store
 
     say("HikariLM " + __version__)
     moved = store.move_old_home()
@@ -117,8 +91,6 @@ def main() -> None:
         say("  " + moved)
     say(f"  page:   {url}")
     say(f"  saved:  {store.home()}")
-    from helper import engine, names
-
     if engine.prepare(say):
         engine.prepare_embed(say)
     mlx = engine.names()
@@ -126,12 +98,154 @@ def main() -> None:
         "No MLX models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download "
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
     report_pictures()
-    say("Press Ctrl+C to stop.")
-    say()
 
+
+def serve_here(background: bool) -> None:
+    """Be the helper. In the background, everything it prints goes to the capped log."""
+    from helper import daemon
+
+    if background:
+        os.environ["HIKARILM_BACKGROUND"] = "1"
+        daemon.capture_output(daemon.CappedLog(daemon.log_path()))
+    from helper.server import main as serve
+
+    daemon.write_pid()
+    try:
+        serve()
+    finally:
+        daemon.forget_pid()
+
+
+def stop_running(host: str, port: int, quiet: bool = False) -> bool:
+    """Stop the HikariLM running in the background. True if one was stopped."""
+    from helper import daemon
+
+    state = running_state(host, port)
+    pid = state.get("pid") if state else daemon.saved_pid()
+    if not pid:
+        if state is not None:
+            sys.exit("A HikariLM from before 4.3.0 is running. Stop it with Ctrl+C in the window where it runs.")
+        if not quiet:
+            say("HikariLM is not running.")
+        return False
+    say("Stopping HikariLM…")
+    if not daemon.stop(pid):
+        sys.exit(f"HikariLM (process {pid}) did not stop. Stop it with:  kill {pid}")
+    say("Stopped.")
+    return True
+
+
+def wait_until_up(host: str, port: int, child, seconds: float = 60) -> dict | None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        state = running_state(host, port)
+        if state is not None:
+            return state
+        if child is not None and child.poll() is not None:
+            return None
+        time.sleep(0.3)
+    return None
+
+
+def show_log(lines: int = 40) -> None:
+    from helper import daemon
+
+    try:
+        text = daemon.log_path().read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        say("There is no log yet.")
+        return
+    say("\n".join(text.splitlines()[-lines:]))
+    say(f"\n(the last {lines} lines of {daemon.log_path()}; follow it with:  tail -f {daemon.log_path()})")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Start HikariLM.")
+    parser.add_argument("action", nargs="?", default="start", choices=("start", "stop", "restart", "status", "log"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("HIKARILM_PORT", "8787")))
+    parser.add_argument("--host", default=os.environ.get("HIKARILM_HOST", "127.0.0.1"))
+    parser.add_argument("--no-browser", action="store_true", help="do not open the page")
+    parser.add_argument("--foreground", action="store_true", help="run in this terminal until Ctrl+C")
+    parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--after", type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--version", action="version", version="HikariLM " + __version__)
+    args = parser.parse_args()
+
+    check_python()
+    check_files()
+    # The helper reads these when it is imported, so set them first.
+    os.environ["HIKARILM_HOST"] = args.host
+    os.environ["HIKARILM_PORT"] = str(args.port)
+    url = f"http://{args.host}:{args.port}"
+
+    if args.serve:
+        serve_here(background=True)
+        return
+    if args.action == "log":
+        show_log()
+        return
+    if args.action == "status":
+        state = running_state(args.host, args.port)
+        if state is None:
+            say("HikariLM is not running.")
+        else:
+            loaded = state.get("large_model")
+            say(f"HikariLM {state.get('version', '')} is running at {url}" +
+                (f" (process {state['pid']})" if state.get("pid") else "") +
+                (", in the background." if state.get("background") else ", in a terminal.") +
+                (f" Loaded: {loaded}." if loaded else ""))
+        return
+    if args.action == "stop":
+        stop_running(args.host, args.port)
+        return
+    if args.action == "restart":
+        stop_running(args.host, args.port, quiet=True)
+
+    if args.after:
+        # Started by Update: the copy it replaces is stopping.
+        from helper import daemon
+
+        if not daemon.wait_gone(args.after, daemon.STOP_SECONDS + 10):
+            sys.exit(f"The copy being updated (process {args.after}) did not stop, so the new one cannot start.")
+
+    if not port_is_free(args.host, args.port):
+        state = running_state(args.host, args.port)
+        if state is None:
+            sys.exit(f"Port {args.port} is used by another program. Try:  ./start.sh --port {args.port + 1}")
+        from helper.version import code_stamp
+
+        if state.get("code") == code_stamp():
+            say(f"HikariLM is already running at {url}")
+            if not args.no_browser:
+                webbrowser.open(url)
+            return
+        # A copy started before the files changed keeps running its old code, so pages
+        # added since would show "not found".
+        say("A copy started before the files were updated is running. Restarting it.")
+        stop_running(args.host, args.port)
+
+    prepare(url)
+    if args.foreground:
+        say("Press Ctrl+C to stop.")
+        say()
+        if not args.no_browser:
+            threading.Timer(0.8, webbrowser.open, args=(url,)).start()
+        serve_here(background=False)
+        return
+
+    from helper import daemon
+
+    child = daemon.spawn(["--serve", "--host", args.host, "--port", str(args.port)])
+    if wait_until_up(args.host, args.port, child) is None:
+        say("HikariLM did not start. The end of its log:")
+        show_log(20)
+        sys.exit(1)
+    say()
+    say(f"HikariLM is running in the background at {url}. You can close this window.")
+    say("  ./start.sh stop     stops it")
+    say(f"  ./start.sh log      shows its log ({daemon.log_path()}, at most {daemon.MAX_LINES} lines)")
     if not args.no_browser:
-        threading.Timer(0.8, webbrowser.open, args=(url,)).start()
-    serve()
+        webbrowser.open(url)
 
 
 if __name__ == "__main__":

@@ -194,6 +194,71 @@ const ISSUES = "https://github.com/Raiden-Makoto/HikariLM/issues/new";
 // Read ahead of the click: Safari blocks a window opened after an await.
 let version = "unknown";
 
+// Updates: how far behind GitHub this copy is, and the button that pulls and restarts it.
+async function showUpdateSetting() {
+  const note = document.querySelector("#update-note");
+  const button = document.querySelector("#update-button");
+  if (button.dataset.restarting) return;
+  note.textContent = "HikariLM " + version + ". Checking GitHub…";
+  let body;
+  try {
+    body = await (await fetch("/api/update")).json();
+  } catch (error) {
+    note.textContent = "HikariLM " + version + ". Could not reach the helper.";
+    return;
+  }
+  button.disabled = !body.git;
+  const here = "HikariLM " + version + (body.head ? " (" + body.head + ")" : "") + ". ";
+  if (!body.git) note.textContent = here + "This copy was not made with git clone, so it cannot update itself. Download the new release from GitHub.";
+  else if (body.error) note.textContent = here + body.error;
+  else if (body.behind) note.textContent = here + body.behind + (body.behind === 1 ? " new change" : " new changes") + " on GitHub.";
+  else note.textContent = here + "Up to date.";
+}
+
+async function runUpdate() {
+  const note = document.querySelector("#update-note");
+  const button = document.querySelector("#update-button");
+  button.disabled = true;
+  note.textContent = "Getting the new code…";
+  let body;
+  let before;
+  try {
+    before = await (await fetch("/api/state")).json();
+    const response = await fetch("/api/update", { method: "POST" });
+    body = await response.json();
+    if (!response.ok) throw new Error(body.error || "The update failed.");
+  } catch (error) {
+    note.textContent = plainError(error.message);
+    button.disabled = false;
+    return;
+  }
+  if (!body.restarting) {
+    note.textContent = "HikariLM " + version + ". Already up to date.";
+    button.disabled = false;
+    return;
+  }
+  // The new copy runs the first-start steps again, which can take minutes when an update
+  // brings new packages. The page reloads once it answers with its new code.
+  button.dataset.restarting = "1";
+  note.textContent = "Updated from " + body.from + " to " + body.to + ". Restarting…";
+  const started = Date.now();
+  while (Date.now() - started < 15 * 60 * 1000) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const now = await (await fetch("/api/state", { cache: "no-store" })).json();
+      if (now.pid !== before.pid || now.code !== before.code) {
+        window.location.reload();
+        return;
+      }
+    } catch (error) {
+      note.textContent = "Updated from " + body.from + " to " + body.to + ". Restarting… (" +
+        Math.round((Date.now() - started) / 1000) + " s)";
+    }
+  }
+  delete button.dataset.restarting;
+  note.textContent = "It has not come back yet. In Terminal, ./start.sh log shows what it is doing, and ./start.sh starts it.";
+}
+
 function reportIssue() {
   const model = modelSelect.value;
   const body = [
@@ -222,11 +287,13 @@ export function start() {
   document.querySelector("#open-settings").addEventListener("click", () => {
     showNotesSetting();
     showContextSetting();
+    showUpdateSetting();
     settings.showModal();
   });
   fetch("/api/state").then((response) => response.json())
     .then((body) => { version = body.version || version; }, () => {});
   document.querySelector("#report-issue").addEventListener("click", reportIssue);
+  document.querySelector("#update-button").addEventListener("click", runUpdate);
   document.querySelector("#rewrite-model").addEventListener("change", (event) => {
     localStorage.setItem(REWRITE_KEY, event.target.value);
     updateChangeNote();
