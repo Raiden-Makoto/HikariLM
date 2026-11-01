@@ -10,19 +10,28 @@ No Docker, no Ollama, no account. Your chats never leave your computer.
 
 HikariLM runs only on a Mac with Apple Silicon (M1 or newer). You need Python 3.9 or newer.
 
+The first time, from the HikariLM folder:
+
 ```bash
-./start.sh            # start it; the terminal can be closed after
-./start.sh stop       # stop it
-./start.sh restart    # stop it and start it again
-./start.sh status     # whether it runs, and what is loaded
-./start.sh log        # the end of its log
+./start.sh
 ```
 
-The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. You see that in the terminal. Then HikariLM keeps running in the background and opens http://127.0.0.1:8787, and the terminal can be closed. Running `./start.sh` again while it runs just opens the page; if the files were updated since it started, it restarts it first.
+That installs the `hikarilm` command (a link in `~/.local/bin`, which it adds to your PATH in `~/.zshrc` if it is not there yet). From then on, in any folder:
+
+```bash
+hikarilm start        # start it; the terminal can be closed after
+hikarilm stop         # stop it
+hikarilm restart      # stop it and start it again
+hikarilm status       # whether it runs, and what is loaded
+hikarilm log          # the end of its log
+hikarilm update       # git pull, and restart it if that brought anything
+```
+
+The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. You see that in the terminal. Then HikariLM keeps running in the background and opens http://127.0.0.1:8787, and the terminal can be closed. `hikarilm start` while it runs just opens the page; if the files were updated since it started, it restarts it first.
 
 What it prints goes to `~/.hikarilm/hikarilm.log`, which keeps only its last 2,000 lines. Only failed requests are logged, not every one.
 
-**Updating**: *Update* in Settings runs `git pull` in the HikariLM folder and, when that brought anything, restarts HikariLM and reloads the page. It says first how many changes GitHub has. It needs a copy made with `git clone`, and refuses while a reply or a picture is being made. Chats, settings and models are kept.
+**Updating**: *Update* in Settings, or `hikarilm update`, runs `git pull` in the HikariLM folder and, when that brought anything, restarts HikariLM and reloads the page. It says first how many changes GitHub has. It needs a copy made with `git clone`, and refuses while a reply or a picture is being made. Chats, settings and models are kept.
 
 Options: `--foreground` to run in the terminal until Ctrl+C, as before 4.3.0; `--port 9000` for another port; `--no-browser` to skip opening the page; `--version`.
 
@@ -44,7 +53,7 @@ Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM 
 
 Other BitNet models work the same way: the rest of the Falcon3 and Falcon-E 1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T` (and its `-bf16` master weights, packed when loaded), `HF1BitLLM/Llama3-8B-1.58-100B-tokens`, and mlx-community's copies of them. `tests/check_bitnet_forms.py` compares each form with transformers on tiny made-up models, with nothing to download; `tests/check_bitnet.py` does it for a real model you have. GGUF files (for bitnet.cpp) and BitNet experiments with their own code, such as `1bitLLM/bitnet_b1_58-large`, are not MLX models and are not listed.
 
-Pictures are drawn by Black Forest Labs' FLUX.2 klein through [mflux](https://github.com/filipstrand/mflux). The 4B in the table is the one to take with less than 18 GB of RAM; with 18 GB or more, the 9B (`mlx-community/flux2-klein-9b-4bit`, 9.5 GB) draws more detail. Pick *Get a picture model…* in the model list, or open http://127.0.0.1:8787/setup/pictures, for a setup page that walks through it and says how far along you are. Every FLUX.2 klein works: 4B and 9B, 9B-KV, and the base 4B and 9B (slower, 50 steps, with guidance), from `black-forest-labs` or mlx-community's MLX copies at any bit width. Once one is downloaded, `./start.sh` puts mflux in a venv of its own, `~/.hikarilm/pictures-venv`, once, so it never changes the packages the chat models run with. Only the models themselves are listed: fine-tunes, LoRA adapters and other people's re-uploads are left out, and the start window says which were skipped. `tests/check_flux.py` checks HikariLM's list against mflux's and draws one picture with each model you have.
+Pictures are drawn by Black Forest Labs' FLUX.2 klein through [mflux](https://github.com/filipstrand/mflux). The 4B in the table is the one to take with less than 18 GB of RAM; with 18 GB or more, the 9B (`mlx-community/flux2-klein-9b-4bit`, 9.5 GB) draws more detail. Pick *Get a picture model…* in the model list, or open http://127.0.0.1:8787/setup/pictures, for a setup page that walks through it and says how far along you are. Every FLUX.2 klein works: 4B and 9B, 9B-KV, and the base 4B and 9B (slower, 50 steps, with guidance), from `black-forest-labs` or mlx-community's MLX copies at any bit width. Once one is downloaded, `hikarilm restart` puts mflux in a venv of its own, `~/.hikarilm/pictures-venv`, once, so it never changes the packages the chat models run with. Only the models themselves are listed: fine-tunes, LoRA adapters and other people's re-uploads are left out, and the start window says which were skipped. `tests/check_flux.py` checks HikariLM's list against mflux's and draws one picture with each model you have.
 
 With more memory, take bigger ones or less quantized ones (8-bit instead of 4-bit, say) from [mlx-community](https://huggingface.co/mlx-community).
 

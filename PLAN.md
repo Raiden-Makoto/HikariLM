@@ -255,6 +255,11 @@ the picture model gets the rewritten prompt and the pictures.
   a Mac skipped: start, close the terminal, still running; Update from Settings pulled, restarted
   under a new pid and reloaded the page; 3,000 failed requests left the log at about 1,000 lines;
   restart, stop and status.
+- [x] The `hikarilm` command (`bin/hikarilm`): `hikarilm start`, `stop`, `restart`, `status`, `log`
+  and `update` (git pull, then the new start.py restarts it). The first `./start.sh` links it into
+  `~/.local/bin` and, if that is not on the PATH, adds it in `~/.zshrc` (`~/.bash_profile` for
+  bash) once, marked. A file of that name that is not the link is left alone. Every message that
+  said `./start.sh` says the command now. Tried in WSL from a new login shell in another folder.
 - [ ] Try it on the Mac, including closing the Terminal window.
 - [ ] `__version__ = "4.3.0"`, tag `v4.3.0`.
 
