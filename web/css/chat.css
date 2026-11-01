@@ -79,6 +79,12 @@ h1 {
   color: #fff;
 }
 .turn.user .who { color: rgba(255, 255, 255, 0.75); }
+.prompt-actions { display: flex; justify-content: flex-end; gap: 0.25rem; margin-top: 0.35rem; }
+.prompt-actions[hidden] { display: none; }
+.prompt-actions button { padding: 0.1rem 0.45rem; border: 0; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.75); font: inherit; font-size: 0.75rem; cursor: pointer; }
+.prompt-actions button:hover, .prompt-actions button:focus-visible { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.turn.user:not(:hover):not(:focus-within) .prompt-actions:not(.prompt-edit .prompt-actions) { opacity: 0.55; }
+.prompt-edit textarea { display: block; width: min(36rem, 70vw); padding: 0.4rem 0.55rem; border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 8px; background: rgba(255, 255, 255, 0.12); color: #fff; font: inherit; line-height: 1.45; resize: none; }
 .turn.assistant {
   padding-left: 0.15rem;
   padding-right: 0.15rem;

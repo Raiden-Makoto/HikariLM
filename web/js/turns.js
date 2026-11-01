@@ -7,6 +7,7 @@ import { pictureLabel, pictureSeed, pictureSize, pictureSteps, pictureToggle } f
 import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
 import { applyCode, syncApplyButtons } from "./apply.js";
+import { deletePrompt, editPrompt } from "./prompt-actions.js";
 
 export function addTurn(role, text, thought, files, message, question) {
   if (role === "assistant" && text) ({ text, thought } = splitStrayThinking(text, thought));
@@ -50,6 +51,18 @@ export function addTurn(role, text, thought, files, message, question) {
   if (role === "user") {
     thinking.remove();
     box.remove();
+    if (message) {
+      const actions = document.createElement("div");
+      actions.className = "prompt-actions";
+      for (const [label, act] of [["Edit", () => editPrompt(message, block, answer)], ["Delete", () => deletePrompt(message)]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", act);
+        actions.append(button);
+      }
+      block.append(actions);
+    }
   } else if (text) {
     updateApply(answer, question);
   }

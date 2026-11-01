@@ -101,8 +101,9 @@ async function send() {
   const files = state.attached;
   state.attached = [];
   renderChips();
-  state.messages.push({ role: "user", content, files: files.length ? files : undefined });
-  const sent = addTurn("user", content, "", files);
+  const asked = { role: "user", content, files: files.length ? files : undefined };
+  state.messages.push(asked);
+  const sent = addTurn("user", content, "", files, asked);
   messageBox.value = "";
   messageBox.style.height = "";
   dropDraft(draftOwner);
@@ -521,8 +522,9 @@ async function drawPicture(prompt, model, request) {
   state.attached = [];
   renderChips();
   clearRewrite();
-  state.messages.push({ role: "user", content: asked, files: files.length ? files : undefined });
-  const sent = addTurn("user", asked, "", files);
+  const question = { role: "user", content: asked, files: files.length ? files : undefined };
+  state.messages.push(question);
+  const sent = addTurn("user", asked, "", files, question);
   messageBox.value = "";
   messageBox.style.height = "";
   dropDraft(draftOwner);

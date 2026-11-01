@@ -34,8 +34,10 @@ class CleanTest(unittest.TestCase):
         for description in ("A cream-colored rabbit with long ears.", ""):
             text = rewrite.messages("her on a beach", description, shown=True)[0]["content"]
             self.assertIn("also given a reference picture", text)
-            self.assertIn("the pose, action, setting", text)
+            self.assertIn("every object the request names", text)
+            self.assertNotIn("Replace every name with how it looks", text)
             self.assertEqual(description in text, True)
+        self.assertIn("Replace every name with how it looks", rewrite.messages("Usagi")[0]["content"])
 
 
 class RewriteTest(FluxCase):

@@ -192,6 +192,16 @@ the picture model gets the rewritten prompt and the pictures.
   them again. A reference no longer needs a model that can see: without one, the read is skipped.
 - [x] The rewrite is told the picture model sees the reference too (`shown`), so it describes the
   scene and what changes rather than repeating every detail of the character.
+- [x] Tried on the Mac: the reference carries the character, but new things in the request can go
+  missing ("Usagi eating a burger" drew Usagi with no burger). Drawing from a reference works like
+  editing it, so the model leans to copying the picture as it is. With a reference, the rewrite
+  now starts with the action and every object asked for, leaves out the character's look (the
+  picture has it) and does not carry over the reference's pose or background. The general
+  instructions also say every object named must be in the prompt, shown being used.
 - [ ] `tests/check_flux.py` draws a fox, then the same fox in a meadow from the first picture.
   Run it on the Mac.
+- [x] Edit and Delete on every message you sent (`web/js/prompt-actions.js`). Edit opens it in
+  place; sending replaces it and everything after it, asking first when that removes more than
+  its own reply. Delete removes it and its reply, and the picture file if the reply was a picture;
+  an empty chat is deleted. Tried in the browser with the fake workers.
 - [ ] `__version__ = "4.2.0"`, tag `v4.2.0`.
