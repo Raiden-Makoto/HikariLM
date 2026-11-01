@@ -242,7 +242,7 @@ Speak a prompt instead of typing it, and have answers read aloud. All of it runs
 the rest: the browser's own speech recognition is not used, because Chrome's sends the audio to
 Google.
 
-**Packages.** mlx-audio (0.6.3) does both directions: speech to text (Whisper, Parakeet) and text
+**Packages.** mlx-audio (0.6.3) does both directions: speech to text (Whisper) and text
 to speech (Kokoro). It pins its own MLX (`mlx==0.32.4`) and wants transformers 5.14 or later, so
 it gets a venv of its own, `~/.hikarilm/voice-venv`, made by `./start.sh` once a voice model is
 downloaded, the way `pictures-venv` is made for mflux. mlx-whisper is the fallback for speech to
@@ -253,7 +253,6 @@ text if mlx-audio's Whisper falls short; it pulls in torch and numba.
 | For | Suggested | Notes |
 |---|---|---|
 | Speech to text | `mlx-community/whisper-large-v3-turbo` | Many languages. Any MLX Whisper works (`whisper-small-mlx` for less memory). |
-| Speech to text, English | `mlx-community/parakeet-tdt-0.6b-v3` | Faster; offered under a fold. |
 | Reading aloud | `mlx-community/Kokoro-82M-bf16` | Small, Apache 2.0, several voices. |
 
 Check on the Mac before building on them: the exact repos mlx-audio loads, the Whisper output
@@ -278,7 +277,7 @@ all.
   like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
   page says so each time, the way reading pictures says what was loaded and what left.
 - [ ] **Setup page**, `/setup/voice`, like the picture one: Whisper turbo first, the smaller
-  Whisper and Parakeet under a fold, Kokoro for reading aloud, each with its command and Copy, and
+  Whisper under a fold, Kokoro for reading aloud, each with its command and Copy, and
   where it stands. *Get a voice model…* in the microphone button's place until one is there.
 - [ ] **Settings**: *Listen with* (the speech-to-text model) and language (or detect), *Read
   aloud with*, the voice, the speed, and *Read answers aloud when they finish*.
