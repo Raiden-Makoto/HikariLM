@@ -51,6 +51,14 @@ body.setup-page { display: block; overflow-y: auto; }
   background: var(--field); font-size: 0.85rem; overflow-x: auto;
 }
 .setup-file { position: relative; }
+.setup-step h3 { margin: 1.2rem 0 0; font-size: 1rem; font-weight: 600; }
+.setup-example { margin-top: 1rem; padding: 0.2rem 1rem 0.8rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.setup-example p { margin: 0.6rem 0 0; }
+.setup-example table { width: 100%; margin-top: 0.6rem; border-collapse: collapse; font-size: 0.92rem; }
+.setup-example th, .setup-example td { padding: 0.4rem 0.5rem; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+.setup-example th { color: var(--muted); font-weight: 500; }
+.setup-example td:first-child { width: 35%; color: var(--muted); }
+.setup-bad strong { color: var(--danger); }
 .setup-file pre code { padding: 0; background: none; font-size: inherit; overflow-wrap: normal; }
 .setup-file button { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--panel); }
 .setup-again { margin-top: 2rem; color: var(--muted); font-size: 0.9rem; }
