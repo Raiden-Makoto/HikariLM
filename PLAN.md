@@ -131,7 +131,7 @@ Each one is checked against its makers' own code before it is used.
 - [x] Every FLUX.2 klein mflux runs (4B, 9B, 9B-KV, base 4B, base 9B), from Black Forest Labs or
   mlx-community's copies at any bit width; no conversion of our own. `flux.py` names each one the
   way mflux does, from the repo's name, checked against the transformer's blocks in the weights.
-- [x] Only the models themselves: fine-tunes, LoRA adapters and other makers' re-uploads are left out,
+- [x] Only the models themselves (LoRAs come back in 4.5, as add-ons, not as models): fine-tunes, LoRA adapters and other makers' re-uploads are left out,
   with a note saying why.
 - [x] `flux_worker.py` runs in `~/.hikarilm/pictures-venv` (mflux pins its own MLX and wants torch and
   transformers 5), installed by `start.py` once a FLUX.2 model is downloaded. It shares the one worker
@@ -262,6 +262,83 @@ the picture model gets the rewritten prompt and the pictures.
   said `./start.sh` says the command now. Tried in WSL from a new login shell in another folder.
 - [x] Try it on the Mac, including closing the Terminal window.
 - [x] `__version__ = "4.3.0"`, tag `v4.3.0`. Released.
+
+## LoRAs
+
+HikariLM never trains a LoRA; it draws with LoRAs people already have. mflux takes them as
+`lora_paths` and `lora_scales` (`--lora-paths`, `--lora-scales`), from a local `.safetensors` or a
+Hugging Face repo, and bakes them into the model when it loads: changing the LoRA means loading
+the picture model again. On a saved q4 model the baked layers become 8-bit, so a LoRA makes the
+loaded model bigger. Classic LoRA and LyCORIS LoKr load on FLUX.2; DoRA does not (mflux refuses
+it). They are drawn on the base 4B first (`flux-2-klein-base-4b-mflux-*` from mflux-community, or
+Black Forest Labs' FLUX.2-klein-base-4B): it is the model they are trained on, 50 steps with
+guidance. The distilled 4B comes after a check on the Mac.
+
+### v4.4.9: how to make a LoRA
+
+- [ ] A page of its own, `/setup/lora`, like `/setup/pictures`, linked from the picture setting in
+  Settings and from the picture setup page. It says what a LoRA is (a small add-on that teaches
+  FLUX.2 klein a style, a character or an object), that HikariLM draws with them from 4.5, and how
+  to train one by hand on the Mac with `mflux-train` (in `~/.hikarilm/pictures-venv`, which already
+  has mflux):
+  - The folder: `001.png` + `001.txt`, `002.png` + `002.txt`…, and `preview_1.txt`… for prompts
+    drawn while it trains.
+  - Captions: say what differs between the pictures (pose, place, clothes), put one made-up
+    trigger word in every caption, and leave out what the LoRA should learn, so the trigger word
+    takes it on. HikariLM's picture reading can write first drafts to correct.
+  - A ready-made `train.json` for `flux2-klein-base-4b` with `model_path` set to the downloaded
+    base 4B, with a Copy button; `gradient_checkpointing` (and `quantize: 8`) for Macs with less
+    memory, as mflux's docs say.
+  - Watching it: the loss chart and the preview pictures; past the best point the previews copy
+    the training pictures or stop following the prompt, so the best checkpoint is often an
+    earlier one. `mflux-train --resume` goes on from a checkpoint.
+  - Getting the LoRA file out of a checkpoint. Check in mflux's code what a checkpoint zip holds
+    and which file is the adapter before writing this part.
+- [ ] `__version__ = "4.4.9"`, tag `v4.4.9`.
+
+### v4.5.0: LoRAs from Hugging Face, on the base 4B
+
+- [ ] A LoRAs part in Settings: paste a repo (`user/name`). HikariLM looks it up on the Hugging Face
+  API and says its download size, the model it was made for (`base_model` on the card) and
+  its trigger word (`instance_prompt` on the card, when there is one), then shows the `hf download`
+  command with Copy, like the picture models. It is listed once it is in the Hugging Face cache.
+- [ ] Refuse, with the reason, what cannot work on the base 4B: a LoRA made for the 9B, FLUX.1 or
+  another model (from the card, and from the layer names and sizes in the file's header once it
+  is downloaded), DoRA files, and repos with no `.safetensors`.
+- [ ] **Drawing**: when the picture model is a base 4B, a LoRA picker and a strength (1.0 to start)
+  in Options. With any other picture model it is hidden, with a line saying LoRAs need the base
+  4B for now. One LoRA at a time. Picking another loads the picture model again, and the page says
+  so. The trigger word is added to the prompt; the user can change or clear it in Settings.
+- [ ] Saved pictures keep the LoRA and its strength: Vary and changing a picture use the same,
+  and the caption under a picture names it. A LoRA that is gone by then: say so and draw without.
+- [ ] Fake worker and tests: the LoRA reaches the worker, the picker shows only for the base 4B,
+  wrong LoRAs are refused. `tests/check_flux.py` on the Mac draws with a small public LoRA.
+- [ ] README, `__version__ = "4.5.0"`, tag `v4.5.0`.
+
+### v4.5.1: your own LoRA files, on the base 4B
+
+- [ ] *Add a LoRA…* in the LoRAs part of Settings: pick a `.safetensors` (from the 4.4.9 page, or
+  anywhere); it is copied to `~/.hikarilm/loras/`, and the same checks as 4.5.0 refuse what cannot
+  work on the base 4B. Its name is the file name; Remove deletes the copy.
+- [ ] The trigger word comes from the file when its trainer saved one (kohya's `ss_tag_frequency`
+  and the like in the header); otherwise the user types it once.
+- [ ] Listed in the same picker as the Hugging Face ones; everything else as in 4.5.0.
+- [ ] Tests, README, `__version__ = "4.5.1"`, tag `v4.5.1`.
+
+### v4.5.1-alpha: does a LoRA work on the distilled 4B? (a check, not a release)
+
+- [ ] On the Mac: the same LoRAs (a Hugging Face one and a local one), prompts and seeds on the base
+  4B (50 steps) and the distilled 4B (4 steps), at strengths 0.5, 0.8 and 1.0; look whether the
+  distilled pictures show the LoRA as well as the base ones and stay clean (no burnt colours,
+  no mush). Try a q4 and a q8 distilled 4B, since baking makes q4 layers 8-bit.
+- [ ] Write down what was found here. If it works: v4.5.2. If not: LoRAs stay on the base 4B, and
+  the line under the picker says why.
+
+### v4.5.2: LoRAs on the distilled 4B (only if the check passes)
+
+- [ ] The picker shows for the distilled 4B too, with the strength the check found best as the
+  start. Still not on the 9B.
+- [ ] Tests, README, `__version__ = "4.5.2"`, tag `v4.5.2`.
 
 ## v5.0.0: voice
 
