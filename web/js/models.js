@@ -134,12 +134,17 @@ let modelProblem = "";
 export const CODE_MODEL_KEY = "hikarilm-model-code";
 export const inCodeView = () => document.body.classList.contains("view-files");
 // Models that can read pictures, as the helper found them (a vision part in
-// their config). A picture goes to the chosen one if it can, otherwise to the first.
+// their config). A picture goes to the picked model if it can see; otherwise to
+// the reader chosen in Settings, or the first one.
 let visionModels = [];
+export const READER_KEY = "hikarilm-reader";
 export const isVision = (name) => visionModels.includes(name);
+export const readers = () => allModels.filter(isVision);
 export function visionModel() {
   if (isVision(modelSelect.value)) return modelSelect.value;
-  return allModels.find(isVision) || "";
+  const chosen = localStorage.getItem(READER_KEY);
+  if (chosen && isVision(chosen) && allModels.includes(chosen)) return chosen;
+  return readers()[0] || "";
 }
 export const codeRank = (name) => (/qwen.*coder|coder.*qwen/i.test(name) ? 0 : /code|devstral/i.test(name) ? 1 : 2);
 

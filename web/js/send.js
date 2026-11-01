@@ -18,7 +18,7 @@ import { editorPrompt } from "./edit-blocks.js";
 // Ask the helper to have a vision model write one picture down as text. It
 // answers from the saved description when it has one, so the vision model
 // is not loaded again for a picture it has already read.
-async function describePicture(file, model, signal, onText, purpose = "code") {
+async function describePicture(file, model, signal, onText, purpose = "code", onLoaded = () => {}) {
   const response = await fetch("/api/describe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -42,6 +42,7 @@ async function describePicture(file, model, signal, onText, purpose = "code") {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
       if (event.error) throw new Error(event.error);
+      if (event.hikarilm === "loaded") onLoaded(event);
       if (event.text) onText(event.text);
       if (typeof event.description === "string") {
         return { text: event.description, cached: Boolean(event.cached), model: event.model || model };
@@ -151,6 +152,9 @@ async function send() {
           reply.thinking.textContent = live;
           reply.thinking.hidden = false;
           scrollLog();
+        }, "code", (event) => {
+          status.textContent = "Loaded: " + modelLabel(event.model) +
+            (event.unloaded ? ", after unloading " + modelLabel(event.unloaded) : "") + ". Reading " + file.name + "…";
         });
         converted.push({ name: file.name + " (read by " + modelLabel(result.model || describer) + ")", text: result.text });
       }
@@ -412,6 +416,8 @@ async function rewritePrompt(request, writer, describer, references, asked = req
     note.hidden = false;
     status.textContent = text;
   };
+  const loadedLine = (event) => "Loaded: " + modelLabel(event.model) +
+    (event.unloaded ? ", after unloading " + (isPictureModel(event.unloaded) ? pictureLabel(event.unloaded) : modelLabel(event.unloaded)) : "");
   // What the vision model saw stays on the note, so a rewrite that ignored it shows.
   const showSeen = (title, text, open) => {
     seenBox.querySelector("summary").textContent = title;
@@ -429,18 +435,18 @@ async function rewritePrompt(request, writer, describer, references, asked = req
   try {
     for (const file of references) {
       const reader = modelLabel(describer);
-      say("Reading " + file.name + " with " + reader + "…");
+      say("Loading " + reader + " to read " + file.name + "…");
       let live = "";
       const result = await describePicture(file, describer, signal, (piece) => {
         live += piece;
         showSeen(reader + " is reading " + file.name, live, true);
-      }, "look");
+      }, "look", (event) => say(loadedLine(event) + ". Reading " + file.name + "…"));
       seen.push((references.length > 1 ? file.name + ": " : "") + result.text);
       showSeen("What " + modelLabel(result.model || describer) + " saw in " +
         references.map((item) => item.name).slice(0, seen.length).join(", ") +
         (result.cached ? " (read before, so not read again)" : ""), seen.join("\n\n"), false);
     }
-    say("Rewriting the prompt with " + modelLabel(writer) + "…");
+    say("Loading " + modelLabel(writer) + " to rewrite the prompt…");
     const response = await fetch("/api/rewrite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -450,6 +456,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "The prompt could not be rewritten.");
     let live = "";
     prompt = await readStream(response, (event) => {
+      if (event.hikarilm === "loaded") say(loadedLine(event) + ". Rewriting the prompt…");
       if (event.text) {
         live += event.text;
         messageBox.value = live;

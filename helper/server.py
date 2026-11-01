@@ -532,6 +532,7 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_start()
             self._stream_line({"description": saved["text"], "cached": True, "model": saved.get("model", "")})
             return
+        previous = router.large
         try:
             room = self._room(model, context.load_settings())
             router.begin(model)
@@ -543,6 +544,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         router.commit(model)
         self._stream_start()
+        self._stream_line(self._loaded_line(model, previous))
         text = ""
         try:
             while True:
@@ -575,6 +577,11 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             response.close()
 
+    @staticmethod
+    def _loaded_line(model: str, previous: str | None) -> dict:
+        """Which model is in memory now, and which one left to make room for it."""
+        return {"hikarilm": "loaded", "model": model, "unloaded": previous if previous not in (None, model) else None}
+
     def _rewrite(self) -> None:
         """Have a chat model turn a request for a picture into a description FLUX.2 can draw.
 
@@ -604,6 +611,7 @@ class Handler(BaseHTTPRequestHandler):
                             status=400)
             return
         self._models.enter_context(KEEPER.using(model))
+        previous = router.large
         try:
             room = self._room(model, context.load_settings())
             think = thinking.think_value(model, show(model), {"enabled": False})
@@ -615,6 +623,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         router.commit(model)
         self._stream_start()
+        self._stream_line(self._loaded_line(model, previous))
         text = ""
         try:
             while True:

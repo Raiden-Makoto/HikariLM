@@ -295,6 +295,13 @@
         </details>
         <p class="note" id="compact-note" role="status"></p>
       </div>
+      <div class="setting">
+        <label class="field-row">
+          <span class="setting-label">Read pictures with</span>
+          <select id="reader-model"></select>
+        </label>
+        <p class="note" id="reader-note">A model that can see writes an attached picture down as text when the model you chat with cannot see, and reads reference pictures before one is drawn. A chat model that can see reads pictures itself.</p>
+      </div>
       <div class="setting" id="picture-setting">
         <span class="setting-label">Making pictures</span>
         <p class="note">Pictures are drawn by Black Forest Labs' FLUX.2 klein, run by mflux. Every FLUX.2 klein works: 4B or 9B, the fast one or the base one, Black Forest Labs' own files or mlx-community's copies. Fine-tunes and LoRA adapters are not used.</p>
@@ -304,7 +311,7 @@
           <span>Rewrite prompts with</span>
           <select id="rewrite-model"></select>
         </label>
-        <p class="note">Before drawing, a chat model rewrites what you ask for into how it looks, and you can edit that before it draws. Models that think before every answer, such as DeepSeek R1, are not offered: they would reason at length over a one-line prompt. A picture you attach is read first by a model that can see, such as Gemma 3.</p>
+        <p class="note">Before drawing, a chat model rewrites what you ask for into how it looks, and you can edit that before it draws. Models that think before every answer, such as DeepSeek R1, are not offered: they would reason at length over a one-line prompt. A picture you attach is read first by the model under Read pictures with.</p>
         <p class="note warning">Picture models may not recognize niche characters, people or places. Describe how they look or attach a reference image. A rewrite only helps if the chat model knows them, and it can be wrong too.</p>
       </div>
       <div class="setting">

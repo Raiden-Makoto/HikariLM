@@ -96,6 +96,15 @@ class RewriteTest(FluxCase):
         self.assertIn("makes pictures", body["error"])
         self.assertIn("Write what", self.post("/api/rewrite", {"model": CODER, "request": " "})["error"])
 
+    def test_each_step_says_which_model_it_loaded_and_which_left(self):
+        self.post("/api/chat", {"model": CODER, "messages": [{"role": "user", "content": "hi"}]})
+        look = self.post("/api/describe", {"model": GEMMA, "image": PNG_B64, "name": "usagi.png", "purpose": "look"})
+        self.assertEqual(look[0], {"hikarilm": "loaded", "model": GEMMA, "unloaded": CODER})
+        lines = self.post("/api/rewrite", {"model": CODER, "request": "her on a beach", "reference": look[-1]["description"]})
+        self.assertEqual(lines[0], {"hikarilm": "loaded", "model": CODER, "unloaded": GEMMA})
+        again = self.post("/api/rewrite", {"model": CODER, "request": "her in the rain"})
+        self.assertEqual(again[0], {"hikarilm": "loaded", "model": CODER, "unloaded": None})
+
     def test_a_reference_is_described_for_drawing_apart_from_code(self):
         look = self.post("/api/describe", {"model": GEMMA, "image": PNG_B64, "name": "usagi.png", "purpose": "look"})
         self.assertIn("an artist who cannot see it", look[-1]["description"])
