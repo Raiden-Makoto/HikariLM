@@ -165,9 +165,28 @@ gets a generic rabbit. Black Forest Labs suggests rewriting prompts for FLUX.2.
   the picture shows the drawn prompt under "Drawn from a rewritten prompt". Vary keeps both.
 - [x] The chat model leaves memory before the picture model loads (one large model at a time):
   tested, the picture's loading line names the chat model it unloads.
-- [ ] Try it on the Mac with a real chat model and FLUX.2 klein.
+- [x] Settings, "Read pictures with": which model that can see reads pictures. Reading and
+  rewriting say which model is loaded and which one left (`{"hikarilm": "loaded"}` lines), and
+  what the vision model saw shows on the note and stays with the picture (`reference`).
+- [x] Tried on the Mac: the rewrite plus the picture read draws closer to the character than
+  without, but not exactly. Text cannot carry a face; 4.2.0 gives the picture model the picture.
 - [x] A short warning under the message box in picture mode, and in the picture setting: "Picture
   models may not recognize niche characters, people or places. Describe how they look or attach a
   reference image." Picture mode shows the attach button again for this (4.0.0 hides it). Rewriting helps only if the chat model knows them; it can be wrong too, so the warning
   stays with rewriting on.
-- [ ] `__version__ = "4.1.0"`, tag `v4.1.0`.
+- [x] `__version__ = "4.1.0"`, tag `v4.1.0`. Released.
+
+## v4.2.0: drawing from the reference picture itself
+
+mflux's `Flux2KleinEdit` takes the same FLUX.2 klein weights plus `image_paths` and conditions on the
+reference pictures' pixels (9B-KV caches them for the later steps). The read and the rewrite stay:
+the picture model gets the rewritten prompt and the pictures.
+
+- [ ] `flux_worker.py`: with references, `Flux2KleinEdit.generate_image(..., image_paths=...)`;
+  without, `Flux2Klein` as now. The pictures go to the worker as temporary files and are deleted after.
+- [ ] `/api/generate` takes the reference pictures; the record keeps which pictures were used
+  (by hash, not a copy), so Vary draws from them again while they are still in the chat.
+- [ ] The rewrite is told the picture model sees the reference too, so it describes the scene and
+  what changes rather than repeating every detail of the character.
+- [ ] `tests/check_flux.py` draws one picture from a reference on the Mac.
+- [ ] `__version__ = "4.2.0"`, tag `v4.2.0`.
