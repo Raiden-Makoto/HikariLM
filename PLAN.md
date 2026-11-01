@@ -234,4 +234,54 @@ the picture model gets the rewritten prompt and the pictures.
 - [x] The start window and the "not downloaded" error name the 9B too, so the 4B command does not
   read as the only one.
 - [x] With the 4B and the 9B both downloaded, the list says "FLUX.2 klein 4B" and "FLUX.2 klein 9B".
-- [ ] `__version__ = "4.2.1"`, tag `v4.2.1`.
+- [x] `__version__ = "4.2.1"`, tag `v4.2.1`. Released.
+
+## v5.0.0: voice
+
+Speak a prompt instead of typing it, and have answers read aloud. All of it runs on the Mac, like
+the rest: the browser's own speech recognition is not used, because Chrome's sends the audio to
+Google.
+
+**Packages.** mlx-audio (0.6.3) does both directions: speech to text (Whisper, Parakeet) and text
+to speech (Kokoro). It pins its own MLX (`mlx==0.32.4`) and wants transformers 5.14 or later, so
+it gets a venv of its own, `~/.hikarilm/voice-venv`, made by `./start.sh` once a voice model is
+downloaded, the way `pictures-venv` is made for mflux. mlx-whisper is the fallback for speech to
+text if mlx-audio's Whisper falls short; it pulls in torch and numba.
+
+**Models.**
+
+| For | Suggested | Notes |
+|---|---|---|
+| Speech to text | `mlx-community/whisper-large-v3-turbo` | Many languages. Any MLX Whisper works (`whisper-small-mlx` for less memory). |
+| Speech to text, English | `mlx-community/parakeet-tdt-0.6b-v3` | Faster; offered under a fold. |
+| Reading aloud | `mlx-community/Kokoro-82M-bf16` | Small, Apache 2.0, several voices. |
+
+Check on the Mac before building on them: the exact repos mlx-audio loads, the Whisper output
+against mlx-whisper's on the same clip, and whether either can share the chat models' venv after
+all.
+
+- [ ] **Microphone button** by Attach, in Chat, the code editor and picture mode. Click to start,
+  click to stop (Esc cancels); a level meter and a timer while it listens. The words go into
+  the message box, added where the cursor is, to read and fix; Send stays yours. Microphone
+  access works on 127.0.0.1 without HTTPS. When it is refused, the page says how to allow it.
+- [ ] **No ffmpeg.** The page records with MediaRecorder, decodes with Web Audio and resamples to
+  16 kHz mono with an OfflineAudioContext, and sends 16-bit PCM. Whisper reads it as a number
+  array. Limit: 10 minutes a recording.
+- [ ] **`/api/transcribe`**: takes the PCM and the model, streams `{"text"}` as it is written, then
+  `{"done"}`. Runs in a voice worker (`helper/voice_worker.py`) in the voice venv, started like
+  the picture worker, with a fake worker for the tests.
+- [ ] **Read aloud**: a Listen button on every answer, and a setting to read each answer when it
+  finishes. `/api/speak` takes text and a voice and streams audio a sentence at a time, so it
+  starts before the whole answer is spoken; Stop ends it. Code blocks, tables and LaTeX are
+  skipped or said briefly ("a Python code block"), and thinking is never read.
+- [ ] **Memory.** Find out on the Mac whether a voice model can stay loaded beside the chat model,
+  like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
+  page says so each time, the way reading pictures says what was loaded and what left.
+- [ ] **Setup page**, `/setup/voice`, like the picture one: Whisper turbo first, the smaller
+  Whisper and Parakeet under a fold, Kokoro for reading aloud, each with its command and Copy, and
+  where it stands. *Get a voice model…* in the microphone button's place until one is there.
+- [ ] **Settings**: *Listen with* (the speech-to-text model) and language (or detect), *Read
+  aloud with*, the voice, the speed, and *Read answers aloud when they finish*.
+- [ ] `tests/check_voice.py` on the Mac: speaks a sentence with Kokoro, writes it back with Whisper,
+  and compares. Nothing to download for the unit tests.
+- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`.
