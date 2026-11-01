@@ -379,8 +379,22 @@ export async function refreshChats() {
   renderChats();
 }
 
+// The hash the helper keeps a picture's description under: the first 32 hex digits of
+// the SHA-256 of its bytes. Saved with the chat, it lets deleting the chat delete them.
+async function pictureKey(image) {
+  if (!crypto.subtle) return undefined;
+  const bytes = Uint8Array.from(atob(image), (char) => char.charCodeAt(0));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export async function saveChat() {
   try {
+    for (const message of state.messages) {
+      for (const file of message.files || []) {
+        if (file.image && !file.key) file.key = await pictureKey(file.image);
+      }
+    }
     const response = await fetch("/api/chats/" + state.chatId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -389,7 +403,7 @@ export async function saveChat() {
         messages: state.messages.map((message) => ({
           ...message,
           files: message.files?.map((file) =>
-            file.image ? { name: file.name, kind: "image" } : file),
+            file.image ? { name: file.name, kind: "image", key: file.key } : file),
         })),
       }),
     });

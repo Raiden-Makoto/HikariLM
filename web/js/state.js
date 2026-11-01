@@ -16,6 +16,8 @@ export const state = {
   openToken: 0,
   openVersion: "",
   rewrite: null,
+  // "change" or "new" when the user turned the change note the other way.
+  changeChoice: "",
   savedText: "",
   saving: false,
   source: null,

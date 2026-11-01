@@ -59,6 +59,7 @@ export function flushDraft(keepalive = false) {
 
 export function clearComposer() {
   clearRewrite();
+  state.changeChoice = "";
   messageBox.value = "";
   messageBox.style.height = "";
   state.attached = [];

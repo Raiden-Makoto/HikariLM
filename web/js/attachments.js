@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { modelSelect, status } from "./core.js";
 import { readDocx, readXlsx } from "./office.js";
 import { decodeText, isTextKind, notify, readBase64, readPdf } from "./text-files.js";
-import { inCodeView, isPictureModel, modelLabel, updatePictureMode, visionModel } from "./models.js";
+import { inCodeView, isPictureModel, modelLabel, updateChangeNote, updatePictureMode, visionModel } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 
 export const MAX_FILE = 500_000;
@@ -20,6 +20,7 @@ export const fileInput = document.querySelector("#file-input");
 export const attachButton = document.querySelector("#attach");
 
 export function renderChips() {
+  updateChangeNote();
   chips.replaceChildren();
   state.attached.forEach((file, index) => {
     const chip = document.createElement("div");
@@ -186,6 +187,6 @@ export async function addFiles(list) {
   else if (isPictureModel(modelSelect.value) && (problems.length || images > before)) {
     notify(problems.length ? notes.join(" ")
       : "The picture model draws from this picture" +
-        (visionModel() ? ", and " + modelLabel(visionModel()) + " reads it first for the rewrite." : "."));
+        (visionModel() ? ". Press Rewrite to have " + modelLabel(visionModel()) + " read it into the prompt first." : "."));
   }
 }

@@ -129,6 +129,16 @@ def clean_request(payload: dict) -> dict:
         raise ValueError(f"reference must be text of at most {MAX_REFERENCE} characters")
     reference = (reference or "").strip()
     pictures = _references(payload.get("references"))
+    # A picture made earlier to change ("add a sunset to the background"): it goes to the
+    # model first, ahead of any reference.
+    changed = payload.get("change")
+    if changed is not None:
+        try:
+            pictures.insert(0, read(changed))
+        except FileNotFoundError:
+            raise ValueError("The picture to change is not there any more. Draw a new one instead.") from None
+        if len(pictures) > MAX_REFERENCES:
+            raise ValueError(f"A picture can be drawn from at most {MAX_REFERENCES} pictures, with the one it changes.")
     width, height = SIZES[size]
     cleaned = {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
                "seed": seed, "steps": steps}
@@ -138,6 +148,8 @@ def clean_request(payload: dict) -> dict:
         cleaned["reference"] = reference
     if pictures:
         cleaned["pictures"] = pictures
+    if changed is not None:
+        cleaned["changed"] = changed
     return cleaned
 
 
@@ -207,8 +219,12 @@ def save(data: bytes, request: dict) -> dict:
         if request.get(key):
             record[key] = request[key]
     # Which pictures it was drawn from, by hash: the chat keeps the pictures themselves.
-    if request.get("pictures"):
-        record["references"] = [hashlib.sha256(data).hexdigest()[:32] for data in request["pictures"]]
+    # A picture it changed is named instead; it is in images/.
+    drawn_from = request.get("pictures", [])[1 if request.get("changed") else 0:]
+    if drawn_from:
+        record["references"] = [hashlib.sha256(data).hexdigest()[:32] for data in drawn_from]
+    if request.get("changed"):
+        record["changed"] = request["changed"]
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record

@@ -178,6 +178,9 @@ textarea::placeholder { color: var(--muted); }
   font-size: 0.88rem;
 }
 .notice[hidden] { display: none; }
+#change-note { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; justify-content: space-between; }
+#change-note[hidden], #picture-rewrite[hidden] { display: none; }
+#change-toggle, #picture-rewrite { flex: none; padding: 0.2rem 0.6rem; font-size: 0.82rem; }
 #rewrite-note { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; justify-content: space-between; }
 #rewrite-note[hidden], .picture-warning[hidden] { display: none; }
 #rewrite-seen { flex-basis: 100%; font-size: 0.82rem; color: var(--muted); }

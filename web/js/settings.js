@@ -1,6 +1,8 @@
 // The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { READER_KEY, REWRITE_KEY, isPictureModel, modelLabel, readers, rewriteModel, rewriters } from "./models.js";
+import {
+  READER_KEY, REWRITE_KEY, isPictureModel, modelLabel, readers, rewriteModel, rewriters, updateChangeNote,
+} from "./models.js";
 import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
@@ -233,6 +235,7 @@ export function start() {
   document.querySelector("#report-issue").addEventListener("click", reportIssue);
   document.querySelector("#rewrite-model").addEventListener("change", (event) => {
     localStorage.setItem(REWRITE_KEY, event.target.value);
+    updateChangeNote();
   });
   document.querySelector("#reader-model").addEventListener("change", (event) => {
     localStorage.setItem(READER_KEY, event.target.value);

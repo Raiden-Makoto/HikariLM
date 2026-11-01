@@ -124,6 +124,10 @@
 
     <form class="composer" id="composer">
       <div class="notice" id="notice" role="status" hidden></div>
+      <div class="notice" id="change-note" role="status" hidden>
+        <span id="change-text"></span>
+        <button class="choice" id="change-toggle" type="button"></button>
+      </div>
       <div class="notice" id="rewrite-note" role="status" hidden>
         <span id="rewrite-text"></span>
         <button class="choice" id="rewrite-undo" type="button">Use my words</button>
@@ -148,6 +152,7 @@
             <input id="file-input" type="file" multiple hidden>
             <select id="model" aria-label="Model"></select>
             <button class="choice" id="picture-toggle" type="button" aria-expanded="false" aria-controls="picture-options" hidden>Options</button>
+            <button class="choice" id="picture-rewrite" type="button" hidden title="Have a chat model rewrite the prompt into how things look, to read and edit before drawing">Rewrite</button>
           </div>
           <button id="send" type="submit" aria-label="Send">
             <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -311,7 +316,7 @@
           <span>Rewrite prompts with</span>
           <select id="rewrite-model"></select>
         </label>
-        <p class="note">Before drawing, a chat model rewrites what you ask for into how it looks, and you can edit that before it draws. Models that think before every answer, such as DeepSeek R1, are not offered: they would reason at length over a one-line prompt. A picture you attach is read first by the model under Read pictures with.</p>
+        <p class="note">Press Rewrite, next to Options, and a chat model rewrites what you ask for into how it looks; you can edit that before it draws. Send on its own draws your words as they are. Models that think before every answer, such as DeepSeek R1, are not offered: they would reason at length over a one-line prompt. A picture you attach is read first by the model under Read pictures with.</p>
         <p class="note warning">Picture models may not recognize niche characters, people or places. Describe how they look or attach a reference image. A rewrite only helps if the chat model knows them, and it can be wrong too.</p>
       </div>
       <div class="setting">

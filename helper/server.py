@@ -239,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, status=404)
             return
         made = store.picture_ids(self._chat_id())
+        attached = store.attached_keys(self._chat_id())
         try:
             removed = store.delete(self._chat_id())
         except ValueError as error:
@@ -255,6 +256,12 @@ class Handler(BaseHTTPRequestHandler):
                     imagegen.delete(image_id)
                 except (OSError, ValueError):
                     pass
+            # So does what was read from the pictures attached to it, and the notes made of
+            # that, unless another chat has the same picture.
+            for key in attached - store.attached_keys_everywhere():
+                descriptions.delete(key)
+                descriptions.delete(key + "-look")
+                indexer.forget_picture(key)
         self._send_json({"deleted": removed}, status=200 if removed else 404)
 
     def do_POST(self) -> None:
@@ -568,7 +575,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": "The model sent no description of the picture."})
                 return
             descriptions.save(key, text, model, name)
-            indexer.picture(key)
+            # A reference's look is for drawing; only what was read for a chat becomes a note.
+            if not suffix:
+                indexer.picture(key)
             self._stream_line({"description": text[:descriptions.MAX_TEXT], "cached": False, "model": model})
         except (BrokenPipeError, ConnectionResetError):
             return

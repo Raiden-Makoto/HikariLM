@@ -117,6 +117,18 @@ class NotesTest(unittest.TestCase):
         self.assertIn("Picture tree.png", [n["title"] for n in found])
         indexer.forget_chat("abc")
         self.assertEqual(notes.count()["sources"], 1)
+        indexer.forget_picture(key)
+        self.assertEqual(notes.count()["sources"], 0)
+
+    def test_how_a_reference_looks_is_never_a_note(self):
+        key = descriptions.image_key("aGVsbG8=")
+        descriptions.save(key + "-look", "a cream rabbit with long ears", "gemma3", "usagi.png")
+        notes.sync(notes.description_source(key + "-look"), "Picture usagi.png", ["a cream rabbit"], self.embed)
+        notes.Indexer(self.embed).everything()
+        deadline = time.time() + 5
+        while time.time() < deadline and notes.count()["sources"]:
+            time.sleep(0.05)
+        self.assertEqual(notes.count()["sources"], 0)
 
 
 if __name__ == "__main__":

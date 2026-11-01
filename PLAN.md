@@ -204,4 +204,17 @@ the picture model gets the rewritten prompt and the pictures.
   place; sending replaces it and everything after it, asking first when that removes more than
   its own reply. Delete removes it and its reply, and the picture file if the reply was a picture;
   an empty chat is deleted. Tried in the browser with the fake workers.
+- [x] Rewriting only when asked: a Rewrite button by Options. Send draws the words in the box as
+  they are; a rewrite done first is drawn as edited. Hidden when Settings says Don't rewrite.
+- [x] Changing the picture above: after a picture, a message that reads like a change ("add a
+  sunset to the background", "make it night", "remove the hat") sends `change: <picture id>`.
+  The helper gives that picture to FLUX.2 klein first, ahead of any reference, at its own size; the
+  record keeps `changed`, and Vary changes the same picture again. A note above the message box
+  says "Changes the picture above" or "Draws a new picture" and turns it the other way. No
+  Rewrite for a change: it is said in the user's own words.
+- [x] Deleting a chat deletes what was read from its pictures: saved chats keep each picture's
+  hash (never the picture), and the descriptions, the look descriptions and their notes go too,
+  unless another chat has the same picture. Chats saved before 4.2.0 have no hashes, so theirs stay.
+- [x] Looks of a reference ("-look") were notes in 4.1, so they could turn up as context in any
+  chat. They are not notes any more, and the helper removes the old ones when it starts.
 - [ ] `__version__ = "4.2.0"`, tag `v4.2.0`.

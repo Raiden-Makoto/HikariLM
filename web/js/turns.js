@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { log, messageBox, modelSelect, scrollLog, sendButton, showEmpty, sidebar } from "./core.js";
 import { attachButton } from "./attachments.js";
 import { renderMarkdown, showThought, splitStrayThinking } from "./markdown.js";
-import { pictureLabel, pictureSeed, pictureSize, pictureSteps, pictureToggle } from "./models.js";
+import { pictureLabel, pictureSeed, pictureSize, pictureSteps, pictureToggle, updateChangeNote } from "./models.js";
 import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
 import { applyCode, syncApplyButtons } from "./apply.js";
@@ -105,6 +105,7 @@ export function renderLog() {
     if (message.role === "user") question = { text: message.content, files: message.files };
     addTurn(message.role, message.content, message.thinking, message.files, message, question);
   }
+  updateChangeNote();
 }
 
 // A picture reply is kept in the chat as its notes; the file is shown by
@@ -124,6 +125,7 @@ export function pictureFigure(message) {
   const caption = document.createElement("figcaption");
   const references = (record.references || []).length;
   caption.textContent = [record.width && record.width + " × " + record.height, "seed " + record.seed, pictureLabel(record.model),
+    record.changed && "a change to the picture before",
     references && "drawn from " + references + (references === 1 ? " reference picture" : " reference pictures")]
     .filter(Boolean).join(" · ");
   img.addEventListener("error", () => { caption.textContent = "The picture file is missing from the helper's images folder."; });

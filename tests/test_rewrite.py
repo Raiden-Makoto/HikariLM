@@ -5,9 +5,10 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from helper import descriptions, engine, imagegen, rewrite, server, store, thinking
+from helper import descriptions, engine, imagegen, notes, rewrite, server, store, thinking
 from tests.test_engine import CODER, GEMMA, R1, add_model, real_config
 from tests.test_flux import KLEIN, FluxCase
+from tests.test_notes import fake_embed
 from tests.test_server import PNG_B64
 
 
@@ -93,6 +94,50 @@ class RewriteTest(FluxCase):
         plain = self.post("/api/generate", {"model": KLEIN, "prompt": "a fox"})
         self.assertIn(b"refs=0", imagegen.read(plain[-1]["image"]["id"]))
         self.assertNotIn("references", plain[-1]["image"])
+
+    def test_a_change_draws_from_the_picture_it_changes(self):
+        self.download(KLEIN)
+        first = self.post("/api/generate", {"model": KLEIN, "prompt": "a fox in snow", "size": "wide"})[-1]["image"]
+        changed = self.post("/api/generate", {"model": KLEIN, "prompt": "add a sunset to the background",
+                                              "change": first["id"], "size": "wide"})[-1]["image"]
+        self.assertEqual(changed["changed"], first["id"])
+        self.assertNotIn("references", changed)
+        self.assertIn(b"refs=1 \x89PNG", imagegen.read(changed["id"]))
+        self.assertEqual(store.clean_picture(changed)["changed"], first["id"])
+        with_reference = self.post("/api/generate", {"model": KLEIN, "prompt": "give it her hat", "change": first["id"],
+                                                     "references": [PNG_B64]})[-1]["image"]
+        self.assertEqual(with_reference["references"], [descriptions.image_key(PNG_B64)])
+        self.assertIn(b"refs=2", imagegen.read(with_reference["id"]))
+        imagegen.delete(first["id"])
+        gone = self.post("/api/generate", {"model": KLEIN, "prompt": "add a moon", "change": first["id"]})
+        self.assertIn("not there any more", gone["error"])
+        with self.assertRaises(ValueError):
+            imagegen.clean_request({"model": KLEIN, "prompt": "add a moon", "change": "../x"})
+
+    def test_deleting_a_chat_deletes_what_was_read_from_its_pictures(self):
+        mine, shared = descriptions.image_key(PNG_B64), "b" * 32
+        for key in (mine, shared):
+            descriptions.save(key, "a cream rabbit", GEMMA, "usagi.png")
+            descriptions.save(key + "-look", "a cream rabbit", GEMMA, "usagi.png")
+            notes.sync(notes.description_source(key), "Picture usagi.png", ["a cream rabbit"], fake_embed)
+        picture = {"role": "user", "content": "her", "files": [{"name": "usagi.png", "kind": "image", "key": mine}]}
+        store.save("one", CODER, [picture, {"role": "assistant", "content": "", "picture": {
+            "id": "20261031-120000-abcdef", "prompt": "p", "model": KLEIN, "references": [shared]}}])
+        store.save("two", CODER, [{"role": "user", "content": "x", "files": [{"name": "u.png", "kind": "image", "key": shared}]}])
+        self.assertEqual(store.attached_keys("one"), {mine, shared})
+        request = urllib.request.Request(self.base + "/api/chats/one", method="DELETE")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            self.assertTrue(json.loads(response.read())["deleted"])
+        self.assertIsNone(descriptions.load(mine))
+        self.assertIsNone(descriptions.load(mine + "-look"))
+        self.assertIsNotNone(descriptions.load(shared))
+        self.assertEqual([n["source"] for n in notes.search("a cream rabbit", fake_embed, min_score=0.1)],
+                         [notes.description_source(shared)])
+
+    def test_a_picture_key_is_kept_only_when_it_is_one(self):
+        kept = store.clean_files([{"name": "a.png", "kind": "image", "key": "c" * 32, "image": PNG_B64},
+                                  {"name": "b.png", "kind": "image", "key": "../../x"}])
+        self.assertEqual(kept, [{"name": "a.png", "kind": "image", "key": "c" * 32}, {"name": "b.png", "kind": "image"}])
 
     def test_references_must_be_pictures(self):
         for references in (["bm90IGEgcGljdHVyZQ=="], ["%%%"], [PNG_B64] * 5, "x"):

@@ -6,8 +6,8 @@ import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
 import { addTurn, pictureFigure, setBusy, updateApply } from "./turns.js";
 import {
-  clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed, pictureSize,
-  pictureSteps, refreshState, rewriteModel, visionModel,
+  changeTarget, clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed,
+  pictureSize, pictureSteps, refreshState, rewriteModel, updateChangeNote, visionModel,
 } from "./models.js";
 import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
@@ -496,19 +496,25 @@ async function sendPicture(prompt, model) {
     notify("A picture model takes reference pictures only. Remove the other files, or pick a chat model.");
     return;
   }
-  const references = state.attached.filter((file) => file.image);
-  // A rewrite in the box is drawn as it is, unless pictures were attached after it.
+  // What is in the box is drawn; a rewrite happens only when Rewrite is pressed.
   const pending = state.rewrite;
-  const used = pending?.pictures || [];
-  const newPictures = references.some((file) => !used.includes(file.image));
-  if (pending && !newPictures) return drawPicture(prompt, model, pending.asIs ? "" : pending.request);
-  // The picture model sees references itself; a model that can see also reads them
-  // for the rewrite, when there is one.
-  let writer = rewriteModel();
+  return drawPicture(prompt, model, pending && !pending.asIs ? pending.request : "");
+}
+
+// Rewrite, by Options: a chat model rewrites the box into how things look, and a model
+// that can see reads the attached pictures for it first.
+function rewriteBox() {
+  const text = messageBox.value.trim();
+  if (!text || state.activeRequest) return;
+  const references = state.attached.filter((file) => file.image);
   const describer = references.length ? visionModel() : "";
-  writer ||= describer;
-  if (!writer) return drawPicture(prompt, model, "");
-  return rewritePrompt(prompt, writer, describer, references, pending ? pending.request : prompt);
+  const writer = rewriteModel() || describer;
+  if (!writer) {
+    notify("No chat model to rewrite with. Pick one under Settings, Rewrite prompts with.");
+    return;
+  }
+  const pending = state.rewrite;
+  rewritePrompt(text, writer, describer, references, pending && !pending.asIs ? pending.request : text);
 }
 
 async function drawPicture(prompt, model, request) {
@@ -519,7 +525,10 @@ async function drawPicture(prompt, model, request) {
   const files = state.attached;
   const asked = request || prompt;
   const pending = state.rewrite;
+  const target = changeTarget()?.picture;
+  const choice = state.changeChoice;
   state.attached = [];
+  state.changeChoice = "";
   renderChips();
   clearRewrite();
   const question = { role: "user", content: asked, files: files.length ? files : undefined };
@@ -542,8 +551,11 @@ async function drawPicture(prompt, model, request) {
   let record = null;
   let failure = "";
   try {
-    record = await makePicture(pictureRequest(prompt, model, request, pending?.asIs ? "" : pending?.seen,
-      files.filter((file) => file.image).map((file) => file.image)), state.activeRequest.signal, show);
+    const asking = pictureRequest(prompt, model, request, pending?.asIs ? "" : pending?.seen,
+      files.filter((file) => file.image).map((file) => file.image));
+    // A change keeps the picture's size, so the model is not stretching it.
+    if (target) Object.assign(asking, { change: target.id, size: target.size });
+    record = await makePicture(asking, state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") failure = plainError(error.message);
   } finally {
@@ -573,11 +585,13 @@ async function drawPicture(prompt, model, request) {
     state.attached = files;
     renderChips();
     state.rewrite = pending;
+    state.changeChoice = choice;
     document.querySelector("#rewrite-note").hidden = !pending || Boolean(pending.asIs);
     saveDraft(draftKey(), true);
     if (state.messages.length === 0) showEmpty();
   }
   if (state.messages.length === 0) state.chatId = null;
+  updateChangeNote();
   refreshState().catch(() => {});
   messageBox.focus();
 }
@@ -613,7 +627,7 @@ export async function varyPicture(message, figure) {
   let record = null;
   try {
     record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, reference: old.reference,
-      references: old.references?.length ? pictures : undefined, size: old.size, steps: old.steps, seed: null },
+      references: old.references?.length ? pictures : undefined, change: old.changed, size: old.size, steps: old.steps, seed: null },
       state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") notify("No new picture: " + plainError(error.message));
@@ -649,8 +663,18 @@ export function start() {
   });
   messageBox.addEventListener("input", () => {
     fitBox();
-    if (!messageBox.value.trim()) clearRewrite();
+    if (!messageBox.value.trim()) {
+      clearRewrite();
+      state.changeChoice = "";
+    }
+    updateChangeNote();
     scheduleDraft();
+  });
+  document.querySelector("#picture-rewrite").addEventListener("click", rewriteBox);
+  document.querySelector("#change-toggle").addEventListener("click", () => {
+    state.changeChoice = changeTarget() ? "new" : "change";
+    updateChangeNote();
+    messageBox.focus();
   });
   document.querySelector("#rewrite-undo").addEventListener("click", () => {
     if (!state.rewrite) return;

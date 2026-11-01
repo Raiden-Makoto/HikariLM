@@ -102,6 +102,39 @@ export function updatePictureMode() {
   attachButton.title = on ? "Attach a reference picture" : "Attach text or code files";
   document.querySelector("#picture-warning").hidden = !on;
   messageBox.placeholder = on ? "Describe the picture" : "Message";
+  updateChangeNote();
+}
+
+// After a picture, a message that reads like a change ("add a sunset to the background")
+// changes that picture rather than drawing a new one. The note says which it will do,
+// and its button turns it the other way for this message.
+const CHANGE = /^\s*(?:(?:please|now|then|ok|okay|can you|could you)[\s,]+)*(?:add|remove|delete|erase|change|make|replace|put|turn|give|take|move|swap|recolou?r|fix|keep|set|place|zoom|crop|brighten|darken|lighten|edit)\b|\b(?:background|foreground|instead)\b/i;
+export const looksLikeChange = (text) => CHANGE.test(text);
+
+function lastPicture() {
+  const last = state.messages[state.messages.length - 1];
+  return last?.role === "assistant" && last.picture?.id ? last : null;
+}
+
+export function changeTarget() {
+  const last = lastPicture();
+  if (!last || !isPictureModel(modelSelect.value) || inCodeView()) return null;
+  const choice = state.changeChoice || (looksLikeChange(messageBox.value) ? "change" : "new");
+  return choice === "change" ? last : null;
+}
+
+export function updateChangeNote() {
+  const note = document.querySelector("#change-note");
+  const showing = Boolean(lastPicture() && isPictureModel(modelSelect.value) && !inCodeView());
+  note.hidden = !showing;
+  const changing = Boolean(changeTarget());
+  if (showing) {
+    document.querySelector("#change-text").textContent = changing ? "Changes the picture above." : "Draws a new picture.";
+    document.querySelector("#change-toggle").textContent = changing ? "Draw a new one instead" : "Change the picture above instead";
+  }
+  // A change is said in the user's own words; only a new picture is rewritten.
+  document.querySelector("#picture-rewrite").hidden = !isPictureModel(modelSelect.value) || changing ||
+    !(rewriteModel() || (state.attached.some((file) => file.image) && visionModel()));
 }
 
 // The chat model that rewrites picture prompts, or "" when Settings turned it off.

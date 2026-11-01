@@ -61,9 +61,38 @@ def clean_files(files) -> list[dict]:
         if isinstance(item.get("text"), str):
             kept.append({"name": item["name"], "text": item["text"]})
         elif item.get("kind") == "image":
-            # Only the name is kept. The picture itself is not saved.
-            kept.append({"name": item["name"], "kind": "image"})
+            # Only the name and the picture's hash are kept, never the picture itself. The
+            # hash finds what was read from it, so deleting the chat can delete that too.
+            entry = {"name": item["name"], "kind": "image"}
+            if isinstance(item.get("key"), str) and PICTURE_HASH.match(item["key"]):
+                entry["key"] = item["key"]
+            kept.append(entry)
     return kept
+
+
+def _keys_in(messages: list) -> set[str]:
+    keys = set()
+    for message in messages:
+        for item in message.get("files") or []:
+            if isinstance(item, dict) and isinstance(item.get("key"), str):
+                keys.add(item["key"])
+        keys.update((message.get("picture") or {}).get("references") or [])
+    return keys
+
+
+def attached_keys(chat_id: str) -> set[str]:
+    """The hashes of the pictures attached to a chat, and of those it drew from."""
+    try:
+        return _keys_in(load(chat_id).get("messages") or [])
+    except (FileNotFoundError, ValueError, OSError):
+        return set()
+
+
+def attached_keys_everywhere() -> set[str]:
+    keys = set()
+    for item in listing():
+        keys |= attached_keys(item["id"])
+    return keys
 
 
 def clean_messages(messages) -> list[dict]:
@@ -124,6 +153,8 @@ def clean_picture(value) -> dict:
     references = value.get("references")
     if isinstance(references, list) and all(isinstance(key, str) and PICTURE_HASH.match(key) for key in references):
         kept["references"] = references[:4]
+    if isinstance(value.get("changed"), str) and PICTURE_ID.match(value["changed"]):
+        kept["changed"] = value["changed"]
     return kept
 
 

@@ -236,6 +236,12 @@ class Indexer:
         except (ValueError, OSError):
             pass
 
+    def forget_picture(self, key: str) -> None:
+        try:
+            remove(description_source(key))
+        except (ValueError, OSError):
+            pass
+
     def everything(self) -> None:
         """Catch up on chats and pictures saved before now. Only new text is embedded."""
         try:
@@ -243,7 +249,11 @@ class Indexer:
                 self.chat(item["id"])
             if descriptions.descriptions_dir().is_dir():
                 for path in descriptions.descriptions_dir().glob("*.json"):
-                    self.picture(path.stem)
+                    if path.stem.endswith("-look"):
+                        # How a reference looks is for drawing, never a note (4.1 made some).
+                        self.forget_picture(path.stem)
+                    else:
+                        self.picture(path.stem)
         except OSError:
             pass
 
