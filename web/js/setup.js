@@ -1,5 +1,7 @@
 // The picture setup page (/setup/pictures): the steps, and where they stand on this Mac.
 
+import { copyButton } from "./copy.js";
+
 function choiceBox(choice, have) {
   const item = document.createElement("div");
   item.className = "setup-choice" + (have ? " have" : "");
@@ -16,20 +18,7 @@ function choiceBox(choice, have) {
   line.className = "setup-command";
   const command = document.createElement("code");
   command.textContent = choice.command;
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.textContent = "Copy";
-  copy.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(choice.command);
-      copy.textContent = "Copied";
-    } catch (error) {
-      window.getSelection().selectAllChildren(command);
-      copy.textContent = "Press Cmd+C";
-    }
-    setTimeout(() => { copy.textContent = "Copy"; }, 2000);
-  });
-  line.append(command, copy);
+  line.append(command, copyButton(() => choice.command, command));
   item.append(head, note, line);
   return item;
 }

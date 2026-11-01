@@ -2,6 +2,8 @@
 These checks stand in for a JavaScript linter, so a name missing from an
 import is found here rather than when someone presses the button that needs it."""
 
+import html
+import json
 import re
 import shutil
 import subprocess
@@ -12,7 +14,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from helper import names, server
+from helper import flux, names, server
 
 WEB = server.WEB_ROOT
 JS = WEB / "js"
@@ -151,6 +153,35 @@ class PageFilesTest(unittest.TestCase):
         for address in ("/setup/pictures", "/setup/pictures/"):
             with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
                 self.assertIn("Set up making pictures", response.read().decode())
+
+    def test_the_lora_page_is_a_page_of_its_own(self):
+        page = (WEB / "setup-lora.html").read_text()
+        for address in re.findall(r'(?:src|href)="(/(?:js|css)/[^"]+)"', page):
+            self.assertTrue((WEB / address.lstrip("/")).is_file(), address)
+        self.assertIn('href="/setup/lora"', (WEB / "index.html").read_text())
+        self.assertIn('href="/setup/lora"', (WEB / "setup-pictures.html").read_text())
+        http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=http.serve_forever, daemon=True).start()
+        self.addCleanup(http.server_close)
+        self.addCleanup(http.shutdown)
+        for address in ("/setup/lora", "/setup/lora/"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
+                self.assertIn("Make a LoRA", response.read().decode())
+
+    def test_the_lora_page_trains_on_the_base_4b(self):
+        page = (WEB / "setup-lora.html").read_text()
+        config = json.loads(html.unescape(re.search(r'<code id="train-json">(.*?)</code>', page, re.S)[1]))
+        self.assertEqual(config["model"], "flux2-klein-base-4b")
+        self.assertEqual(flux.variant_of(config["model_path"])[0], config["model"])
+        self.assertIn(f"hf download {config['model_path']}", page)
+        self.assertIn(f"--model {config['model_path']} ", page)
+        self.assertEqual(config["steps"], flux.STEPS[False])
+        self.assertEqual(config["guidance"], flux.GUIDANCE[False])
+        self.assertEqual(config["checkpoint"]["save_frequency"], config["monitoring"]["generate_image_frequency"])
+        double, single, _ = flux.VARIANTS[config["model"]]
+        for target in config["lora_layers"]["targets"]:
+            wanted = single if target["module_path"].startswith("single_") else double
+            self.assertEqual(target["blocks"], {"start": 0, "end": wanted}, target["module_path"])
 
     def test_the_helper_serves_the_parts_and_nothing_beside_them(self):
         http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)

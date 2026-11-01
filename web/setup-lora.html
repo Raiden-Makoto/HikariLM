@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Make a LoRA · HikariLM</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("hikarilm-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
+  </script>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/setup.css">
+  <script type="module" src="/js/setup-lora.js"></script>
+</head>
+<body class="setup-page">
+  <main class="setup">
+    <a class="setup-back" href="/chat">← Back to HikariLM</a>
+    <h1>Make a LoRA</h1>
+    <p class="setup-lead">A LoRA is a small add-on file that teaches FLUX.2 klein one thing it does not know: a style, a character, an object. You make it from your own pictures, with <a href="https://github.com/filipstrand/mflux">mflux</a>'s trainer, on this Mac. HikariLM does not train; this page walks you through doing it in Terminal. HikariLM draws with LoRAs from version 4.5, on FLUX.2 klein base 4B.</p>
+
+    <section class="setup-standing">
+      <p><strong>Before you start.</strong> Set up making pictures first (<a href="/setup/pictures">the picture setup page</a>), so mflux is installed in <code>~/.hikarilm/pictures-venv</code>. Training takes hours and uses the whole Mac, so stop HikariLM while it runs (<code>hikarilm stop</code>) and start it again after (<code>hikarilm start</code>).</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">1</span> Download the base 4B</h2>
+      <p>LoRAs are trained on the base model, not the quick 4-step one. mflux-community's 4-bit copy (4.6 GB):</p>
+      <div class="setup-command"><code>~/.hikarilm/venv/bin/hf download mflux-community/flux-2-klein-base-4b-mflux-q4</code></div>
+      <p>The 8-bit copy, <code>mflux-community/flux-2-klein-base-4b-mflux-q8</code> (8.6 GB), keeps more detail. If you take it, change <code>model_path</code> in step 4 to match.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">2</span> Gather the pictures</h2>
+      <p>Put them in one folder, each with a caption file of the same name:</p>
+      <pre class="setup-tree">dataset/
+  001.png
+  001.txt
+  002.png
+  002.txt
+  …
+  preview_1.txt</pre>
+      <ul>
+        <li>PNG, JPEG or WebP. Any size; the long side is brought down to 1024.</li>
+        <li>Every picture needs its <code>.txt</code>; the trainer stops and names the one that has none.</li>
+        <li>Variety teaches more than numbers: the thing you want, in different poses, places, lights and framings. Leave out blurry pictures and near-copies.</li>
+        <li><code>preview_1.txt</code>, <code>preview_2.txt</code>… (optional) are prompts it draws every so often while it trains, so you can see the LoRA take hold. Write them the way you will prompt later, with the trigger word.</li>
+      </ul>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">3</span> Write the captions</h2>
+      <p>The captions decide what the LoRA learns. Pick a made-up trigger word that means nothing yet, such as <code>usagi_style</code>, and start every caption with it. Then describe what <em>changes</em> from picture to picture, and leave out what stays the same: whatever the captions never mention is what the trigger word comes to mean.</p>
+      <ul>
+        <li>For a character: <code>usagi_style, sitting on a park bench, holding a red umbrella, rainy evening</code>. Not their hair or face; those are what it should learn.</li>
+        <li>For a style: <code>usagi_style, a lighthouse on a cliff at sunset</code>. Say what is in the picture, never how it is painted.</li>
+      </ul>
+      <p>One or two sentences each. HikariLM can write first drafts: attach a picture in Chat and ask what is in it, then fix the words and add the trigger word.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">4</span> Write train.json</h2>
+      <p>Save this as <code>train.json</code> in the folder that holds <code>dataset/</code>. <code>data</code> is read from where <code>train.json</code> is; an absolute path such as <code>/Users/you/dataset</code> works too.</p>
+      <div class="setup-file"><pre><code id="train-json">{
+  "model": "flux2-klein-base-4b",
+  "model_path": "mflux-community/flux-2-klein-base-4b-mflux-q4",
+  "data": "dataset/",
+  "seed": 42,
+  "steps": 50,
+  "guidance": 4.0,
+  "quantize": null,
+  "max_resolution": 1024,
+  "low_ram": false,
+  "gradient_checkpointing": true,
+  "training_loop": { "num_epochs": 20, "batch_size": 1 },
+  "optimizer": { "name": "AdamW", "learning_rate": 1e-4 },
+  "checkpoint": { "output_path": "training", "save_frequency": 200 },
+  "monitoring": {
+    "preview_width": 768,
+    "preview_height": 768,
+    "plot_frequency": 50,
+    "generate_image_frequency": 200
+  },
+  "lora_layers": {
+    "targets": [
+      { "module_path": "transformer_blocks.{block}.attn.to_q", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.to_k", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.to_v", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.to_out", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.add_q_proj", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.add_k_proj", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.add_v_proj", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.attn.to_add_out", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.ff.linear_in", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.ff.linear_out", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.ff_context.linear_in", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "transformer_blocks.{block}.ff_context.linear_out", "blocks": { "start": 0, "end": 5 }, "rank": 16 },
+      { "module_path": "single_transformer_blocks.{block}.attn.to_qkv_mlp_proj", "blocks": { "start": 0, "end": 20 }, "rank": 16 },
+      { "module_path": "single_transformer_blocks.{block}.attn.to_out", "blocks": { "start": 0, "end": 20 }, "rank": 16 }
+    ]
+  }
+}</code></pre></div>
+      <p>What to change, if anything:</p>
+      <ul>
+        <li><strong>num_epochs</strong>: how many times it goes through every picture. A step is one picture, so 100 pictures for 20 epochs are 2,000 steps. Fewer pictures, more epochs.</li>
+        <li><strong>save_frequency</strong> and <strong>generate_image_frequency</strong>: every how many steps it saves a checkpoint and draws the previews. Keep them the same, so every checkpoint has previews to judge it by.</li>
+        <li><strong>learning_rate</strong>: how big each step is. Lower it (5e-5) if the previews go wrong early.</li>
+        <li><strong>rank</strong>: how much the LoRA can hold. 16 is plenty for one style or character; 32 for more, at twice the file size.</li>
+        <li><strong>gradient_checkpointing</strong>: on, it needs far less memory and steps take about 30% longer. Turn it off only on a Mac with memory to spare.</li>
+        <li>The <strong>lora_layers</strong> cover every block of the 4B (5 and 20). Leave them.</li>
+      </ul>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">5</span> Check, then train</h2>
+      <p>In Terminal, in the folder with <code>train.json</code>. First a check that reads the config and the pictures without loading the model:</p>
+      <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-train --config train.json --dry-run</code></div>
+      <p>When it says <em>Training config validated</em>, train. <code>caffeinate -i</code> keeps the Mac from sleeping while it runs:</p>
+      <div class="setup-command"><code>caffeinate -i ~/.hikarilm/pictures-venv/bin/mflux-train --config train.json</code></div>
+      <p>Keep the Terminal window open; it shows the steps as they go. If it stops (you closed it, the Mac restarted), go on from the last checkpoint instead of starting over:</p>
+      <div class="setup-command"><code>caffeinate -i ~/.hikarilm/pictures-venv/bin/mflux-train --resume training/checkpoints/0000600_checkpoint.zip</code></div>
+      <p>If <code>mflux-train</code> is not found, or does not know <code>flux2-klein-base-4b</code>, update mflux: <code>~/.hikarilm/pictures-venv/bin/pip install -U mflux</code>.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">6</span> Watch it</h2>
+      <p>Everything goes into <code>training/</code> (or <code>training_</code> and the date, if that folder is already there):</p>
+      <ul>
+        <li><code>training/preview/</code>: the preview pictures, by step. This is what to judge by.</li>
+        <li><code>training/loss/loss.html</code>: the loss chart; open it in the browser. It falls, then flattens.</li>
+        <li><code>training/checkpoints/</code>: a checkpoint every <code>save_frequency</code> steps.</li>
+      </ul>
+      <p>Early previews look like the plain model. Then the trigger word starts to show. Past the best point, the previews copy your training pictures, lose what the prompt asks for, or turn harsh and oversaturated: that is overtraining. The best checkpoint is often not the last one. Note the step of the previews you like best; you can stop training there with Ctrl+C.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">7</span> Take the LoRA out and try it</h2>
+      <p>A checkpoint zip holds the LoRA as <code>…_adapter.safetensors</code>, beside what the trainer needs to go on. Take it out of the one you picked:</p>
+      <div class="setup-command"><code>unzip -j training/checkpoints/0001400_checkpoint.zip '*_adapter.safetensors'</code></div>
+      <p>and give it a name you will know:</p>
+      <div class="setup-command"><code>mv 0001400_adapter.safetensors usagi-style.safetensors</code></div>
+      <p>Draw with it to see it work, at full strength (the 1.0 after its name):</p>
+      <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-generate-flux2 --model mflux-community/flux-2-klein-base-4b-mflux-q4 --steps 50 --guidance 4 --seed 1 --prompt "usagi_style, a fox reading a book under a tree" --lora usagi-style.safetensors 1.0 --output try.png</code></div>
+      <p>Too strong, or too weak? Try 0.7 or 1.2 in place of 1.0. Strength is chosen when you draw, so the file stays as it is.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">8</span> Draw with it in HikariLM</h2>
+      <p>From HikariLM 4.5.1, add the <code>.safetensors</code> file in Settings and pick it when drawing with FLUX.2 klein base 4B. From 4.5.0, a LoRA you upload to Hugging Face can be added by its repo name. Until then, keep the file; nothing else is needed from the training folder. Keep <code>dataset/</code> too, in case you want to train it again.</p>
+    </section>
+  </main>
+</body>
+</html>

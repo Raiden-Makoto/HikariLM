@@ -4,9 +4,9 @@ mflux runs every FLUX.2 klein model with one pipeline and is told which one it h
 its own name for it ("flux2-klein-9b"). Its saved folders carry no config, so the name
 comes from the repo's name, checked against the transformer's blocks in the weights.
 
-Only the models themselves are listed: Black Forest Labs' repos and mlx-community's
-copies of them, or a folder in ~/.hikarilm/models named the same way. Fine-tunes and
-LoRA adapters are left out, with a note saying why.
+Only the models themselves are listed: Black Forest Labs' repos and mlx-community's and
+mflux-community's copies of them, or a folder in ~/.hikarilm/models named the same way.
+Fine-tunes and LoRA adapters are left out, with a note saying why.
 """
 
 from __future__ import annotations
@@ -32,9 +32,11 @@ VARIANTS = {
 # Distilled models draw in 4 steps without guidance; the base models take 50 with it.
 STEPS = {True: 4, False: 50}
 GUIDANCE = {True: 1.0, False: 4.0}
-MAKERS = ("black-forest-labs", "mlx-community")
+MAKERS = ("black-forest-labs", "mlx-community", "mflux-community")
 PARTS = ("transformer", "text_encoder", "vae")
-NAME = re.compile(r"flux2-klein(?P<base>-base)?-(?P<size>4b|9b)(?P<kv>-kv)?(?:-(?P<bits>\d)-?bit|-bf16|-fp16|-mlx)*")
+# mflux-community spells it flux-2-klein-base-4b-mflux-q4.
+NAME = re.compile(r"flux-?2-klein(?P<base>-base)?-(?P<size>4b|9b)(?P<kv>-kv)?"
+                  r"(?:-(?P<bits>\d)-?bit|-q(?P<q>\d)|-bf16|-fp16|-mlx|-mflux)*")
 BLOCK = re.compile(r"(?:^|\.)(single_)?transformer_blocks\.(\d+)\.")
 MAX_HEADER = 100_000_000
 SCAN_SECONDS = 5
@@ -52,7 +54,8 @@ def variant_of(name: str) -> tuple[str, int | None] | None:
     key = "flux2-klein-" + ("base-" if found["base"] else "") + found["size"] + ("-kv" if found["kv"] else "")
     if key not in VARIANTS:
         return None
-    return key, int(found["bits"]) if found["bits"] else None
+    bits = found["bits"] or found["q"]
+    return key, int(bits) if bits else None
 
 
 def _header_keys(path: Path) -> list[str]:
@@ -96,7 +99,7 @@ def identify(name: str, folder: Path) -> tuple[dict | None, str]:
     maker = name.split("/")[0] if "/" in name else ""
     if named is None or (maker and maker not in MAKERS):
         return None, (f"A {short} copy is left out: HikariLM runs only the FLUX.2 klein models themselves, from "
-                      "Black Forest Labs or mlx-community, not fine-tunes or LoRA adapters.")
+                      "Black Forest Labs, mlx-community or mflux-community, not fine-tunes or LoRA adapters.")
     key = named[0]
     missing = [part for part in PARTS if not any((folder / part).glob("*.safetensors"))]
     if missing or not (folder / "tokenizer").is_dir():

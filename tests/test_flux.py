@@ -91,13 +91,18 @@ class NamesTest(unittest.TestCase):
             ("mlx-community/flux2-klein-9b-8bit", ("flux2-klein-9b", 8)),
             ("mlx-community/FLUX.2-klein-base-4B-bf16", ("flux2-klein-base-4b", None)),
             ("flux2_klein_4b_3bit", ("flux2-klein-4b", 3)),
+            ("mflux-community/flux-2-klein-base-4b-mflux-q4", ("flux2-klein-base-4b", 4)),
+            ("mflux-community/flux-2-klein-base-9b-mflux-bf16", ("flux2-klein-base-9b", None)),
+            ("mflux-community/flux2-klein-9b-kv-mflux-q8", ("flux2-klein-9b-kv", 8)),
+            ("mflux-community/flux2-klein-4b-mflux-q3", ("flux2-klein-4b", 3)),
         ]:
             self.assertEqual(flux.variant_of(name), wanted, name)
 
     def test_anything_else_has_no_name(self):
         for name in ("mlx-community/flux2-klein-4b-uncensored", "someone/FLUX.2-klein-4B-lora",
                      "mlx-community/flux-3-image-klein-bf16", "black-forest-labs/FLUX.2-dev",
-                     "mlx-community/flux2-klein-base-4b-kv", "black-forest-labs/FLUX.1-schnell"):
+                     "mlx-community/flux2-klein-base-4b-kv", "black-forest-labs/FLUX.1-schnell",
+                     "mflux-community/flux-3-image-klein-mflux-q4", "mflux-community/flux-2-klein-4b-mflux-lora"):
             self.assertIsNone(flux.variant_of(name), name)
 
     def test_every_variant_is_one_mflux_runs(self):
@@ -123,6 +128,14 @@ class FindTest(FluxCase):
         model = flux.find("black-forest-labs/FLUX.2-klein-base-9B")
         self.assertEqual((model["variant"], model["label"], model["steps"], model["guidance"]),
                          ("flux2-klein-base-9b", "FLUX.2 klein base", 50, 4.0))
+
+    def test_mflux_community_copies_are_listed(self):
+        self.download("mflux-community/flux-2-klein-base-4b-mflux-q4")
+        found, notes = flux.scan()
+        model = found["mflux-community/flux-2-klein-base-4b-mflux-q4"]
+        self.assertEqual((model["variant"], model["label"], model["steps"], model["guidance"]),
+                         ("flux2-klein-base-4b", "FLUX.2 klein base", 50, 4.0))
+        self.assertEqual(notes, [])
 
     def test_fine_tunes_and_other_makers_are_left_out_with_a_note(self):
         self.download("someone/FLUX.2-klein-4B-4bit")

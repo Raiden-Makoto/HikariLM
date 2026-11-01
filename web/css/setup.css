@@ -45,4 +45,12 @@ body.setup-page { display: block; overflow-y: auto; }
 }
 .setup button:hover { background: var(--hover); }
 .setup-warning { color: var(--danger); }
+
+.setup-tree, .setup-file pre {
+  margin: 0.6rem 0 0; padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--field); font-size: 0.85rem; overflow-x: auto;
+}
+.setup-file { position: relative; }
+.setup-file pre code { padding: 0; background: none; font-size: inherit; overflow-wrap: normal; }
+.setup-file button { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--panel); }
 .setup-again { margin-top: 2rem; color: var(--muted); font-size: 0.9rem; }

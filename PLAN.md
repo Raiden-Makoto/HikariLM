@@ -276,7 +276,7 @@ guidance. The distilled 4B comes after a check on the Mac.
 
 ### v4.4.9: how to make a LoRA
 
-- [ ] A page of its own, `/setup/lora`, like `/setup/pictures`, linked from the picture setting in
+- [x] A page of its own, `/setup/lora`, like `/setup/pictures`, linked from the picture setting in
   Settings and from the picture setup page. It says what a LoRA is (a small add-on that teaches
   FLUX.2 klein a style, a character or an object), that HikariLM draws with them from 4.5, and how
   to train one by hand on the Mac with `mflux-train` (in `~/.hikarilm/pictures-venv`, which already
@@ -294,6 +294,18 @@ guidance. The distilled 4B comes after a check on the Mac.
     earlier one. `mflux-train --resume` goes on from a checkpoint.
   - Getting the LoRA file out of a checkpoint. Check in mflux's code what a checkpoint zip holds
     and which file is the adapter before writing this part.
+- [x] Checked against mflux 0.24's code: a checkpoint zip holds the LoRA as
+  `NNNNNNN_adapter.safetensors` (PEFT keys, `transformer.…lora_A/B`, which `--lora` loads), so
+  the page takes it out with `unzip -j`; block ranges stop before `end`, and the 4B has 5 and 20
+  blocks; `data` is read from train.json's folder; `model_path` takes a Hugging Face repo;
+  training wraps quantized layers too, so the q4 trains as it is (`quantize: null`);
+  `mflux-train --dry-run` checks the config and the pictures without loading the model. The
+  page's train.json goes through mflux's own config reader with 100 pictures and a preview
+  prompt; `tests/test_web.py` checks it names the base 4B, its steps and guidance, and its blocks.
+- [x] mflux-community's copies (`flux-2-klein-base-4b-mflux-q4` and the rest) are FLUX.2 klein
+  models to HikariLM now, not "fine-tunes": the page has people download one, and they are laid
+  out like mlx-community's.
+- [x] The Copy button is one module (`js/copy.js`) for both setup pages.
 - [ ] `__version__ = "4.4.9"`, tag `v4.4.9`.
 
 ### v4.5.0: LoRAs from Hugging Face, on the base 4B
