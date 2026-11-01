@@ -273,9 +273,15 @@ all.
   finishes. `/api/speak` takes text and a voice and streams audio a sentence at a time, so it
   starts before the whole answer is spoken; Stop ends it. Code blocks, tables and LaTeX are
   skipped or said briefly ("a Python code block"), and thinking is never read.
-- [ ] **Memory.** Find out on the Mac whether a voice model can stay loaded beside the chat model,
-  like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
-  page says so each time, the way reading pictures says what was loaded and what left.
+- [ ] **Memory.** Kokoro (82M parameters) stays loaded beside the chat model, like the notes model:
+  it never counts as the one large model, and it is never unloaded for one. It loads the first
+  time something is read aloud (at start when *Read answers aloud* is on), in the voice worker,
+  which keeps running for it. Whisper turbo is bigger; find out on the Mac whether it can stay
+  too or must take the chat model's place, like FLUX.2 klein. If it takes its place, the page
+  says so each time, the way reading pictures says what was loaded and what left.
+- [ ] Check on the Mac what Kokoro needs besides its weights: mlx-audio turns text into sounds
+  with misaki, which may download a spaCy model or want espeak-ng for some languages. The setup
+  page lists whatever that turns out to be, and `./start.sh` installs it with the voice venv.
 - [ ] **Setup page**, `/setup/voice`, like the picture one: Whisper turbo first, the smaller
   Whisper under a fold, Kokoro for reading aloud, each with its command and Copy, and
   where it stands. *Get a voice model…* in the microphone button's place until one is there.
