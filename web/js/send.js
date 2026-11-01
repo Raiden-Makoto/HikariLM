@@ -399,8 +399,9 @@ async function readStream(response, onEvent) {
 
 // A picture model is asked in words a chat model wrote: what a name looks like, and
 // what an attached reference picture shows. The rewrite goes into the box to be read,
-// edited or undone; the next send draws it.
-async function rewritePrompt(request, writer, describer, references) {
+// edited or undone; the next send draws it. `asked` is what the user first wrote, when
+// `request` is an earlier rewrite being redone for a picture attached since.
+async function rewritePrompt(request, writer, describer, references, asked = request) {
   const note = document.querySelector("#rewrite-note");
   const noteText = document.querySelector("#rewrite-text");
   const undo = document.querySelector("#rewrite-undo");
@@ -449,8 +450,10 @@ async function rewritePrompt(request, writer, describer, references) {
   messageBox.value = prompt || request;
   fitBox();
   if (prompt) {
-    state.rewrite = { request, writer };
-    noteText.textContent = "Rewritten by " + modelLabel(writer) + " from “" + request + "”. Edit it if you like, then send to draw.";
+    state.rewrite = { request: asked, writer, pictures: references.map((file) => file.image) };
+    noteText.textContent = "Rewritten by " + modelLabel(writer) + " from “" + asked + "”" +
+      (references.length ? " and " + references.map((file) => file.name).join(", ") : "") +
+      ". Edit it if you like, then send to draw.";
     undo.hidden = false;
     note.hidden = false;
     status.textContent = "";
@@ -465,8 +468,12 @@ async function sendPicture(prompt, model) {
     notify("A picture model takes reference pictures only. Remove the other files, or pick a chat model.");
     return;
   }
-  if (state.rewrite) return drawPicture(prompt, model, state.rewrite.asIs ? "" : state.rewrite.request);
   const references = state.attached.filter((file) => file.image);
+  // A rewrite in the box is drawn as it is, unless pictures were attached after it.
+  const pending = state.rewrite;
+  const used = pending?.pictures || [];
+  const newPictures = references.some((file) => !used.includes(file.image));
+  if (pending && !newPictures) return drawPicture(prompt, model, pending.asIs ? "" : pending.request);
   let writer = rewriteModel();
   let describer = "";
   if (references.length) {
@@ -478,7 +485,7 @@ async function sendPicture(prompt, model) {
     writer ||= describer;
   }
   if (!writer) return drawPicture(prompt, model, "");
-  return rewritePrompt(prompt, writer, describer, references);
+  return rewritePrompt(prompt, writer, describer, references, pending ? pending.request : prompt);
 }
 
 async function drawPicture(prompt, model, request) {
@@ -615,7 +622,7 @@ export function start() {
     if (!state.rewrite) return;
     messageBox.value = state.rewrite.request;
     fitBox();
-    state.rewrite = { request: state.rewrite.request, asIs: true };
+    state.rewrite = { request: state.rewrite.request, asIs: true, pictures: state.rewrite.pictures };
     document.querySelector("#rewrite-note").hidden = true;
     saveDraft(draftKey(), true);
     messageBox.focus();

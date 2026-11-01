@@ -45,6 +45,7 @@ export async function addFiles(list) {
   let total = state.attached.reduce((sum, file) => sum + (file.text || "").length, 0);
   const problems = [];
   let images = state.attached.filter((item) => item.image).length;
+  const before = images;
   let imageBytes = state.attached.reduce((sum, item) => sum + (item.image ? item.image.length : 0), 0);
   let switched = "";
   const addImage = async (name, size, getData) => {
@@ -181,4 +182,8 @@ export async function addFiles(list) {
   status.textContent = notes.join(" ");
   saveDraft(draftKey(), true);
   if (switched) notify("Switched to " + modelLabel(switched) + " to read your image.");
+  else if (isPictureModel(modelSelect.value) && (problems.length || images > before)) {
+    notify(problems.length ? notes.join(" ")
+      : "When you send, " + modelLabel(visionModel()) + " reads the picture and the prompt is rewritten to match it.");
+  }
 }
