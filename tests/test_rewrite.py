@@ -60,13 +60,16 @@ class RewriteTest(FluxCase):
         self.assertTrue(prompt.endswith("Request: Usagi from Chiikawa"))
         self.assertEqual(" ".join("".join(line.get("text", "") for line in lines[:-1]).split()), prompt)
         self.download(KLEIN)
-        drawn = self.post("/api/generate", {"model": KLEIN, "prompt": "a cream rabbit", "request": "Usagi from Chiikawa"})
+        drawn = self.post("/api/generate", {"model": KLEIN, "prompt": "a cream rabbit", "request": "Usagi from Chiikawa",
+                                            "reference": "A cream rabbit with long ears."})
         self.assertEqual(drawn[0]["unloading"], CODER)
         record = drawn[-1]["image"]
-        self.assertEqual((record["prompt"], record["request"]), ("a cream rabbit", "Usagi from Chiikawa"))
+        self.assertEqual((record["prompt"], record["request"], record["reference"]),
+                         ("a cream rabbit", "Usagi from Chiikawa", "A cream rabbit with long ears."))
         saved = json.loads((imagegen.images_dir() / (record["id"] + ".json")).read_text())
-        self.assertEqual(saved["request"], "Usagi from Chiikawa")
-        self.assertEqual(store.clean_picture(record)["request"], "Usagi from Chiikawa")
+        self.assertEqual((saved["request"], saved["reference"]), ("Usagi from Chiikawa", "A cream rabbit with long ears."))
+        kept = store.clean_picture(record)
+        self.assertEqual((kept["request"], kept["reference"]), ("Usagi from Chiikawa", "A cream rabbit with long ears."))
 
     def test_a_prompt_drawn_as_written_keeps_no_request(self):
         self.assertNotIn("request", imagegen.clean_request({"model": KLEIN, "prompt": "a fox", "request": "a fox"}))

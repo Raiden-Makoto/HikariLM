@@ -26,6 +26,7 @@ SIZES = {
     "small": (512, 512),
 }
 MAX_PROMPT = 4000
+MAX_REFERENCE = 20_000
 MAX_SEED = 2 ** 31 - 1
 MAX_STEPS = 100
 ID_PATTERN = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
@@ -119,11 +120,18 @@ def clean_request(payload: dict) -> dict:
     if request is not None and (not isinstance(request, str) or len(request) > MAX_PROMPT):
         raise ValueError(f"request must be text of at most {MAX_PROMPT} characters")
     request = (request or "").strip()
+    # What a vision model saw in a reference picture, which the rewrite was made from.
+    reference = payload.get("reference")
+    if reference is not None and (not isinstance(reference, str) or len(reference) > MAX_REFERENCE):
+        raise ValueError(f"reference must be text of at most {MAX_REFERENCE} characters")
+    reference = (reference or "").strip()
     width, height = SIZES[size]
     cleaned = {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
                "seed": seed, "steps": steps}
     if request and request != cleaned["prompt"]:
         cleaned["request"] = request
+    if reference:
+        cleaned["reference"] = reference
     return cleaned
 
 
@@ -163,8 +171,9 @@ def save(data: bytes, request: dict) -> dict:
     record = {"id": image_id, "prompt": request["prompt"], "model": request["model"], "seed": request["seed"],
               "size": request["size"], "width": request["width"], "height": request["height"],
               "steps": request["steps"], "created": time.time()}
-    if request.get("request"):
-        record["request"] = request["request"]
+    for key in ("request", "reference"):
+        if request.get(key):
+            record[key] = request[key]
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record

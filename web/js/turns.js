@@ -135,6 +135,11 @@ export function pictureFigure(message) {
     const text = document.createElement("p");
     text.textContent = record.prompt;
     drawn.append(summary, text);
+    if (record.reference) {
+      const seen = document.createElement("p");
+      seen.textContent = "The reference picture, as the vision model saw it: " + record.reference;
+      drawn.append(seen);
+    }
     figure.append(drawn);
   }
   figure.append(actions);

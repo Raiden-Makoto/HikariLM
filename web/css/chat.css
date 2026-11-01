@@ -174,6 +174,10 @@ textarea::placeholder { color: var(--muted); }
 .notice[hidden] { display: none; }
 #rewrite-note { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; justify-content: space-between; }
 #rewrite-note[hidden], .picture-warning[hidden] { display: none; }
+#rewrite-seen { flex-basis: 100%; font-size: 0.82rem; color: var(--muted); }
+#rewrite-seen[hidden] { display: none; }
+#rewrite-seen summary { cursor: pointer; }
+#rewrite-seen p, .drawn-prompt p + p { margin: 0.3rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12rem; overflow-y: auto; }
 #rewrite-undo { flex: none; padding: 0.2rem 0.6rem; font-size: 0.82rem; }
 .picture-warning { margin: 0; font-size: 0.8rem; color: var(--muted); }
 body.dragging .box { border-color: var(--you); border-style: dashed; box-shadow: 0 0 0 3px color-mix(in srgb, var(--you) 35%, transparent); }

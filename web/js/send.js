@@ -366,9 +366,9 @@ async function makePicture(payload, signal, show) {
   throw new Error("The helper stopped before the picture was finished.");
 }
 
-function pictureRequest(prompt, model, request) {
+function pictureRequest(prompt, model, request, reference) {
   const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
-  return { model, prompt, request: request || undefined, size: pictureSize.value || "square",
+  return { model, prompt, request: request || undefined, reference: reference || undefined, size: pictureSize.value || "square",
     seed: number(pictureSeed), steps: number(pictureSteps) };
 }
 
@@ -405,22 +405,40 @@ async function rewritePrompt(request, writer, describer, references, asked = req
   const note = document.querySelector("#rewrite-note");
   const noteText = document.querySelector("#rewrite-text");
   const undo = document.querySelector("#rewrite-undo");
+  const seenBox = document.querySelector("#rewrite-seen");
   const say = (text) => {
     noteText.textContent = text;
     undo.hidden = true;
     note.hidden = false;
     status.textContent = text;
   };
+  // What the vision model saw stays on the note, so a rewrite that ignored it shows.
+  const showSeen = (title, text, open) => {
+    seenBox.querySelector("summary").textContent = title;
+    seenBox.querySelector("p").textContent = text;
+    seenBox.open = open;
+    seenBox.hidden = false;
+  };
+  seenBox.hidden = true;
   setBusy(true);
   state.activeRequest = new AbortController();
   state.lastContext = null;
   const signal = state.activeRequest.signal;
   let prompt = "";
+  const seen = [];
   try {
-    const seen = [];
     for (const file of references) {
-      say("Reading " + file.name + " with " + modelLabel(describer) + "…");
-      seen.push((await describePicture(file, describer, signal, () => {}, "look")).text);
+      const reader = modelLabel(describer);
+      say("Reading " + file.name + " with " + reader + "…");
+      let live = "";
+      const result = await describePicture(file, describer, signal, (piece) => {
+        live += piece;
+        showSeen(reader + " is reading " + file.name, live, true);
+      }, "look");
+      seen.push((references.length > 1 ? file.name + ": " : "") + result.text);
+      showSeen("What " + modelLabel(result.model || describer) + " saw in " +
+        references.map((item) => item.name).slice(0, seen.length).join(", ") +
+        (result.cached ? " (read before, so not read again)" : ""), seen.join("\n\n"), false);
     }
     say("Rewriting the prompt with " + modelLabel(writer) + "…");
     const response = await fetch("/api/rewrite", {
@@ -442,6 +460,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
     if (!prompt) throw new Error("The helper stopped before the prompt was rewritten.");
   } catch (error) {
     note.hidden = true;
+    seenBox.hidden = true;
     if (error.name !== "AbortError") notify("Not rewritten: " + plainError(error.message));
   } finally {
     state.activeRequest = null;
@@ -450,7 +469,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
   messageBox.value = prompt || request;
   fitBox();
   if (prompt) {
-    state.rewrite = { request: asked, writer, pictures: references.map((file) => file.image) };
+    state.rewrite = { request: asked, writer, pictures: references.map((file) => file.image), seen: seen.join("\n\n") };
     noteText.textContent = "Rewritten by " + modelLabel(writer) + " from “" + asked + "”" +
       (references.length ? " and " + references.map((file) => file.name).join(", ") : "") +
       ". Edit it if you like, then send to draw.";
@@ -518,7 +537,7 @@ async function drawPicture(prompt, model, request) {
   let record = null;
   let failure = "";
   try {
-    record = await makePicture(pictureRequest(prompt, model, request), state.activeRequest.signal, show);
+    record = await makePicture(pictureRequest(prompt, model, request, pending?.asIs ? "" : pending?.seen), state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") failure = plainError(error.message);
   } finally {
@@ -578,7 +597,7 @@ export async function varyPicture(message, figure) {
   state.lastContext = null;
   let record = null;
   try {
-    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, size: old.size,
+    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, reference: old.reference, size: old.size,
       steps: old.steps, seed: null },
       state.activeRequest.signal, show);
   } catch (error) {
