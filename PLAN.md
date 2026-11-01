@@ -261,7 +261,7 @@ the picture model gets the rewritten prompt and the pictures.
   bash) once, marked. A file of that name that is not the link is left alone. Every message that
   said `./start.sh` says the command now. Tried in WSL from a new login shell in another folder.
 - [ ] Try it on the Mac, including closing the Terminal window.
-- [ ] `__version__ = "4.3.0"`, tag `v4.3.0`.
+- [x] `__version__ = "4.3.0"`, tag `v4.3.0`. Released.
 
 ## v5.0.0: voice
 
