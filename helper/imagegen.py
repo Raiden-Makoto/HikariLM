@@ -114,9 +114,17 @@ def clean_request(payload: dict) -> dict:
             raise ValueError("steps must be a whole number") from None
         if not 1 <= steps <= MAX_STEPS:
             raise ValueError(f"steps must be from 1 to {MAX_STEPS}")
+    # What was asked for, when a chat model rewrote it into the prompt.
+    request = payload.get("request")
+    if request is not None and (not isinstance(request, str) or len(request) > MAX_PROMPT):
+        raise ValueError(f"request must be text of at most {MAX_PROMPT} characters")
+    request = (request or "").strip()
     width, height = SIZES[size]
-    return {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
-            "seed": seed, "steps": steps}
+    cleaned = {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
+               "seed": seed, "steps": steps}
+    if request and request != cleaned["prompt"]:
+        cleaned["request"] = request
+    return cleaned
 
 
 # --- images/ -----------------------------------------------------------------------
@@ -155,6 +163,8 @@ def save(data: bytes, request: dict) -> dict:
     record = {"id": image_id, "prompt": request["prompt"], "model": request["model"], "seed": request["seed"],
               "size": request["size"], "width": request["width"], "height": request["height"],
               "steps": request["steps"], "created": time.time()}
+    if request.get("request"):
+        record["request"] = request["request"]
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record

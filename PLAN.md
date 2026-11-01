@@ -149,13 +149,23 @@ Each one is checked against its makers' own code before it is used.
   stopped with "The helper hit a bug". Fixed, with `tests/test_server.py`: a chat and a description
   through the server, and a check that every name the helper uses is defined. Released.
 
-## v4.0.2: prompt rewriting
+## v4.1.0: prompt rewriting
 
 FLUX.2 klein draws what a prompt describes far better than what it names: "Usagi from Chiikawa"
 gets a generic rabbit. Black Forest Labs suggests rewriting prompts for FLUX.2.
 
-- [ ] A Settings switch: before drawing, the chat model rewrites the request into a visual
-  description. With a picture attached, the vision model describes it and that goes into the rewrite.
-- [ ] The rewritten prompt is shown before drawing and can be edited; the picture keeps both.
-- [ ] The chat model leaves memory before the picture model loads (one large model at a time).
-- [ ] `__version__ = "4.0.2"`, tag `v4.0.2`.
+- [x] A Settings choice, "Rewrite prompts with": a chat model (a general one before a coder by
+  default) or "Don't rewrite". `/api/rewrite` and `helper/rewrite.py`; thinking is off for it.
+  With a picture attached, the vision model describes how it looks (`/api/describe` with
+  `purpose: "look"`, kept apart from the description written for code) and that goes into the rewrite.
+- [x] The rewrite streams into the message box, with a note above it and "Use my words"; the next
+  send draws what is in the box. The picture record keeps `request` and the drawn `prompt`, and
+  the picture shows the drawn prompt under "Drawn from a rewritten prompt". Vary keeps both.
+- [x] The chat model leaves memory before the picture model loads (one large model at a time):
+  tested, the picture's loading line names the chat model it unloads.
+- [ ] Try it on the Mac with a real chat model and FLUX.2 klein.
+- [x] A short warning under the message box in picture mode, and in the picture setting: "Picture
+  models may not recognize niche characters, people or places. Describe how they look or attach a
+  reference image." Picture mode shows the attach button again for this (4.0.0 hides it). Rewriting helps only if the chat model knows them; it can be wrong too, so the warning
+  stays with rewriting on.
+- [ ] `__version__ = "4.1.0"`, tag `v4.1.0`.

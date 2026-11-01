@@ -30,6 +30,16 @@ PROMPT = (
     "Say what is there and nothing else. No introduction and no guessing about what it is for."
 )
 
+# A reference for a picture to be drawn: how things look, not what to code. It is
+# kept apart from the description above, under the picture's name plus "-look".
+LOOK_PROMPT = (
+    "Describe this picture so that an artist who cannot see it could draw the same subject. For each "
+    "character or object: its shape and proportions, colors, face, hair, clothing and markings. Then the "
+    "pose, the background, and the art style (for example flat cartoon, anime, photo, watercolor). If you "
+    "recognize a character, say who it is as well. Plain text, no introduction."
+)
+PURPOSES = {"code": ("", PROMPT), "look": ("-look", LOOK_PROMPT)}
+
 
 def descriptions_dir() -> Path:
     return store.home() / "descriptions"

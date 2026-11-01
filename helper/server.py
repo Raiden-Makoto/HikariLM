@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, descriptions, documents, engine, flux, imagegen, names, notes,
-                    store, thinking, workspace)
+                    rewrite, store, thinking, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -265,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/search":
             self._search()
             return
-        if self.path not in ("/api/chat", "/api/describe"):
+        if self.path not in ("/api/chat", "/api/describe", "/api/rewrite"):
             self._send_json({"error": "not found"}, status=404)
             return
         busy = work.start_chat()
@@ -277,6 +277,8 @@ class Handler(BaseHTTPRequestHandler):
             with ExitStack() as self._models:
                 if self.path == "/api/describe":
                     self._describe()
+                elif self.path == "/api/rewrite":
+                    self._rewrite()
                 else:
                     self._chat()
         finally:
@@ -514,7 +516,10 @@ class Handler(BaseHTTPRequestHandler):
             model = model.strip()
             name = payload.get("name") if isinstance(payload.get("name"), str) else "picture"
             image = payload.get("image")
-            key = descriptions.image_key(image)
+            if payload.get("purpose", "code") not in descriptions.PURPOSES:
+                raise ValueError("purpose is not one of the choices")
+            suffix, prompt = descriptions.PURPOSES[payload.get("purpose", "code")]
+            key = descriptions.image_key(image) + suffix
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return
@@ -530,7 +535,7 @@ class Handler(BaseHTTPRequestHandler):
             room = self._room(model, context.load_settings())
             router.begin(model)
             response = open_chat(
-                model, [{"role": "user", "content": descriptions.PROMPT, "images": [image]}], KEEP_ALIVE,
+                model, [{"role": "user", "content": prompt, "images": [image]}], KEEP_ALIVE,
                 {"num_ctx": room["num_ctx"]})
         except ModelError as error:
             self._send_json({"error": str(error)}, status=502)
@@ -566,6 +571,70 @@ class Handler(BaseHTTPRequestHandler):
             return
         except OSError as error:
             self._stream_line({"error": f"The description could not be saved: {error.strerror or error}"})
+        finally:
+            response.close()
+
+    def _rewrite(self) -> None:
+        """Have a chat model turn a request for a picture into a description FLUX.2 can draw.
+
+        Streams {"text"} pieces as they are written, then {"prompt": ...}. `reference` is
+        what a vision model wrote about an attached picture, if there was one.
+        """
+        try:
+            payload = self._body(MAX_BODY)
+            model, request, reference = payload.get("model"), payload.get("request"), payload.get("reference", "")
+            if not isinstance(model, str) or not model.strip():
+                raise ValueError("model is required")
+            if not isinstance(request, str) or not request.strip():
+                raise ValueError("Write what the picture should show.")
+            if len(request) > imagegen.MAX_PROMPT:
+                raise ValueError(f"The request is longer than {imagegen.MAX_PROMPT} characters.")
+            if not isinstance(reference, str):
+                raise ValueError("reference must be text")
+            model = model.strip()
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        if self._refuse_picture_model(model):
+            return
+        self._models.enter_context(KEEPER.using(model))
+        try:
+            room = self._room(model, context.load_settings())
+            think = thinking.think_value(model, show(model), {"enabled": False})
+            router.begin(model)
+            response = open_chat(model, rewrite.messages(request, reference[:descriptions.MAX_TEXT]), KEEP_ALIVE,
+                                 {"num_ctx": room["num_ctx"], "num_predict": rewrite.MAX_TOKENS}, think)
+        except ModelError as error:
+            self._send_json({"error": str(error)}, status=502)
+            return
+        router.commit(model)
+        self._stream_start()
+        text = ""
+        try:
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if event.get("error"):
+                    self._stream_line({"error": str(event["error"])})
+                    return
+                piece = (event.get("message") or {}).get("content", "")
+                text += piece
+                if piece and not self._stream_line({"text": piece}):
+                    return
+                if event.get("done"):
+                    break
+            prompt = rewrite.clean(text)[:imagegen.MAX_PROMPT]
+            if not prompt:
+                self._stream_line({"error": f"{names.label(model)} wrote no prompt. Send it again, or turn rewriting off."})
+                return
+            self._stream_line({"prompt": prompt, "model": model})
+        except (BrokenPipeError, ConnectionResetError):
+            return
         finally:
             response.close()
 

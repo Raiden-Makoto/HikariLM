@@ -15,6 +15,7 @@ export const state = {
   openPath: "",
   openToken: 0,
   openVersion: "",
+  rewrite: null,
   savedText: "",
   saving: false,
   source: null,

@@ -6,8 +6,8 @@ import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
 import { addTurn, pictureFigure, setBusy, updateApply } from "./turns.js";
 import {
-  inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed, pictureSize,
-  pictureSteps, refreshState, visionModel,
+  clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed, pictureSize,
+  pictureSteps, refreshState, rewriteModel, visionModel,
 } from "./models.js";
 import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
@@ -18,11 +18,11 @@ import { editorPrompt } from "./edit-blocks.js";
 // Ask the helper to have a vision model write one picture down as text. It
 // answers from the saved description when it has one, so the vision model
 // is not loaded again for a picture it has already read.
-async function describePicture(file, model, signal, onText) {
+async function describePicture(file, model, signal, onText, purpose = "code") {
   const response = await fetch("/api/describe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, image: file.image, name: file.name }),
+    body: JSON.stringify({ model, image: file.image, name: file.name, purpose }),
     signal,
   });
   if (!response.ok) {
@@ -366,22 +366,134 @@ async function makePicture(payload, signal, show) {
   throw new Error("The helper stopped before the picture was finished.");
 }
 
-function pictureRequest(prompt, model) {
+function pictureRequest(prompt, model, request) {
   const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
-  return { model, prompt, size: pictureSize.value || "square", seed: number(pictureSeed), steps: number(pictureSteps) };
+  return { model, prompt, request: request || undefined, size: pictureSize.value || "square",
+    seed: number(pictureSeed), steps: number(pictureSteps) };
+}
+
+function fitBox() {
+  messageBox.style.height = "auto";
+  messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+}
+
+async function readStream(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return null;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.error) throw new Error(event.error);
+      const result = onEvent(event);
+      if (result !== undefined) return result;
+    }
+  }
+}
+
+// A picture model is asked in words a chat model wrote: what a name looks like, and
+// what an attached reference picture shows. The rewrite goes into the box to be read,
+// edited or undone; the next send draws it.
+async function rewritePrompt(request, writer, describer, references) {
+  const note = document.querySelector("#rewrite-note");
+  const noteText = document.querySelector("#rewrite-text");
+  const undo = document.querySelector("#rewrite-undo");
+  const say = (text) => {
+    noteText.textContent = text;
+    undo.hidden = true;
+    note.hidden = false;
+    status.textContent = text;
+  };
+  setBusy(true);
+  state.activeRequest = new AbortController();
+  state.lastContext = null;
+  const signal = state.activeRequest.signal;
+  let prompt = "";
+  try {
+    const seen = [];
+    for (const file of references) {
+      say("Reading " + file.name + " with " + modelLabel(describer) + "…");
+      seen.push((await describePicture(file, describer, signal, () => {}, "look")).text);
+    }
+    say("Rewriting the prompt with " + modelLabel(writer) + "…");
+    const response = await fetch("/api/rewrite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: writer, request, reference: seen.join("\n\n") }),
+      signal,
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "The prompt could not be rewritten.");
+    let live = "";
+    prompt = await readStream(response, (event) => {
+      if (event.text) {
+        live += event.text;
+        messageBox.value = live;
+        fitBox();
+      }
+      if (typeof event.prompt === "string") return event.prompt;
+    }) || "";
+    if (!prompt) throw new Error("The helper stopped before the prompt was rewritten.");
+  } catch (error) {
+    note.hidden = true;
+    if (error.name !== "AbortError") notify("Not rewritten: " + plainError(error.message));
+  } finally {
+    state.activeRequest = null;
+    setBusy(false);
+  }
+  messageBox.value = prompt || request;
+  fitBox();
+  if (prompt) {
+    state.rewrite = { request, writer };
+    noteText.textContent = "Rewritten by " + modelLabel(writer) + " from “" + request + "”. Edit it if you like, then send to draw.";
+    undo.hidden = false;
+    note.hidden = false;
+    status.textContent = "";
+  }
+  saveDraft(draftKey(), true);
+  refreshState().catch(() => {});
+  messageBox.focus();
 }
 
 async function sendPicture(prompt, model) {
-  if (state.attached.length) {
-    notify("A picture model cannot read attached files. Remove them, or pick a chat model.");
+  if (state.attached.some((file) => !file.image)) {
+    notify("A picture model takes reference pictures only. Remove the other files, or pick a chat model.");
     return;
   }
+  if (state.rewrite) return drawPicture(prompt, model, state.rewrite.asIs ? "" : state.rewrite.request);
+  const references = state.attached.filter((file) => file.image);
+  let writer = rewriteModel();
+  let describer = "";
+  if (references.length) {
+    describer = visionModel();
+    if (!describer) {
+      notify("A reference picture needs a model that can read it, such as Gemma 3 or Qwen2.5 VL. Remove the picture or download one.");
+      return;
+    }
+    writer ||= describer;
+  }
+  if (!writer) return drawPicture(prompt, model, "");
+  return rewritePrompt(prompt, writer, describer, references);
+}
+
+async function drawPicture(prompt, model, request) {
   const draftOwner = draftKey();
   askNotifyPermission();
   if (!state.chatId) state.chatId = crypto.randomUUID();
   const thisChat = state.chatId;
-  state.messages.push({ role: "user", content: prompt });
-  const sent = addTurn("user", prompt, "");
+  const files = state.attached;
+  const asked = request || prompt;
+  const pending = state.rewrite;
+  state.attached = [];
+  renderChips();
+  clearRewrite();
+  state.messages.push({ role: "user", content: asked, files: files.length ? files : undefined });
+  const sent = addTurn("user", asked, "", files);
   messageBox.value = "";
   messageBox.style.height = "";
   dropDraft(draftOwner);
@@ -399,7 +511,7 @@ async function sendPicture(prompt, model) {
   let record = null;
   let failure = "";
   try {
-    record = await makePicture(pictureRequest(prompt, model), state.activeRequest.signal, show);
+    record = await makePicture(pictureRequest(prompt, model, request), state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") failure = plainError(error.message);
   } finally {
@@ -420,11 +532,16 @@ async function sendPicture(prompt, model) {
     reply.answer.textContent = failure;
     announce("Picture failed", name(), failure, thisChat);
   } else {
-    // Stopped: nothing was made, so the prompt goes back into the box.
+    // Stopped: nothing was made, so the prompt and pictures go back, still rewritten.
     state.messages.pop();
     sent.block.remove();
     reply.block.remove();
     messageBox.value = prompt;
+    fitBox();
+    state.attached = files;
+    renderChips();
+    state.rewrite = pending;
+    document.querySelector("#rewrite-note").hidden = !pending || Boolean(pending.asIs);
     saveDraft(draftKey(), true);
     if (state.messages.length === 0) showEmpty();
   }
@@ -454,7 +571,8 @@ export async function varyPicture(message, figure) {
   state.lastContext = null;
   let record = null;
   try {
-    record = await makePicture({ model: old.model, prompt: old.prompt, size: old.size, steps: old.steps, seed: null },
+    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, size: old.size,
+      steps: old.steps, seed: null },
       state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") notify("No new picture: " + plainError(error.message));
@@ -489,9 +607,18 @@ export function start() {
     }
   });
   messageBox.addEventListener("input", () => {
-    messageBox.style.height = "auto";
-    messageBox.style.height = Math.min(messageBox.scrollHeight, 160) + "px";
+    fitBox();
+    if (!messageBox.value.trim()) clearRewrite();
     scheduleDraft();
+  });
+  document.querySelector("#rewrite-undo").addEventListener("click", () => {
+    if (!state.rewrite) return;
+    messageBox.value = state.rewrite.request;
+    fitBox();
+    state.rewrite = { request: state.rewrite.request, asIs: true };
+    document.querySelector("#rewrite-note").hidden = true;
+    saveDraft(draftKey(), true);
+    messageBox.focus();
   });
   window.addEventListener("pagehide", () => flushDraft(true));
   document.addEventListener("visibilitychange", () => {

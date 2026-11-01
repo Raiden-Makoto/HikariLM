@@ -172,6 +172,10 @@ textarea::placeholder { color: var(--muted); }
   font-size: 0.88rem;
 }
 .notice[hidden] { display: none; }
+#rewrite-note { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; justify-content: space-between; }
+#rewrite-note[hidden], .picture-warning[hidden] { display: none; }
+#rewrite-undo { flex: none; padding: 0.2rem 0.6rem; font-size: 0.82rem; }
+.picture-warning { margin: 0; font-size: 0.8rem; color: var(--muted); }
 body.dragging .box { border-color: var(--you); border-style: dashed; box-shadow: 0 0 0 3px color-mix(in srgb, var(--you) 35%, transparent); }
 body.dragging .box::after {
   content: "Drop files to attach";
@@ -272,6 +276,9 @@ body.has-bg .turn.assistant {
 .picture { display: flex; flex-direction: column; gap: 0.4rem; margin: 0; }
 .picture img { display: block; width: min(100%, 32rem); height: auto; border-radius: 12px; background: var(--hover); }
 .picture figcaption { font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.drawn-prompt { font-size: 0.8rem; color: var(--muted); }
+.drawn-prompt summary { cursor: pointer; }
+.drawn-prompt p { margin: 0.3rem 0 0; overflow-wrap: anywhere; }
 .picture .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .picture .actions .choice { flex: none; padding: 0.3rem 0.65rem; font-size: 0.82rem; text-decoration: none; color: inherit; }
 

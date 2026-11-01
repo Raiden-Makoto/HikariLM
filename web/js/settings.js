@@ -1,6 +1,6 @@
 // The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { isPictureModel, modelLabel } from "./models.js";
+import { REWRITE_KEY, chatModels, isPictureModel, modelLabel, rewriteModel } from "./models.js";
 import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
@@ -58,6 +58,7 @@ async function showContextSetting() {
 }
 
 async function showPictureSetting() {
+  showRewriteSetting();
   const note = document.querySelector("#picture-note");
   let body;
   try {
@@ -76,6 +77,14 @@ async function showPictureSetting() {
   }
   parts.push(...body.notes);
   note.textContent = parts.join(" ");
+}
+
+function showRewriteSetting() {
+  const select = document.querySelector("#rewrite-model");
+  const writer = rewriteModel();
+  select.replaceChildren(new Option("Don't rewrite", "off"),
+    ...chatModels().map((name) => new Option(modelLabel(name), name)));
+  select.value = writer || "off";
 }
 
 // From the model list when no picture model is downloaded: Settings says how to get one.
@@ -208,6 +217,9 @@ export function start() {
   fetch("/api/state").then((response) => response.json())
     .then((body) => { version = body.version || version; }, () => {});
   document.querySelector("#report-issue").addEventListener("click", reportIssue);
+  document.querySelector("#rewrite-model").addEventListener("change", (event) => {
+    localStorage.setItem(REWRITE_KEY, event.target.value);
+  });
   document.querySelector("#close-settings").addEventListener("click", () => settings.close());
   settings.addEventListener("click", (event) => {
     if (event.target === settings) settings.close();

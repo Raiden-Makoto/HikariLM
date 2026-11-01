@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { modelSelect, status } from "./core.js";
 import { readDocx, readXlsx } from "./office.js";
 import { decodeText, isTextKind, notify, readBase64, readPdf } from "./text-files.js";
-import { inCodeView, modelLabel, updatePictureMode, visionModel } from "./models.js";
+import { inCodeView, isPictureModel, modelLabel, updatePictureMode, visionModel } from "./models.js";
 import { draftKey, saveDraft } from "./chats.js";
 
 export const MAX_FILE = 500_000;
@@ -50,7 +50,7 @@ export async function addFiles(list) {
   const addImage = async (name, size, getData) => {
     const vision = visionModel();
     if (!vision) {
-      problems.push(name + " needs a model that can read pictures (such as gemma3, llava or qwen2.5vl), and none is installed");
+      problems.push(name + " needs a model that can read pictures (such as Gemma 3 or Qwen2.5 VL), and none is installed");
       return false;
     }
     if (size > MAX_IMAGE) {
@@ -64,7 +64,8 @@ export async function addFiles(list) {
     state.attached.push({ name, image: await getData() });
     imageBytes += size;
     images += 1;
-    if (modelSelect.value !== vision) {
+    // In picture mode it is a reference: the vision model reads it before drawing.
+    if (modelSelect.value !== vision && !isPictureModel(modelSelect.value)) {
       modelSelect.value = vision;
       updatePictureMode();
       switched = vision;
@@ -99,6 +100,10 @@ export async function addFiles(list) {
   for (const file of list) {
     if (inCodeView() && (IMAGE_TYPES.includes(file.type) || /\.(pdf|docx|xlsx)$/i.test(file.name) || file.type === "application/pdf")) {
       problems.push(file.name + " was not attached: the code editor takes text and code files only. Pictures and PDFs go in the Chat tab");
+      continue;
+    }
+    if (isPictureModel(modelSelect.value) && !IMAGE_TYPES.includes(file.type)) {
+      problems.push(file.name + " was not attached: a picture model takes reference pictures only");
       continue;
     }
     if (IMAGE_TYPES.includes(file.type)) {

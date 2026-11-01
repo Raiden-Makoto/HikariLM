@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { messageBox, modelSelect, status } from "./core.js";
 import { renderChips } from "./attachments.js";
 import { renderLog } from "./turns.js";
-import { CODE_MODEL_KEY, inCodeView, updatePictureMode } from "./models.js";
+import { CODE_MODEL_KEY, clearRewrite, inCodeView, updatePictureMode } from "./models.js";
 import { closeSidebarIfNarrow, refreshChats, renderChats } from "./chat-list.js";
 
 // Drafts. What is typed and attached but not sent is kept by the helper in
@@ -58,6 +58,7 @@ export function flushDraft(keepalive = false) {
 }
 
 export function clearComposer() {
+  clearRewrite();
   messageBox.value = "";
   messageBox.style.height = "";
   state.attached = [];

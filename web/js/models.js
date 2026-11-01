@@ -94,9 +94,31 @@ function setPictureOptions(open) {
 export function updatePictureMode() {
   const on = isPictureModel(modelSelect.value);
   pictureToggle.hidden = !on;
-  if (!on) setPictureOptions(false);
-  attachButton.hidden = on;
+  if (!on) {
+    setPictureOptions(false);
+    clearRewrite();
+  }
+  attachButton.title = on ? "Attach a reference picture" : "Attach text or code files";
+  document.querySelector("#picture-warning").hidden = !on;
   messageBox.placeholder = on ? "Describe the picture" : "Message";
+}
+
+// The chat model that rewrites picture prompts, or "" when Settings turned it off.
+// Unchosen, a general model goes before a coder: it is likelier to know a character.
+export const REWRITE_KEY = "hikarilm-rewrite";
+export const chatModels = () => allModels;
+export function rewriteModel() {
+  const chosen = localStorage.getItem(REWRITE_KEY);
+  if (chosen === "off") return "";
+  if (chosen && allModels.includes(chosen)) return chosen;
+  return allModels.find((name) => codeRank(name) === 2) || allModels[0] || "";
+}
+
+// A rewrite waiting in the box: { request, writer }, or asIs when the user took their
+// own words back. The next send draws the box as it is.
+export function clearRewrite() {
+  state.rewrite = null;
+  document.querySelector("#rewrite-note").hidden = true;
 }
 
 // The picker shows every chat model in Chat. In the code editor it shows

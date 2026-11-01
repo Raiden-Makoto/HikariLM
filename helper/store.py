@@ -113,7 +113,7 @@ def clean_picture(value) -> dict:
     if not isinstance(value, dict) or not isinstance(value.get("id"), str) or not PICTURE_ID.match(value["id"]):
         return {}
     kept = {"id": value["id"]}
-    for key, limit in (("prompt", 4000), ("model", 200), ("size", 20)):
+    for key, limit in (("prompt", 4000), ("request", 4000), ("model", 200), ("size", 20)):
         if isinstance(value.get(key), str):
             kept[key] = value[key][:limit]
     for key in ("seed", "width", "height", "steps"):

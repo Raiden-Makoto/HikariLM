@@ -126,7 +126,18 @@ export function pictureFigure(message) {
   vary.title = "Same prompt with a new seed. The new picture replaces this one.";
   vary.addEventListener("click", () => varyPicture(message, figure));
   actions.append(download, vary);
-  figure.append(img, caption, actions);
+  figure.append(img, caption);
+  if (record.request) {
+    const drawn = document.createElement("details");
+    drawn.className = "drawn-prompt";
+    const summary = document.createElement("summary");
+    summary.textContent = "Drawn from a rewritten prompt";
+    const text = document.createElement("p");
+    text.textContent = record.prompt;
+    drawn.append(summary, text);
+    figure.append(drawn);
+  }
+  figure.append(actions);
   return figure;
 }
 
