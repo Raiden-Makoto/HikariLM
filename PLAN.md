@@ -218,3 +218,17 @@ the picture model gets the rewritten prompt and the pictures.
 - [x] Looks of a reference ("-look") were notes in 4.1, so they could turn up as context in any
   chat. They are not notes any more, and the helper removes the old ones when it starts.
 - [x] `__version__ = "4.2.0"`, tag `v4.2.0`. Released.
+
+## v4.2.1: a setup page for pictures
+
+- [x] *Get a picture model…* (and *How to set it up…* in Settings) opens a page of its own: what
+  draws and where, then three steps. Download a model: the 4B (recommended under 18 GB of RAM)
+  and the 9B (`mlx-community/flux2-klein-9b-4bit`, more detail), each with its command and a
+  Copy button, and the other FLUX.2 klein models under a fold. Run ./start.sh again for mflux.
+  Draw: Options, Rewrite, references, changing a picture, the niche-character warning. A line at
+  the top says where it stands (nothing yet, downloaded but no mflux, ready), and Check again
+  looks again and refreshes the model list.
+- [x] The start window and the "not downloaded" error name the 9B too, so the 4B command does not
+  read as the only one.
+- [x] With the 4B and the 9B both downloaded, the list says "FLUX.2 klein 4B" and "FLUX.2 klein 9B".
+- [ ] `__version__ = "4.2.1"`, tag `v4.2.1`.

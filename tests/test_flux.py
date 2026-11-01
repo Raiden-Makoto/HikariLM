@@ -170,6 +170,14 @@ class FindTest(FluxCase):
         items, _ = imagegen.picture_models()
         self.assertEqual(sorted(item["label"] for item in items), ["FLUX.2-Klein-4B-4bit", "flux2-klein-4b-4bit"])
 
+    def test_the_4b_and_the_9b_say_their_size(self):
+        self.download(KLEIN)
+        self.download(imagegen.LARGER, double=8, single=24)
+        self.download("black-forest-labs/FLUX.2-klein-base-9B", double=8, single=24, bits=None)
+        items, _ = imagegen.picture_models()
+        self.assertEqual(sorted(item["label"] for item in items),
+                         ["FLUX.2 klein 4B", "FLUX.2 klein 9B", "FLUX.2 klein base"])
+
     def test_picture_models_are_not_chat_models(self):
         self.download(KLEIN)
         self.assertTrue(imagegen.is_picture_model(KLEIN))
@@ -254,6 +262,7 @@ class GenerateTest(FluxCase):
     def test_a_model_that_is_not_downloaded_says_how_to_get_one(self):
         body = self.post({"model": "mlx-community/flux2-klein-9b-4bit", "prompt": "a fox"})
         self.assertIn("hf download " + imagegen.SUGGESTED, body["error"])
+        self.assertIn(imagegen.LARGER + ", the 9B", body["error"])
 
     def test_the_settings_note_lists_what_was_found(self):
         self.download(KLEIN)
@@ -261,8 +270,20 @@ class GenerateTest(FluxCase):
         with urllib.request.urlopen(self.base + "/api/pictures", timeout=10) as response:
             body = json.loads(response.read())
         self.assertEqual(body["models"], ["FLUX.2 klein"])
+        self.assertEqual(body["ids"], [KLEIN])
         self.assertTrue(body["ready"])
         self.assertEqual(len(body["notes"]), 1)
+
+    def test_the_setup_page_offers_the_4b_and_the_9b(self):
+        with urllib.request.urlopen(self.base + "/api/pictures", timeout=10) as response:
+            choices = json.loads(response.read())["choices"]
+        self.assertEqual([choice["repo"] for choice in choices], [imagegen.SUGGESTED, imagegen.LARGER])
+        self.assertIn("less than 18 GB", choices[0]["note"])
+        for choice in choices:
+            self.assertEqual(choice["command"], "~/.hikarilm/venv/bin/hf download " + choice["repo"])
+            variant = flux.variant_of(choice["repo"])
+            self.assertIsNotNone(variant, choice["repo"])
+            self.assertEqual(variant[0], "flux2-klein-" + choice["name"].split()[-1].lower())
 
 
 if __name__ == "__main__":

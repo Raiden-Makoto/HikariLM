@@ -75,8 +75,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/pictures":
             pictures, notes_ = imagegen.picture_models()
-            self._send_json({"models": [item["label"] for item in pictures], "notes": notes_,
-                             "ready": engine.pictures_ready(), "get": imagegen.GET_ONE})
+            self._send_json({"models": [item["label"] for item in pictures], "ids": [item["id"] for item in pictures],
+                             "notes": notes_,
+                             "ready": engine.pictures_ready(), "get": imagegen.GET_ONE,
+                             "choices": imagegen.CHOICES})
             return
         if self.path.startswith(IMAGES + "/") and self.path.endswith(".png"):
             try:

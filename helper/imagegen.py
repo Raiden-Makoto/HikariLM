@@ -50,7 +50,18 @@ def apple_silicon() -> bool:
 
 
 SUGGESTED = "mlx-community/FLUX.2-Klein-4B-4bit"
-GET_ONE = f"~/.hikarilm/venv/bin/hf download {SUGGESTED}"
+LARGER = "mlx-community/flux2-klein-9b-4bit"
+DOWNLOAD = "~/.hikarilm/venv/bin/hf download "
+GET_ONE = f"{DOWNLOAD}{SUGGESTED}  (or {LARGER}, the 9B, with 18 GB of RAM or more)"
+# What the setup page offers. Any FLUX.2 klein flux.py knows works; these are the two to start with.
+CHOICES = [
+    {"repo": SUGGESTED, "name": "FLUX.2 klein 4B", "download": "4.6 GB",
+     "note": "Recommended for Macs with less than 18 GB of RAM, and the quicker of the two."},
+    {"repo": LARGER, "name": "FLUX.2 klein 9B", "download": "9.5 GB",
+     "note": "More detail, for Macs with 18 GB of RAM or more. Each picture takes longer."},
+]
+for choice in CHOICES:
+    choice["command"] = DOWNLOAD + choice["repo"]
 
 
 def vision_models(names: list[str], show) -> list[str]:
@@ -73,13 +84,18 @@ def is_picture_model(model: str) -> bool:
 
 def picture_models() -> tuple[list[dict], list[str]]:
     """Every downloaded FLUX.2 model, for the picker, and a plain note for each one left out.
-    Two copies of the same model keep their repo names, so both can be told apart."""
+    With the 4B and the 9B both there, each says its size; two copies of the same model keep
+    their repo names, so both can be told apart."""
     found, notes = flux.scan()
-    items = [{"id": name, "label": model["label"]} for name, model in found.items()]
+    items = [{"id": name, "label": model["label"],
+              "sized": model["label"] + " " + model["variant"].rsplit("klein-", 1)[-1].replace("base-", "").upper()}
+             for name, model in found.items()]
     labels = [item["label"] for item in items]
+    sized = [item["sized"] for item in items]
     for item in items:
         if labels.count(item["label"]) > 1:
-            item["label"] = item["id"].split("/")[-1]
+            item["label"] = item["sized"] if sized.count(item["sized"]) == 1 else item["id"].split("/")[-1]
+        del item["sized"]
     return items, notes
 
 
