@@ -170,13 +170,28 @@
       <p>and give it a name you will know:</p>
       <div class="setup-command"><code>mv 0001400_adapter.safetensors zq-usagi.safetensors</code></div>
       <p>Draw with it to see it work, at full strength (the 1.0 after its name):</p>
-      <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-generate-flux2 --model mflux-community/flux-2-klein-base-4b-mflux-q4 --steps 50 --guidance 4 --seed 1 --prompt "zq_usagi, reading a book under a tree" --lora zq-usagi.safetensors 1.0 --output try.png</code></div>
-      <p>Too strong, or too weak? Try 0.7 or 1.2 in place of 1.0. Strength is chosen when you draw, so the file stays as it is.</p>
+      <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-generate-flux2 --model mflux-community/flux-2-klein-base-4b-mflux-q4 --steps 50 --guidance 4 --seed 1 --prompt "zq_usagi, riding a bicycle along a seaside road, her scarf blowing in the wind, golden hour, wide shot" --lora zq-usagi.safetensors 1.0 --output try.png</code></div>
+
+      <div class="setup-example">
+        <p><strong>Prompting with it.</strong> Write the prompt the way you wrote the captions: the trigger word first, then only what this picture should have.</p>
+        <table>
+          <tr><th>Prompt</th><th>What comes out</th></tr>
+          <tr><td><code>zq_usagi, riding a bicycle along a seaside road, her scarf blowing in the wind, golden hour, wide shot</code></td><td>Usagi, with her white fur, pink-tipped ears and red eyes, though the prompt says none of it, on a bicycle by the sea in evening light.</td></tr>
+          <tr><td><code>zq_usagi, reading a book in a library, sitting by the window, rainy day, close-up</code></td><td>The same Usagi, somewhere she never was in your pictures. That is the test that it learned her rather than your pictures.</td></tr>
+          <tr><td><code>zq_usagi, wearing a red raincoat instead of her scarf, jumping in puddles</code></td><td>Usagi in a raincoat, if the scarf was named in the captions (step 3). If it never was, it is part of her, and she may keep it on anyway.</td></tr>
+          <tr><td><code>a white rabbit girl riding a bicycle by the sea</code></td><td>A rabbit girl who may look a little like Usagi, but not reliably: a loaded LoRA leans on every picture somewhat, but it is the trigger word that calls her up.</td></tr>
+        </table>
+        <ul>
+          <li>Do not describe her look in the prompt; the trigger word already does, and spelling it out can pull her towards the model's own idea of those words.</li>
+          <li>The trigger word only works with the LoRA loaded (<code>--lora</code>). Without it, <code>zq_usagi</code> is a word the model has never seen and means nothing to it.</li>
+          <li>Too strong (stiff poses, the same face and framing every time, colours burnt) or too weak (she looks off)? Change the 1.0 after the file name: 0.7 for less, 1.2 for more. Strength is chosen when you draw, so the file stays as it is.</li>
+        </ul>
+      </div>
     </section>
 
     <section class="setup-step">
       <h2><span class="setup-number">8</span> Draw with it in HikariLM</h2>
-      <p>From HikariLM 4.5.1, add the <code>.safetensors</code> file in Settings and pick it when drawing with FLUX.2 klein base 4B. From 4.5.0, a LoRA you upload to Hugging Face can be added by its repo name. Until then, keep the file; nothing else is needed from the training folder. Keep <code>dataset/</code> too, in case you want to train it again.</p>
+      <p>From HikariLM 4.5.1, add the <code>.safetensors</code> file in Settings, with its trigger word, and pick it when drawing with FLUX.2 klein base 4B. HikariLM puts the trigger word in front of your prompt, so <code>riding a bicycle along a seaside road</code> is enough. From 4.5.0, a LoRA you upload to Hugging Face can be added by its repo name. Until then, keep the file; nothing else is needed from the training folder. Keep <code>dataset/</code> too, in case you want to train it again.</p>
     </section>
   </main>
 </body>
