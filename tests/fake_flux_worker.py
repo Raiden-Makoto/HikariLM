@@ -22,7 +22,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--variant", required=True)
+    parser.add_argument("--lora")
+    parser.add_argument("--lora-strength", type=float, default=1.0)
     args = parser.parse_args()
+    lora = f" lora={args.lora.rsplit('/', 1)[-1]}@{args.lora_strength:g}" if args.lora else ""
     print("loading", args.variant, file=sys.stderr)
     say({"ready": True})
     edits = False
@@ -43,7 +46,7 @@ def main():
         edits = bool(references)
         seen = b"".join(open(path, "rb").read()[:4] for path in references)
         with open(command["out"], "wb") as handle:
-            handle.write(PNG + f" refs={len(references)} ".encode() + seen
+            handle.write(PNG + f" prompt={command['prompt']}|{lora} refs={len(references)} ".encode() + seen
                          + f" {args.variant} {command['steps']} {command['guidance']}".encode())
         say({"done": True})
 

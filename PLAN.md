@@ -310,21 +310,32 @@ guidance. The distilled 4B comes after a check on the Mac.
 
 ### v4.5.0: LoRAs from Hugging Face, on the base 4B
 
-- [ ] A LoRAs part in Settings: paste a repo (`user/name`). HikariLM looks it up on the Hugging Face
-  API and says its download size, the model it was made for (`base_model` on the card) and
-  its trigger word (`instance_prompt` on the card, when there is one), then shows the `hf download`
-  command with Copy, like the picture models. It is listed once it is in the Hugging Face cache.
-- [ ] Refuse, with the reason, what cannot work on the base 4B: a LoRA made for the 9B, FLUX.1 or
-  another model (from the card, and from the layer names and sizes in the file's header once it
-  is downloaded), DoRA files, and repos with no `.safetensors`.
-- [ ] **Drawing**: when the picture model is a base 4B, a LoRA picker and a strength (1.0 to start)
-  in Options. With any other picture model it is hidden, with a line saying LoRAs need the base
-  4B for now. One LoRA at a time. Picking another loads the picture model again, and the page says
-  so. The trigger word is added to the prompt; the user can change or clear it in Settings.
-- [ ] Saved pictures keep the LoRA and its strength: Vary and changing a picture use the same,
-  and the caption under a picture names it. A LoRA that is gone by then: say so and draw without.
-- [ ] Fake worker and tests: the LoRA reaches the worker, the picker shows only for the base 4B,
-  wrong LoRAs are refused. `tests/check_flux.py` on the Mac draws with a small public LoRA.
+- [x] A LoRAs part in Settings: paste a repo (`user/name`, `user/name:file.safetensors` or its
+  huggingface.co address) and Look up. HikariLM asks the Hugging Face API (with curl, which every
+  Mac has) and says its download size, the file it picked (the LoRA, not the step checkpoints
+  beside it; a select when there are several), what it was made for (`base_model` on the card)
+  and its trigger word (`instance_prompt` on the card, or the trainer's folder name in the file),
+  with Add. Added ones are kept in `~/.hikarilm/loras.json`, each with the `hf download` command
+  and Copy until it is in the Hugging Face cache, then "ready".
+- [x] Refuse, with the reason, what cannot work on the base 4B: a LoRA made for the 9B, FLUX.1 or
+  another model (from the card, and from the layer names and widths in the file's header, read
+  with a range request before it is downloaded and again from the file after), DoRA files, and
+  repos with no `.safetensors`. One made for the quick 4B is added with a note.
+- [x] **Drawing**: when the picture model is a base 4B, a LoRA picker and a strength (1.0 to start,
+  up to 2) in Options, and the Options button says *Options · LoRA*. With any other picture model
+  it is hidden, with a line saying LoRAs draw on the base 4B. One LoRA at a time. Picking another
+  loads the picture model again (the worker is started with `--lora`), and the loading line names
+  it. The trigger word is put in front of the prompt unless it is in it already; the user can
+  change or clear it in Settings.
+- [x] Saved pictures keep the LoRA and its strength: Vary and changing a picture use the same,
+  and the caption under a picture names it. A LoRA that is gone by then: say so and draw without,
+  taking its trigger word off the front of the prompt.
+- [x] Fake worker and tests (`tests/test_lora.py`): the LoRA reaches the worker, the trigger word
+  goes in front, wrong LoRAs are refused, another LoRA restarts the worker, the routes.
+  Checked in the browser: the picker shows only for the base 4B, a real look-up, Add, Vary
+  without the LoRA.
+- [ ] `tests/check_flux.py` on the Mac draws with each ready LoRA on the base 4B, beside the
+  same seed without it, and from a reference picture with it.
 - [ ] README, `__version__ = "4.5.0"`, tag `v4.5.0`.
 
 ### v4.5.1: your own LoRA files, on the base 4B

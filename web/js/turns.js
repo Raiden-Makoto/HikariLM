@@ -125,6 +125,7 @@ export function pictureFigure(message) {
   const caption = document.createElement("figcaption");
   const references = (record.references || []).length;
   caption.textContent = [record.width && record.width + " × " + record.height, "seed " + record.seed, pictureLabel(record.model),
+    record.lora && "LoRA " + record.lora.label + (record.lora.strength !== 1 ? " at " + record.lora.strength : ""),
     record.changed && "a change to the picture before",
     references && "drawn from " + references + (references === 1 ? " reference picture" : " reference pictures")]
     .filter(Boolean).join(" · ");

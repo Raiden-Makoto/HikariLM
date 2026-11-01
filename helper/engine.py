@@ -274,7 +274,7 @@ class _Worker:
         interpreter = interpreter or python()
         if not interpreter.exists():
             raise ModelError(SETUP if interpreter == python() else PICTURE_SETUP)
-        self.model = model
+        self.model, self.flags = model, flags
         self.size = _size(folder) if size is None else size
         self.log_name = log_name
         store.home().mkdir(parents=True, exist_ok=True)
@@ -336,19 +336,26 @@ def _died(model: str, log_name: str = "mlx-worker.log") -> str:
             f"{store.home() / log_name}.")
 
 
-def _ready(model: str, picture: dict | None = None) -> _Worker:
+def _ready(model: str, picture: dict | None = None, lora: dict | None = None) -> _Worker:
     """The worker with this model loaded, starting it (and ending any other) if needed.
-    A picture model, found by flux.py, runs in the picture venv."""
+    A picture model, found by flux.py, runs in the picture venv. A LoRA is baked into the
+    model as it loads, so another LoRA, or another strength, loads it again."""
     global _worker
-    if _worker is not None and _worker.model == model and _worker.alive():
+    if picture is not None:
+        flags = ["--variant", picture["variant"]]
+        if lora:
+            flags += ["--lora", lora["path"], "--lora-strength", str(lora["strength"])]
+    else:
+        folder = _folder(model)
+        flags = ["--vision"] if "vision_config" in (_config(folder) or {}) else []
+    if _worker is not None and _worker.model == model and _worker.flags == flags and _worker.alive():
         return _worker
     _end()
     if picture is not None:
-        started = _Worker(model, picture["folder"], ["--variant", picture["variant"]], "picture-worker.log",
+        started = _Worker(model, picture["folder"], flags, "picture-worker.log",
                           picture_python(), picture_worker(), picture["size"])
     else:
-        folder = _folder(model)
-        started = _Worker(model, folder, ["--vision"] if "vision_config" in (_config(folder) or {}) else [])
+        started = _Worker(model, folder, flags)
     event = started.next(LOAD_SECONDS)
     if not event or not event.get("ready"):
         started.end()
@@ -471,7 +478,7 @@ def make_picture(picture: dict, request: dict, on_progress, stopped) -> bytes | 
     out = None
     references: list[str] = []
     try:
-        process = _ready(picture["id"], picture)
+        process = _ready(picture["id"], picture, request.get("lora"))
         on_progress(0, 0)
         fd, out = tempfile.mkstemp(dir=store.home(), prefix=".drawing.", suffix=".png")
         os.close(fd)

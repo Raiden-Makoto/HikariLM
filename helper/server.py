@@ -14,8 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, names,
-                    notes, rewrite, store, thinking, update, workspace)
+from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, lora,
+                    names, notes, rewrite, store, thinking, update, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -33,6 +33,7 @@ WORKSPACE = "/api/workspace"
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 SETUP_PICTURES = "/setup/pictures"
 SETUP_LORA = "/setup/lora"
+LORAS = "/api/loras"
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
           "/vendor/katex.min.js")
 # The page's own scripts and styles: web/js/*.js and web/css/*.css, plain names only.
@@ -97,6 +98,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/settings":
             self._send_json(context.load_settings())
+            return
+        if self.path == LORAS:
+            self._send_json({"loras": lora.listing(), "for": lora.VARIANT})
             return
         if self.path.startswith("/api/context?"):
             model = parse_qs(urlparse(self.path).query).get("model", [""])[0]
@@ -292,6 +296,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/update":
             self._update()
+            return
+        if self.path in (LORAS, LORAS + "/trigger", LORAS + "/remove"):
+            self._loras()
             return
         if self.path not in ("/api/chat", "/api/describe", "/api/rewrite"):
             self._send_json({"error": "not found"}, status=404)
@@ -720,6 +727,11 @@ class Handler(BaseHTTPRequestHandler):
                 message = f"{names.label(model)} is not downloaded. Get FLUX.2 klein with:  {imagegen.GET_ONE}"
             self._send_json({"error": message}, status=400)
             return
+        try:
+            imagegen.attach_lora(request, picture)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
         busy = work.start_picture()
         if busy:
             self._send_json({"error": busy, "busy": True}, status=409)
@@ -727,7 +739,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self._stream_start()
             self._stream_line({"hikarilm": "loading", "model": model, "unloading": router.large
-                               if router.large and router.large != model else None})
+                               if router.large and router.large != model else None,
+                               "lora": (request.get("lora") or {}).get("label")})
             with KEEPER.using(model):
                 self._draw(request, picture)
         finally:
@@ -750,6 +763,24 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"error": str(error)})
         except OSError as error:
             self._stream_line({"error": f"The picture could not be saved: {error.strerror or error}"})
+
+    def _loras(self) -> None:
+        """Look up a LoRA by its Hugging Face repo (and add it, with "add"), change its trigger
+        word, or take it off the list. A LoRA that cannot be drawn is answered with why, and
+        never added."""
+        try:
+            body = self._body(10_000)
+            if self.path.endswith("/trigger"):
+                self._send_json({"lora": lora.set_trigger(str(body.get("id") or ""), body.get("trigger"))})
+            elif self.path.endswith("/remove"):
+                self._send_json({"removed": lora.remove(str(body.get("id") or ""))})
+            else:
+                found = lora.look_up(str(body.get("repo") or ""))
+                if body.get("add") is True and not found.get("error"):
+                    lora.add(found)
+                self._send_json({"found": found, "loras": lora.listing()})
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
 
     def _loaded(self) -> dict:
         """What is really in memory, asked of the MLX worker rather than remembered, since

@@ -7,7 +7,8 @@ again with that venv's Python. First, every FLUX.2 model flux.py knows must be o
 and the same number of steps. That covers all of them without downloading any. Then
 each FLUX.2 model in the Hugging Face cache draws one small picture through the real
 worker, then a second one from the first as its reference, both saved in /tmp, so you
-can look at them: the fox in the meadow should be the fox from the snow.
+can look at them: the fox in the meadow should be the fox from the snow. Last, each
+LoRA added in Settings and downloaded draws on FLUX.2 klein base 4B, with and without it.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from helper import engine, flux, imagegen  # noqa: E402
+from helper import engine, flux, imagegen, lora  # noqa: E402
 
 
 def check_table() -> bool:
@@ -80,6 +81,44 @@ def check_drawing() -> bool:
     return good
 
 
+def check_loras() -> bool:
+    """Each downloaded LoRA in Settings draws on the base 4B, beside the same seed without it,
+    and from a reference picture with it, so Flux2KleinEdit loads it too."""
+    bases = [(name, picture) for name, picture in flux.scan()[0].items() if picture["variant"] == lora.VARIANT]
+    ready = [item for item in lora.listing() if item["ready"]]
+    if not bases or not ready:
+        print("      No LoRA was drawn: that needs FLUX.2 klein base 4B and a LoRA added in Settings and downloaded.")
+        return True
+    name, picture = bases[0]
+    good = True
+    try:
+        for item in ready:
+            image = b""
+            for kind, extra in (("", {"lora": item["id"]}), ("-without", {}), ("-from-reference", {"lora": item["id"]})):
+                payload = {"model": name, "prompt": "a red fox in fresh snow", "size": "small", "seed": 42, **extra}
+                if kind == "-from-reference":
+                    payload["references"] = [base64.b64encode(image).decode()]
+                request = imagegen.clean_request(payload)
+                imagegen.attach_lora(request, picture)
+                started = time.monotonic()
+                try:
+                    drawn = engine.make_picture(picture, request, lambda step, total: None, lambda: False)
+                except engine.ModelError as error:
+                    print(f"FAIL  {item['label']}{kind}: {error}")
+                    good = False
+                    break
+                image = image or drawn
+                out = Path("/tmp") / ("lora-" + item["label"] + kind + ".png")
+                out.write_bytes(drawn)
+                ok = drawn.startswith(imagegen.PNG)
+                good = good and ok
+                print(f"{'ok  ' if ok else 'FAIL'}  {item['label']}{kind} ({request['prompt']}): drew in "
+                      f"{time.monotonic() - started:.0f} s, saved {out}")
+    finally:
+        engine.unload()
+    return good
+
+
 def in_picture_venv() -> None:
     """Carry on with the picture venv's Python, making the venv first if it is not there."""
     try:
@@ -100,5 +139,6 @@ if __name__ == "__main__":
     in_picture_venv()
     table = check_table()
     drawing = check_drawing()
-    print("OK" if table and drawing else "FAILED")
-    sys.exit(0 if table and drawing else 1)
+    loras = check_loras()
+    print("OK" if table and drawing and loras else "FAILED")
+    sys.exit(0 if table and drawing and loras else 1)

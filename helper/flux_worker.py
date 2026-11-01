@@ -3,7 +3,9 @@
 Run by helper/engine.py with the Python in ~/.hikarilm/pictures-venv; the helper never
 imports it. One model per process, named the way mflux names it:
 
-    python flux_worker.py --model FOLDER --variant flux2-klein-4b
+    python flux_worker.py --model FOLDER --variant flux2-klein-4b [--lora FILE --lora-strength 1.0]
+
+A LoRA is baked into the weights as the model loads, so it holds for every picture.
 
 The first line written is {"ready": true}, or {"error": ...} if the model did not load.
 Then one command per line on stdin, {"op": "picture", "prompt", "width", "height",
@@ -42,12 +44,13 @@ class Progress:
 class Drawer:
     """The loaded model: Flux2Klein for a prompt alone, Flux2KleinEdit with references."""
 
-    def __init__(self, folder: str, variant: str) -> None:
+    def __init__(self, folder: str, variant: str, lora: str | None = None, strength: float = 1.0) -> None:
         from mflux.models.common.config.model_config import AVAILABLE_MODELS
 
         if not variant.startswith("flux2-") or variant not in AVAILABLE_MODELS:
             raise ValueError(f"This mflux does not know {variant}. Update it: ~/.hikarilm/pictures-venv/bin/pip install -U mflux")
         self.folder, self.config = folder, AVAILABLE_MODELS[variant]
+        self.lora = {"lora_paths": [lora], "lora_scales": [strength]} if lora else {}
         self.model, self.edits = None, False
         self.load(edits=False)
 
@@ -61,7 +64,7 @@ class Drawer:
         gc.collect()
         mx.clear_cache()
         kind = Flux2KleinEdit if edits else Flux2Klein
-        self.model = kind(model_config=self.config, model_path=self.folder)
+        self.model = kind(model_config=self.config, model_path=self.folder, **self.lora)
         self.model.callbacks.register(Progress())
         self.edits = edits
 
@@ -82,12 +85,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--variant", required=True)
+    parser.add_argument("--lora")
+    parser.add_argument("--lora-strength", type=float, default=1.0)
     args = parser.parse_args()
     try:
-        drawer = Drawer(args.model, args.variant)
+        drawer = Drawer(args.model, args.variant, args.lora, args.lora_strength)
     except Exception as error:
         traceback.print_exc()
-        say({"error": f"The picture model could not load: {type(error).__name__}: {error}"})
+        what = "The picture model could not load" + (" with the LoRA" if args.lora else "")
+        say({"error": f"{what}: {type(error).__name__}: {error}"})
         return
     say({"ready": True})
     for line in sys.stdin:

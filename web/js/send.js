@@ -14,6 +14,7 @@ import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./cha
 import { announce, askNotifyPermission } from "./page.js";
 import { notesOn } from "./settings.js";
 import { editorPrompt } from "./edit-blocks.js";
+import { findLora, loraRequest } from "./loras.js";
 
 // Ask the helper to have a vision model write one picture down as text. It
 // answers from the saved description when it has one, so the vision model
@@ -338,7 +339,8 @@ async function send() {
 // Ask the helper for one picture. It first moves the chat model (or the
 // last picture model) out of memory; show() is told each step.
 async function makePicture(payload, signal, show) {
-  const label = pictureLabel(payload.model);
+  const lora = payload.lora ? findLora(payload.lora) : null;
+  const label = pictureLabel(payload.model) + (lora ? " with the LoRA " + lora.label : "");
   show("Loading " + label + "…");
   const response = await fetch("/api/generate", {
     method: "POST",
@@ -375,7 +377,12 @@ function pictureRequest(prompt, model, request, reference, pictures) {
   const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
   return { model, prompt, request: request || undefined, reference: reference || undefined,
     references: pictures.length ? pictures : undefined, size: pictureSize.value || "square",
-    seed: number(pictureSeed), steps: number(pictureSteps) };
+    seed: number(pictureSeed), steps: number(pictureSteps), ...loraRequest() };
+}
+
+// A picture drawn with a LoRA is varied or changed with it again, if it is still ready.
+function sameLora(picture) {
+  return picture.lora && findLora(picture.lora.id) ? { lora: picture.lora.id, lora_strength: picture.lora.strength } : {};
 }
 
 function fitBox() {
@@ -555,6 +562,11 @@ async function drawPicture(prompt, model, request) {
       files.filter((file) => file.image).map((file) => file.image));
     // A change keeps the picture's size, so the model is not stretching it.
     if (target) Object.assign(asking, { change: target.id, size: target.size });
+    if (target?.lora) {
+      delete asking.lora;
+      delete asking.lora_strength;
+      Object.assign(asking, sameLora(target));
+    }
     record = await makePicture(asking, state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") failure = plainError(error.message);
@@ -614,6 +626,13 @@ export async function varyPicture(message, figure) {
       "Attach them again and send to draw a new one.");
     return;
   }
+  const lora = sameLora(old);
+  let prompt = old.prompt;
+  if (old.lora && !lora.lora) {
+    notify("The LoRA " + old.lora.label + " is not ready any more, so this one is drawn without it.");
+    const front = old.lora.trigger ? old.lora.trigger + ", " : "";
+    if (front && prompt.toLowerCase().startsWith(front.toLowerCase())) prompt = prompt.slice(front.length);
+  }
   const line = document.createElement("div");
   line.className = "thinking";
   figure.before(line);
@@ -626,8 +645,8 @@ export async function varyPicture(message, figure) {
   state.lastContext = null;
   let record = null;
   try {
-    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, reference: old.reference,
-      references: old.references?.length ? pictures : undefined, change: old.changed, size: old.size, steps: old.steps, seed: null },
+    record = await makePicture({ model: old.model, prompt, request: old.request, reference: old.reference,
+      references: old.references?.length ? pictures : undefined, change: old.changed, size: old.size, steps: old.steps, seed: null, ...lora },
       state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") notify("No new picture: " + plainError(error.message));

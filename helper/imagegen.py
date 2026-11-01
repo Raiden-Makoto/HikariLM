@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from helper import flux, store
+from helper import flux, lora, store
 
 SIZES = {
     "square": (1024, 1024),
@@ -87,7 +87,7 @@ def picture_models() -> tuple[list[dict], list[str]]:
     With the 4B and the 9B both there, each says its size; two copies of the same model keep
     their repo names, so both can be told apart."""
     found, notes = flux.scan()
-    items = [{"id": name, "label": model["label"],
+    items = [{"id": name, "label": model["label"], "variant": model["variant"],
               "sized": model["label"] + " " + model["variant"].rsplit("klein-", 1)[-1].replace("base-", "").upper()}
              for name, model in found.items()]
     labels = [item["label"] for item in items]
@@ -158,6 +158,14 @@ def clean_request(payload: dict) -> dict:
     width, height = SIZES[size]
     cleaned = {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
                "seed": seed, "steps": steps}
+    chosen = payload.get("lora")
+    if chosen not in (None, ""):
+        if not isinstance(chosen, str) or len(chosen) > 300:
+            raise ValueError("lora must be a LoRA from the list in Settings")
+        strength = payload.get("lora_strength", 1.0)
+        if isinstance(strength, bool) or not isinstance(strength, (int, float)) or not 0 < strength <= lora.MAX_STRENGTH:
+            raise ValueError(f"The LoRA's strength must be above 0 and at most {lora.MAX_STRENGTH:g}.")
+        cleaned["lora"] = {"id": chosen, "strength": round(float(strength), 2)}
     if request and request != cleaned["prompt"]:
         cleaned["request"] = request
     if reference:
@@ -167,6 +175,22 @@ def clean_request(payload: dict) -> dict:
     if changed is not None:
         cleaned["changed"] = changed
     return cleaned
+
+
+def attach_lora(request: dict, picture: dict) -> None:
+    """Find the LoRA a request asks for, and put its trigger word in front of the prompt."""
+    asked = request.get("lora")
+    if not asked:
+        return
+    if picture["variant"] != lora.VARIANT:
+        raise ValueError(f"LoRAs draw on FLUX.2 klein base 4B for now, not {picture['label']}. Pick the base 4B, "
+                         "or no LoRA.")
+    found = lora.find(asked["id"])
+    if found is None:
+        name = asked["id"].split(":")[0]
+        raise ValueError(f"The LoRA {name} is not downloaded, or not in the list in Settings any more.")
+    request["prompt"] = lora.with_trigger(request["prompt"], found["trigger"])
+    request["lora"] = {**asked, "label": found["label"], "trigger": found["trigger"], "path": found["path"]}
 
 
 # Picture files a FLUX.2 model can draw from: PNG, JPEG, WebP and GIF.
@@ -241,6 +265,9 @@ def save(data: bytes, request: dict) -> dict:
         record["references"] = [hashlib.sha256(data).hexdigest()[:32] for data in drawn_from]
     if request.get("changed"):
         record["changed"] = request["changed"]
+    if request.get("lora"):
+        record["lora"] = {key: request["lora"][key] for key in ("id", "label", "strength", "trigger")
+                          if key in request["lora"]}
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record

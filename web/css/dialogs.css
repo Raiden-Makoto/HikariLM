@@ -100,3 +100,27 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .field-row input[type="text"] { flex: 1; min-width: 0; max-width: 16rem; }
 .setting textarea { box-sizing: border-box; width: 100%; min-height: 6rem; margin-top: 0.5rem; resize: vertical; font-size: 0.82rem; }
 .setting details summary { cursor: pointer; margin-top: 0.75rem; font-size: 0.9rem; }
+
+.link-button { padding: 0; border: none; background: none; color: var(--you); font: inherit; cursor: pointer; text-decoration: underline; }
+.lora-add { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.lora-add input, .lora-item input {
+  flex: 1; min-width: 0; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field); color: inherit; font: inherit; font-size: 0.9rem;
+}
+.lora-add .choice { flex: none; padding: 0.4rem 0.8rem; }
+.lora-found:empty { display: none; }
+.lora-found, .lora-item { margin-top: 0.6rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; font-size: 0.85rem; }
+.lora-found select { max-width: 100%; margin-top: 0.3rem; }
+.lora-list { margin: 0; padding: 0; list-style: none; }
+.lora-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+.lora-head strong { overflow-wrap: anywhere; }
+.lora-head span, .lora-file { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.lora-item.ready { border-color: var(--you); }
+.lora-item p, .lora-found p { margin: 0.35rem 0 0; }
+.lora-bad { color: var(--danger); }
+.lora-command { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.35rem; }
+.lora-command code { flex: 1; min-width: 0; padding: 0.3rem 0.45rem; border: 1px solid var(--line); border-radius: 6px; background: var(--field); font-size: 0.75rem; overflow-wrap: anywhere; }
+.lora-command button, .lora-actions button { flex: none; padding: 0.3rem 0.7rem; }
+.lora-trigger { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
+.lora-trigger span { flex: none; color: var(--muted); }
+.lora-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.45rem; }

@@ -2,6 +2,7 @@
 import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, status } from "./core.js";
 import { attachButton } from "./attachments.js";
+import { updateLoraPicker } from "./loras.js";
 
 // Short names for people: "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit" is
 // "DeepSeek R1". Earlier entries win, so a distill is named for its teacher.
@@ -102,6 +103,7 @@ export function updatePictureMode() {
   attachButton.title = on ? "Attach a reference picture" : "Attach text or code files";
   document.querySelector("#picture-warning").hidden = !on;
   messageBox.placeholder = on ? "Describe the picture" : "Message";
+  updateLoraPicker(on ? allPictures.find((item) => item.id === modelSelect.value)?.variant : "");
   updateChangeNote();
 }
 
