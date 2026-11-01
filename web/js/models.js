@@ -13,6 +13,7 @@ const FAMILIES = [
   [/llama[-_ ]?3\.3/i, "Llama 3.3"], [/llama[-_ ]?3\.2/i, "Llama 3.2"], [/llama[-_ ]?3\.1/i, "Llama 3.1"],
   [/gpt-oss/i, "gpt-oss"], [/devstral/i, "Devstral"], [/mistral/i, "Mistral"], [/phi[-_ ]?4/i, "Phi-4"],
   [/falcon[-_ ]?3/i, "Falcon3"], [/nomic-embed/i, "nomic-embed-text"],
+  [/flux\.?[-_ ]?2[-_ ]?klein[-_ ]?base/i, "FLUX.2 klein base"], [/flux\.?[-_ ]?2[-_ ]?klein/i, "FLUX.2 klein"],
 ];
 const NOISE = /^(\d+(\.\d+)?[bm]|\d+bit|\d{4}|instruct|it|chat|mlx|gguf|latest|q\d\w*|fp16|bf16)$/i;
 export function modelLabel(name) {

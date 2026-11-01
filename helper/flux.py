@@ -19,14 +19,15 @@ import time
 from pathlib import Path
 
 from helper import store
+from helper.names import label
 
-# mflux's name: (label, double-stream blocks, single-stream blocks, distilled)
+# mflux's name: (double-stream blocks, single-stream blocks, distilled)
 VARIANTS = {
-    "flux2-klein-4b": ("FLUX.2 klein 4B", 5, 20, True),
-    "flux2-klein-9b": ("FLUX.2 klein 9B", 8, 24, True),
-    "flux2-klein-9b-kv": ("FLUX.2 klein 9B KV", 8, 24, True),
-    "flux2-klein-base-4b": ("FLUX.2 klein base 4B", 5, 20, False),
-    "flux2-klein-base-9b": ("FLUX.2 klein base 9B", 8, 24, False),
+    "flux2-klein-4b": (5, 20, True),
+    "flux2-klein-9b": (8, 24, True),
+    "flux2-klein-9b-kv": (8, 24, True),
+    "flux2-klein-base-4b": (5, 20, False),
+    "flux2-klein-base-9b": (8, 24, False),
 }
 # Distilled models draw in 4 steps without guidance; the base models take 50 with it.
 STEPS = {True: 4, False: 50}
@@ -90,31 +91,30 @@ def identify(name: str, folder: Path) -> tuple[dict | None, str]:
     plain = _plain(name)
     if "flux2" not in plain and "flux-2" not in plain:
         return None, ""
+    short = label(name)
     named = variant_of(name)
     maker = name.split("/")[0] if "/" in name else ""
     if named is None or (maker and maker not in MAKERS):
-        return None, (f"{name} is left out: HikariLM runs only the FLUX.2 klein models themselves, from "
+        return None, (f"A {short} copy is left out: HikariLM runs only the FLUX.2 klein models themselves, from "
                       "Black Forest Labs or mlx-community, not fine-tunes or LoRA adapters.")
-    key, bits = named
+    key = named[0]
     missing = [part for part in PARTS if not any((folder / part).glob("*.safetensors"))]
     if missing or not (folder / "tokenizer").is_dir():
-        return None, f"{name} is left out: it is not a whole FLUX.2 model (no {', '.join(missing) or 'tokenizer'} folder)."
-    label, double, single, distilled = VARIANTS[key]
+        return None, f"A {short} download is left out: it is not a whole model (no {', '.join(missing) or 'tokenizer'} folder)."
+    double, single, distilled = VARIANTS[key]
     try:
-        names, metadata = _weight_names(folder / "transformer")
+        names, _ = _weight_names(folder / "transformer")
     except (OSError, ValueError, struct.error):
-        return None, f"{name} is left out: its transformer weights could not be read."
+        return None, f"A {short} download is left out: its weights could not be read."
     if blocks(names) != (double, single):
-        return None, f"{name} is left out: its name says {label}, but its weights are a different model."
+        return None, f"A {short} download is left out: its weights are not the model its name says."
     try:
         index = json.loads((folder / "model_index.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         index = {}
     if isinstance(index, dict) and isinstance(index.get("is_distilled"), bool) and index["is_distilled"] != distilled:
-        return None, f"{name} is left out: its name says {label}, but its model_index.json says otherwise."
-    level = str(metadata.get("quantization_level") or "")
-    bits = int(level) if level.isdigit() else bits
-    return {"id": name, "label": label + (f", {bits}-bit" if bits else ""), "variant": key, "folder": folder,
+        return None, f"A {short} download is left out: its model_index.json is for another model than its name says."
+    return {"id": name, "label": short, "variant": key, "folder": folder,
             "steps": STEPS[distilled], "guidance": GUIDANCE[distilled], "size": _size(folder)}, ""
 
 

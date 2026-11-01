@@ -587,7 +587,7 @@ class Handler(BaseHTTPRequestHandler):
             if model in engine.names():
                 message = f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model."
             else:
-                message = f"{model} is not a downloaded FLUX.2 model. Get one with:  {imagegen.GET_ONE}"
+                message = f"{names.label(model)} is not downloaded. Get FLUX.2 klein with:  {imagegen.GET_ONE}"
             self._send_json({"error": message}, status=400)
             return
         busy = work.start_picture()

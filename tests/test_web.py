@@ -247,7 +247,10 @@ class ModelNamesTest(unittest.TestCase):
                             ("mlx-community/Qwen2.5-Coder-7B-Instruct-4bit", "Qwen2.5 Coder"),
                             ("mlx-community/gemma-3-12b-it-4bit", "Gemma 3"),
                             ("qwen2.5-coder:7b", "Qwen2.5 Coder"), ("gemma3:12b", "Gemma 3"),
-                            ("falcon3-10b-mlx", "Falcon3"), ("kimi-k2:latest", "kimi k2")):
+                            ("falcon3-10b-mlx", "Falcon3"), ("kimi-k2:latest", "kimi k2"),
+                            ("mlx-community/FLUX.2-Klein-4B-4bit", "FLUX.2 klein"),
+                            ("mlx-community/flux2-klein-9b-8bit", "FLUX.2 klein"),
+                            ("black-forest-labs/FLUX.2-klein-base-9B", "FLUX.2 klein base")):
             with self.subTest(name=name):
                 self.assertEqual(names.label(name), short)
 

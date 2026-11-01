@@ -114,7 +114,7 @@ class FindTest(FluxCase):
         found, notes = flux.scan()
         model = found[KLEIN]
         self.assertEqual((model["variant"], model["label"], model["steps"], model["guidance"]),
-                         ("flux2-klein-4b", "FLUX.2 klein 4B, 4-bit", 4, 1.0))
+                         ("flux2-klein-4b", "FLUX.2 klein", 4, 1.0))
         self.assertEqual(notes, [])
 
     def test_black_forest_labs_own_files_are_listed(self):
@@ -122,7 +122,7 @@ class FindTest(FluxCase):
                       index={"_class_name": "Flux2KleinPipeline", "is_distilled": False})
         model = flux.find("black-forest-labs/FLUX.2-klein-base-9B")
         self.assertEqual((model["variant"], model["label"], model["steps"], model["guidance"]),
-                         ("flux2-klein-base-9b", "FLUX.2 klein base 9B", 50, 4.0))
+                         ("flux2-klein-base-9b", "FLUX.2 klein base", 50, 4.0))
 
     def test_fine_tunes_and_other_makers_are_left_out_with_a_note(self):
         self.download("someone/FLUX.2-klein-4B-4bit")
@@ -140,13 +140,14 @@ class FindTest(FluxCase):
         (folder / "snapshots" / "abc" / "adapter.safetensors").write_bytes(safetensors_header(["lora_A"]))
         found, notes = flux.scan()
         self.assertEqual(found, {})
-        self.assertIn("not a whole FLUX.2 model", notes[0])
+        self.assertIn("not a whole model", notes[0])
+        self.assertNotIn("mlx-community", notes[0])
 
     def test_weights_that_do_not_match_the_name_are_left_out(self):
         self.download("mlx-community/flux2-klein-9b-4bit", double=5, single=20)
         found, notes = flux.scan()
         self.assertEqual(found, {})
-        self.assertIn("its weights are a different model", notes[0])
+        self.assertIn("its weights are not the model its name says", notes[0])
 
     def test_model_index_must_agree_on_distilled(self):
         self.download("black-forest-labs/FLUX.2-klein-4B", diffusers=True, index={"is_distilled": False})
@@ -259,7 +260,7 @@ class GenerateTest(FluxCase):
         self.download("someone/flux2-klein-4b-4bit")
         with urllib.request.urlopen(self.base + "/api/pictures", timeout=10) as response:
             body = json.loads(response.read())
-        self.assertEqual(body["models"], ["FLUX.2 klein 4B, 4-bit"])
+        self.assertEqual(body["models"], ["FLUX.2 klein"])
         self.assertTrue(body["ready"])
         self.assertEqual(len(body["notes"]), 1)
 

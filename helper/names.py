@@ -17,6 +17,7 @@ FAMILIES = [
     (r"llama[-_ ]?3\.3", "Llama 3.3"), (r"llama[-_ ]?3\.2", "Llama 3.2"), (r"llama[-_ ]?3\.1", "Llama 3.1"),
     (r"gpt-oss", "gpt-oss"), (r"devstral", "Devstral"), (r"mistral", "Mistral"), (r"phi[-_ ]?4", "Phi-4"),
     (r"falcon[-_ ]?3", "Falcon3"), (r"nomic-embed", "nomic-embed-text"),
+    (r"flux\.?[-_ ]?2[-_ ]?klein[-_ ]?base", "FLUX.2 klein base"), (r"flux\.?[-_ ]?2[-_ ]?klein", "FLUX.2 klein"),
 ]
 NOISE = r"^(\d+(\.\d+)?[bm]|\d+bit|\d{4}|instruct|it|chat|mlx|gguf|latest|q\d\w*|fp16|bf16)$"
 

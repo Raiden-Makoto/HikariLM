@@ -30,7 +30,7 @@ def check_table() -> bool:
     if set(flux.VARIANTS) != theirs:
         print(f"FAIL  mflux's FLUX.2 models are {sorted(theirs)}, HikariLM's are {sorted(flux.VARIANTS)}")
         good = False
-    for key, (label, double, single, distilled) in flux.VARIANTS.items():
+    for key, (double, single, distilled) in flux.VARIANTS.items():
         config = AVAILABLE_MODELS.get(key)
         if config is None:
             continue
@@ -38,7 +38,7 @@ def check_table() -> bool:
         steps = MODEL_INFERENCE_STEPS.get(key)
         ok = shape == (double, single) and steps == flux.STEPS[distilled]
         good = good and ok
-        print(f"{'ok  ' if ok else 'FAIL'}  {label}: blocks {shape}, {steps} steps")
+        print(f"{'ok  ' if ok else 'FAIL'}  {key}: blocks {shape}, {steps} steps")
     return good
 
 
