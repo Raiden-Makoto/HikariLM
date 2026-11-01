@@ -1,8 +1,9 @@
 """On the Mac: check HikariLM's FLUX.2 table against mflux's, then draw with what is downloaded.
 
-    ~/.hikarilm/pictures-venv/bin/python tests/check_flux.py
+    python3 tests/check_flux.py
 
-First, every FLUX.2 model flux.py knows must be one mflux knows, with the same blocks
+It makes ~/.hikarilm/pictures-venv with mflux first if there is none, and runs itself
+again with that venv's Python. First, every FLUX.2 model flux.py knows must be one mflux knows, with the same blocks
 and the same number of steps. That covers all of them without downloading any. Then
 each FLUX.2 model in the Hugging Face cache draws one small picture through the real
 worker, saved in /tmp, so you can look at it.
@@ -10,6 +11,7 @@ worker, saved in /tmp, so you can look at it.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -68,7 +70,24 @@ def check_drawing() -> bool:
     return good
 
 
+def in_picture_venv() -> None:
+    """Carry on with the picture venv's Python, making the venv first if it is not there."""
+    try:
+        import mflux  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if os.environ.get("HIKARILM_CHECK_RESTARTED"):
+        sys.exit(f"mflux is still missing in {engine.picture_python()}.")
+    if not engine.prepare_pictures(print):
+        sys.exit(1)
+    os.environ["HIKARILM_CHECK_RESTARTED"] = "1"
+    python = str(engine.picture_python())
+    os.execv(python, [python, str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
 if __name__ == "__main__":
+    in_picture_venv()
     table = check_table()
     drawing = check_drawing()
     print("OK" if table and drawing else "FAILED")

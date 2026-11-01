@@ -138,6 +138,6 @@ Each one is checked against its makers' own code before it is used.
 - [x] Delete `sdserver.py` and `picsetup.py`, the setup window, the picture server address, and the
   picture settings.
 - [x] Tests with a fake picture worker.
-- [ ] On the Mac: `~/.hikarilm/pictures-venv/bin/python tests/check_flux.py` passes (mflux's table, then
+- [ ] On the Mac: `python3 tests/check_flux.py` passes (it makes the picture venv if needed) (mflux's table, then
   a picture from each downloaded model), and a picture made in the page.
 - [ ] `__version__ = "4.0.0"`, tag `v4.0.0`.
