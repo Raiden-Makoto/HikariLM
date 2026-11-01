@@ -198,8 +198,8 @@ the picture model gets the rewritten prompt and the pictures.
   now starts with the action and every object asked for, leaves out the character's look (the
   picture has it) and does not carry over the reference's pose or background. The general
   instructions also say every object named must be in the prompt, shown being used.
-- [ ] `tests/check_flux.py` draws a fox, then the same fox in a meadow from the first picture.
-  Run it on the Mac.
+- [x] `tests/check_flux.py` draws a fox, then the same fox in a meadow from the first picture.
+  Run on the Mac.
 - [x] Edit and Delete on every message you sent (`web/js/prompt-actions.js`). Edit opens it in
   place; sending replaces it and everything after it, asking first when that removes more than
   its own reply. Delete removes it and its reply, and the picture file if the reply was a picture;
