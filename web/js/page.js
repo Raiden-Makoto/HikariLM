@@ -4,7 +4,6 @@ import { messageBox, modelSelect, narrow } from "./core.js";
 import { addFiles, attachButton, fileInput } from "./attachments.js";
 import { CODE_MODEL_KEY, inCodeView, loadModels, SETUP_PICTURES, updatePictureMode } from "./models.js";
 import { isEditorId, newChat } from "./chats.js";
-import { openPictureSetup } from "./settings.js";
 import { openChatAnywhere } from "./sections.js";
 
 let dragDepth = 0;
@@ -116,7 +115,7 @@ export function start() {
     if (modelSelect.value === SETUP_PICTURES) {
       const saved = localStorage.getItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model");
       modelSelect.value = [...modelSelect.options].some((option) => option.value === saved) ? saved : modelSelect.options[0].value;
-      openPictureSetup();
+      window.location.href = "/setup/pictures";
       return;
     }
     localStorage.setItem(inCodeView() ? CODE_MODEL_KEY : "hikarilm-model", modelSelect.value);

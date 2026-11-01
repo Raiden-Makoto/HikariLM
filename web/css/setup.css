@@ -1,0 +1,48 @@
+/* The picture setup page. */
+body.setup-page { display: block; overflow-y: auto; }
+.setup { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+.setup a { color: var(--you); }
+.setup-back { display: inline-block; margin-bottom: 1.5rem; font-size: 0.9rem; text-decoration: none; }
+.setup h1 { margin: 0 0 0.5rem; font-size: 1.6rem; font-weight: 650; }
+.setup-lead { margin: 0; color: var(--muted); }
+.setup code { padding: 0.05rem 0.3rem; border-radius: 5px; background: var(--hover); font-size: 0.85em; overflow-wrap: anywhere; }
+.setup ul { padding-left: 1.2rem; }
+.setup li { margin-top: 0.35rem; }
+.setup details summary { cursor: pointer; margin-top: 1rem; color: var(--muted); }
+
+.setup-standing {
+  display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: center; justify-content: space-between;
+  margin-top: 1.5rem; padding: 0.9rem 1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+}
+.setup-standing p { margin: 0; flex: 1 1 20rem; }
+.setup-standing.ready { border-color: var(--you); }
+.setup-go {
+  padding: 0.5rem 1.1rem; border-radius: 10px; background: var(--send); color: var(--send-ink) !important;
+  font-weight: 600; text-decoration: none;
+}
+.setup-go[hidden] { display: none; }
+
+.setup-step { margin-top: 2rem; }
+.setup-step h2 { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 600; }
+.setup-step > p { margin: 0.5rem 0 0; }
+.setup-number {
+  display: inline-grid; place-items: center; flex: none; width: 1.7rem; height: 1.7rem;
+  border: 1px solid var(--line); border-radius: 50%; font-size: 0.9rem;
+}
+.setup-step.done .setup-number { border-color: var(--you); background: var(--you); color: #fff; font-size: 0; }
+.setup-step.done .setup-number::after { content: "✓"; font-size: 0.9rem; }
+
+.setup-choice { margin-top: 0.9rem; padding: 0.8rem 1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.setup-choice.have { border-color: var(--you); }
+.setup-choice-head { display: flex; justify-content: space-between; gap: 1rem; }
+.setup-choice-head span { color: var(--muted); font-size: 0.9rem; }
+.setup-choice p { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.92rem; }
+.setup-command { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.6rem; }
+.setup-command code { flex: 1; min-width: 0; padding: 0.45rem 0.6rem; background: var(--field); border: 1px solid var(--line); }
+.setup button {
+  flex: none; padding: 0.4rem 0.9rem; border: 1px solid var(--line); border-radius: 10px;
+  background: transparent; cursor: pointer;
+}
+.setup button:hover { background: var(--hover); }
+.setup-warning { color: var(--danger); }
+.setup-again { margin-top: 2rem; color: var(--muted); font-size: 0.9rem; }

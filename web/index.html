@@ -311,7 +311,7 @@
         <span class="setting-label">Making pictures</span>
         <p class="note">Pictures are drawn by Black Forest Labs' FLUX.2 klein, run by mflux: the 4B, recommended under 18 GB of RAM, or the 9B.</p>
         <p class="note" id="picture-note" role="status"></p>
-        <div class="choices"><button class="choice" id="open-picture-setup" type="button">How to set it up…</button></div>
+        <p class="note"><a href="/setup/pictures">How to set it up</a></p>
         <label class="field-row">
           <span>Rewrite prompts with</span>
           <select id="rewrite-model"></select>
@@ -334,52 +334,6 @@
           <button class="choice" type="button" id="report-issue">Report a problem…</button>
         </div>
         <p class="note" id="report-note">Opens a new issue on GitHub with the HikariLM version and the model filled in. Nothing is sent until you submit it there.</p>
-      </div>
-    </div>
-  </dialog>
-
-  <dialog id="picture-setup" aria-labelledby="picture-setup-title">
-    <div class="dialog-head">
-      <h2 id="picture-setup-title">Set up making pictures</h2>
-      <button class="icon-button" id="close-picture-setup" type="button" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <path d="M6 6l12 12M18 6L6 18"/>
-        </svg>
-      </button>
-    </div>
-    <div class="dialog-body">
-      <p class="note">Pictures are drawn on this Mac by Black Forest Labs' FLUX.2 klein, run by mflux. Nothing is sent anywhere. This is done once.</p>
-      <p class="setup-status" id="picture-setup-status" role="status"></p>
-
-      <div class="setting">
-        <span class="setting-label">1. Download a model</span>
-        <p class="note">Pick one. Run its command in Terminal, on the Mac that runs HikariLM.</p>
-        <div id="picture-setup-choices"></div>
-        <details>
-          <summary>Other FLUX.2 klein models</summary>
-          <p class="note">Every FLUX.2 klein works: mlx-community's copies at other bit widths (fewer bits are smaller, more keep more detail), and Black Forest Labs' own <code>black-forest-labs/FLUX.2-klein-4B</code> and <code>-9B</code>. Their 9B asks you to accept its license on Hugging Face first, and to sign in with <code>~/.hikarilm/venv/bin/hf auth login</code>. The base models (<code>FLUX.2-klein-base-4B</code>, <code>-base-9B</code>) take 50 steps instead of 4, so they are much slower. Fine-tunes and LoRA adapters are not used.</p>
-        </details>
-      </div>
-
-      <div class="setting">
-        <span class="setting-label">2. Run ./start.sh again</span>
-        <p class="note">Stop HikariLM with Ctrl+C and start it again. It sees the model and installs mflux into a venv of its own, <code>~/.hikarilm/pictures-venv</code>, so it never changes the packages the chat models use. This takes a while the first time and is not done again.</p>
-      </div>
-
-      <div class="setting">
-        <span class="setting-label">3. Draw</span>
-        <p class="note">Pick FLUX.2 klein under Make pictures in the model list and describe the picture. While it draws it takes the chat model's place in memory; the chat model loads again for your next message.</p>
-        <ul class="note setup-list">
-          <li><strong>Options</strong> sets the size, the seed and the steps.</li>
-          <li><strong>Rewrite</strong> has a chat model turn your words into how things look, which FLUX.2 klein follows better. You can edit it before it draws.</li>
-          <li><strong>Attach</strong> up to four reference pictures to draw from, such as a character.</li>
-          <li>After a picture, say a change, like "add a sunset to the background", and it changes that picture instead of drawing a new one.</li>
-        </ul>
-        <p class="note warning">Picture models may not recognize niche characters, people or places. Describe how they look or attach a reference image.</p>
-      </div>
-
-      <div class="choices setup-actions">
-        <button class="choice" id="picture-setup-check" type="button">Check again</button>
       </div>
     </div>
   </dialog>

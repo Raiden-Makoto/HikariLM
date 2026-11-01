@@ -221,8 +221,11 @@ the picture model gets the rewritten prompt and the pictures.
 
 ## v4.2.1: a setup page for pictures
 
-- [x] *Get a picture model…* (and *How to set it up…* in Settings) opens a page of its own: what
-  draws and where, then three steps. Download a model: the 4B (recommended under 18 GB of RAM)
+- [x] *Get a picture model…* (and *How to set it up* in Settings) goes to a page of its own,
+  `/setup/pictures` (`web/setup-pictures.html`, `js/setup.js`, `css/setup.css`): what draws and
+  where, then three steps, each ticked when done. It looks again every 5 seconds until it is
+  ready, so it follows the download, and then *Start drawing* goes back to Chat with FLUX.2 klein
+  picked. Download a model: the 4B (recommended under 18 GB of RAM)
   and the 9B (`mlx-community/flux2-klein-9b-4bit`, more detail), each with its command and a
   Copy button, and the other FLUX.2 klein models under a fold. Run ./start.sh again for mflux.
   Draw: Options, Rewrite, references, changing a picture, the niche-character warning. A line at

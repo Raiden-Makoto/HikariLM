@@ -134,6 +134,24 @@ class PageFilesTest(unittest.TestCase):
         self.assertNotIn("<style>", page)
         self.assertEqual(page.count("<script"), 2, "the theme line and main.js only")
 
+    def test_the_picture_setup_page_is_a_page_of_its_own(self):
+        page = (WEB / "setup-pictures.html").read_text()
+        wanted = re.findall(r'(?:src|href)="(/(?:js|css)/[^"]+)"', page)
+        self.assertIn("/js/setup.js", wanted)
+        for address in wanted:
+            self.assertTrue((WEB / address.lstrip("/")).is_file(), address)
+        ids = set(re.findall(r'id="([^"]+)"', page))
+        used = set(re.findall(r'querySelector\("#([\w-]+)"\)', (JS / "setup.js").read_text()))
+        self.assertEqual(used - ids, set())
+        self.assertIn('window.location.href = "/setup/pictures"', (JS / "page.js").read_text())
+        http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=http.serve_forever, daemon=True).start()
+        self.addCleanup(http.server_close)
+        self.addCleanup(http.shutdown)
+        for address in ("/setup/pictures", "/setup/pictures/"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
+                self.assertIn("Set up making pictures", response.read().decode())
+
     def test_the_helper_serves_the_parts_and_nothing_beside_them(self):
         http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         threading.Thread(target=http.serve_forever, daemon=True).start()

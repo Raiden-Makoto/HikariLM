@@ -1,7 +1,7 @@
 // The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
 import {
-  READER_KEY, REWRITE_KEY, isPictureModel, loadModels, modelLabel, readers, rewriteModel, rewriters, updateChangeNote,
+  READER_KEY, REWRITE_KEY, isPictureModel, modelLabel, readers, rewriteModel, rewriters, updateChangeNote,
 } from "./models.js";
 import { applyBackground } from "./page.js";
 
@@ -60,7 +60,7 @@ async function showContextSetting() {
 }
 
 // Where picture making stands: what is downloaded, whether mflux is installed, and what
-// was left out. Settings and the setup page both say it.
+// was left out.
 function pictureStanding(body) {
   const parts = [];
   if (body.models.length) {
@@ -74,65 +74,14 @@ function pictureStanding(body) {
   return parts.join(" ");
 }
 
-async function fetchPictures() {
-  try {
-    return await (await fetch("/api/pictures")).json();
-  } catch (error) {
-    return null;
-  }
-}
-
 async function showPictureSetting() {
   showReaderSetting();
   showRewriteSetting();
-  const body = await fetchPictures();
+  let body = null;
+  try {
+    body = await (await fetch("/api/pictures")).json();
+  } catch (error) {}
   document.querySelector("#picture-note").textContent = body ? pictureStanding(body) : "Could not reach the helper.";
-}
-
-function setupChoice(choice, have) {
-  const item = document.createElement("div");
-  item.className = "setup-choice" + (have ? " have" : "");
-  const head = document.createElement("div");
-  head.className = "setup-choice-head";
-  const size = document.createElement("span");
-  size.textContent = have ? "Downloaded" : choice.download + " download";
-  head.append(choice.name, size);
-  const note = document.createElement("p");
-  note.className = "note";
-  note.textContent = choice.note;
-  const line = document.createElement("div");
-  line.className = "setup-command";
-  const command = document.createElement("code");
-  command.textContent = choice.command;
-  const copy = document.createElement("button");
-  copy.className = "choice";
-  copy.type = "button";
-  copy.textContent = "Copy";
-  copy.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(choice.command);
-      copy.textContent = "Copied";
-    } catch (error) {
-      window.getSelection().selectAllChildren(command);
-      copy.textContent = "Press Cmd+C";
-    }
-    setTimeout(() => { copy.textContent = "Copy"; }, 2000);
-  });
-  line.append(command, copy);
-  item.append(head, note, line);
-  return item;
-}
-
-async function showPictureSetup() {
-  const standing = document.querySelector("#picture-setup-status");
-  const body = await fetchPictures();
-  standing.classList.toggle("ready", Boolean(body?.models.length && body.ready));
-  standing.textContent = body ? pictureStanding(body) : "Could not reach the helper. Is ./start.sh running?";
-  if (body) {
-    document.querySelector("#picture-setup-choices").replaceChildren(
-      ...body.choices.map((choice) => setupChoice(choice, body.ids.includes(choice.repo))));
-  }
-  return body;
 }
 
 function showReaderSetting() {
@@ -154,14 +103,6 @@ function showRewriteSetting() {
   select.replaceChildren(new Option("Don't rewrite", "off"),
     ...rewriters().map((name) => new Option(modelLabel(name), name)));
   select.value = writer || "off";
-}
-
-// From the model list when no picture model is downloaded, and from Settings: the steps,
-// once, with where they stand.
-export function openPictureSetup() {
-  if (settings.open) settings.close();
-  showPictureSetup();
-  document.querySelector("#picture-setup").showModal();
 }
 
 // Steps of 1,024 up to 8K, then a quarter of each doubling, so there is
@@ -294,19 +235,6 @@ export function start() {
     localStorage.setItem(READER_KEY, event.target.value);
   });
   document.querySelector("#close-settings").addEventListener("click", () => settings.close());
-  const setup = document.querySelector("#picture-setup");
-  document.querySelector("#open-picture-setup").addEventListener("click", openPictureSetup);
-  document.querySelector("#close-picture-setup").addEventListener("click", () => setup.close());
-  setup.addEventListener("click", (event) => {
-    if (event.target === setup) setup.close();
-  });
-  document.querySelector("#picture-setup-check").addEventListener("click", async () => {
-    const button = document.querySelector("#picture-setup-check");
-    button.disabled = true;
-    await showPictureSetup();
-    await loadModels();
-    button.disabled = false;
-  });
   settings.addEventListener("click", (event) => {
     if (event.target === settings) settings.close();
   });

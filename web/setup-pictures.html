@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up making pictures · HikariLM</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("hikarilm-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
+  </script>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/setup.css">
+  <script type="module" src="/js/setup.js"></script>
+</head>
+<body class="setup-page">
+  <main class="setup">
+    <a class="setup-back" href="/chat">← Back to HikariLM</a>
+    <h1>Set up making pictures</h1>
+    <p class="setup-lead">HikariLM draws pictures on this Mac with Black Forest Labs' FLUX.2 klein, run by <a href="https://github.com/filipstrand/mflux">mflux</a>. Nothing is sent anywhere. You do this once: download a model, start HikariLM again, and it is in the model list from then on.</p>
+
+    <section class="setup-standing" id="standing" aria-live="polite">
+      <p id="standing-text">Looking…</p>
+      <a class="setup-go" id="start-drawing" href="/chat" hidden>Start drawing</a>
+    </section>
+
+    <section class="setup-step" id="step-download">
+      <h2><span class="setup-number">1</span> Download a model</h2>
+      <p>Pick one and run its command in Terminal on the Mac that runs HikariLM. It downloads into the Hugging Face cache, where HikariLM finds every model.</p>
+      <div id="choices"></div>
+      <details>
+        <summary>Other FLUX.2 klein models</summary>
+        <p>Every FLUX.2 klein works, so you are not limited to these two:</p>
+        <ul>
+          <li>mlx-community's copies at other bit widths, such as <code>mlx-community/flux2-klein-9b-8bit</code>. Fewer bits are smaller and quicker; more keep more detail.</li>
+          <li>Black Forest Labs' own <code>black-forest-labs/FLUX.2-klein-4B</code> and <code>black-forest-labs/FLUX.2-klein-9B</code>. Their 9B asks you to accept its license on its Hugging Face page first, and to sign in with <code>~/.hikarilm/venv/bin/hf auth login</code>.</li>
+          <li><code>black-forest-labs/FLUX.2-klein-9b-kv</code>, a 9B that is quicker when it draws from reference pictures.</li>
+          <li>The base models, <code>FLUX.2-klein-base-4B</code> and <code>FLUX.2-klein-base-9B</code>. They take 50 steps instead of 4, so each picture takes far longer.</li>
+        </ul>
+        <p>Fine-tunes, LoRA adapters and other people's re-uploads are not used.</p>
+      </details>
+    </section>
+
+    <section class="setup-step" id="step-start">
+      <h2><span class="setup-number">2</span> Start HikariLM again</h2>
+      <p>In the window where HikariLM runs, press Ctrl+C, then run <code>./start.sh</code>. It sees the model and installs mflux into a venv of its own, <code>~/.hikarilm/pictures-venv</code>, so the packages the chat models run with are never changed. The first time takes a while; it is not done again.</p>
+    </section>
+
+    <section class="setup-step" id="step-draw">
+      <h2><span class="setup-number">3</span> Draw</h2>
+      <p>Pick FLUX.2 klein under <strong>Make pictures</strong> in the model list and describe the picture. One large model is in memory at a time: while it draws, FLUX.2 klein takes the chat model's place, and the chat model loads again for your next message.</p>
+      <ul>
+        <li><strong>Options</strong> sets the size, the seed and the steps.</li>
+        <li><strong>Rewrite</strong> has a chat model turn your words into how things look, which FLUX.2 klein follows better. It appears in the message box to edit or undo before it draws. Settings picks the model, or turns it off.</li>
+        <li><strong>Attach</strong> up to four reference pictures, such as a character, and it draws from them as well as the words.</li>
+        <li>After a picture, say a change, like "add a sunset to the background", and it changes that picture instead of drawing a new one. A note above the message box says which it will do.</li>
+        <li><strong>Vary</strong> on a picture draws it again with a new seed.</li>
+      </ul>
+      <p class="setup-warning">Picture models may not recognize niche characters, people or places. Describe how they look or attach a reference image.</p>
+    </section>
+
+    <p class="setup-again"><button type="button" id="check">Check again</button> <span id="checked"></span></p>
+  </main>
+</body>
+</html>

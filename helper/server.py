@@ -31,6 +31,7 @@ DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
 # One page, three addresses: the page shows the section the address names.
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
+SETUP_PICTURES = "/setup/pictures"
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
           "/vendor/katex.min.js")
 # The page's own scripts and styles: web/js/*.js and web/css/*.css, plain names only.
@@ -133,6 +134,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if urlparse(self.path).path in PAGES:
             self._send_file(WEB_ROOT / "index.html", "text/html; charset=utf-8")
+            return
+        if urlparse(self.path).path.rstrip("/") == SETUP_PICTURES:
+            self._send_file(WEB_ROOT / "setup-pictures.html", "text/html; charset=utf-8")
             return
         if urlparse(self.path).path.rstrip("/") == "/generate":
             # Pictures used to have their own section here; they are made in Chat now.
