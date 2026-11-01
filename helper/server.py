@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, descriptions, documents, engine, flux, imagegen, names, notes,
                     store, thinking, workspace)
-from helper.models import (EMBED_NAME, KEEPER, ModelError, complete, embed, open_chat, running, show,
+from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
 from helper.version import code_stamp
