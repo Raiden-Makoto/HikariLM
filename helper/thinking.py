@@ -14,6 +14,8 @@ here, so the page sees one shape either way.
 
 from __future__ import annotations
 
+import re
+
 DEFAULTS = {"enabled": True, "budget": 2048}
 LOWEST, HIGHEST = 128, 32768
 OPEN, CLOSE = "<think>", "</think>"
@@ -38,6 +40,16 @@ def can_think(shown: dict | None) -> bool:
 def _levels_only(model: str) -> bool:
     # gpt-oss always thinks; it takes a level instead of on and off.
     return "gpt-oss" in model.lower()
+
+
+# Models that reason before every answer, even with thinking off: an R1 distill's
+# template has no switch, and gpt-oss only goes down to "low". Too slow and wordy
+# for a short job such as rewriting a picture prompt.
+ALWAYS_THINKS = re.compile(r"deepseek[-_ ]?r1|qwq|gpt-oss|magistral|reason|thinking", re.IGNORECASE)
+
+
+def always_thinks(model: str) -> bool:
+    return bool(ALWAYS_THINKS.search(str(model).rsplit("/", 1)[-1]))
 
 
 def off(model: str):

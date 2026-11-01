@@ -107,7 +107,8 @@ class Handler(BaseHTTPRequestHandler):
             chat = tags()
             pictures, notes_ = imagegen.picture_models()
             self._send_json({"models": chat, "vision": imagegen.vision_models(chat, show), "pictures": pictures,
-                             "picture_notes": notes_, "sizes": imagegen.SIZES})
+                             "picture_notes": notes_, "sizes": imagegen.SIZES,
+                             "thinkers": [name for name in chat if thinking.always_thinks(name)]})
             return
         if self.path == CHATS:
             self._send_json({"chats": store.listing()})
@@ -596,6 +597,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": str(error)}, status=400)
             return
         if self._refuse_picture_model(model):
+            return
+        if thinking.always_thinks(model):
+            self._send_json({"error": f"{names.label(model)} thinks before every answer, which is slow and wordy for "
+                                      "a picture prompt. Choose another model under Settings, Rewrite prompts with."},
+                            status=400)
             return
         self._models.enter_context(KEEPER.using(model))
         try:

@@ -57,6 +57,7 @@ export async function loadModels() {
     visionModels = body.vision || [];
     allPictures = body.pictures || [];
     pictureNotes = body.picture_notes || [];
+    thinkers = body.thinkers || [];
     fillPictureSizes(body.sizes || {});
     if (!response.ok) problem = plainError(body.error || "Could not list models.");
     else if (models.length === 0 && allPictures.length === 0) problem = "No models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download mlx-community/Qwen2.5-Coder-7B-Instruct-4bit";
@@ -104,14 +105,18 @@ export function updatePictureMode() {
 }
 
 // The chat model that rewrites picture prompts, or "" when Settings turned it off.
-// Unchosen, a general model goes before a coder: it is likelier to know a character.
+// Models that think before every answer (R1, gpt-oss) never do: a short prompt
+// would wait on pages of reasoning. Unchosen, a general model goes before a coder,
+// since it is likelier to know a character.
 export const REWRITE_KEY = "hikarilm-rewrite";
-export const chatModels = () => allModels;
+let thinkers = [];
+export const rewriters = () => allModels.filter((name) => !thinkers.includes(name));
 export function rewriteModel() {
   const chosen = localStorage.getItem(REWRITE_KEY);
   if (chosen === "off") return "";
-  if (chosen && allModels.includes(chosen)) return chosen;
-  return allModels.find((name) => codeRank(name) === 2) || allModels[0] || "";
+  const choices = rewriters();
+  if (chosen && choices.includes(chosen)) return chosen;
+  return choices.find((name) => codeRank(name) === 2) || choices[0] || "";
 }
 
 // A rewrite waiting in the box: { request, writer }, or asIs when the user took their

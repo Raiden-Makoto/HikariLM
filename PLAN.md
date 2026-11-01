@@ -156,6 +156,8 @@ gets a generic rabbit. Black Forest Labs suggests rewriting prompts for FLUX.2.
 
 - [x] A Settings choice, "Rewrite prompts with": a chat model (a general one before a coder by
   default) or "Don't rewrite". `/api/rewrite` and `helper/rewrite.py`; thinking is off for it.
+  Models that think before every answer (DeepSeek R1, QwQ, gpt-oss, Magistral, "reasoning" and
+  "thinking" models) are never offered and the helper refuses them (`thinking.always_thinks`).
   With a picture attached, the vision model describes how it looks (`/api/describe` with
   `purpose: "look"`, kept apart from the description written for code) and that goes into the rewrite.
 - [x] The rewrite streams into the message box, with a note above it and "Use my words"; the next

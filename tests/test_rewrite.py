@@ -5,8 +5,8 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from helper import descriptions, engine, imagegen, rewrite, server, store
-from tests.test_engine import CODER, GEMMA, add_model, real_config
+from helper import descriptions, engine, imagegen, rewrite, server, store, thinking
+from tests.test_engine import CODER, GEMMA, R1, add_model, real_config
 from tests.test_flux import KLEIN, FluxCase
 from tests.test_server import PNG_B64
 
@@ -73,6 +73,19 @@ class RewriteTest(FluxCase):
         self.assertNotIn("request", imagegen.clean_request({"model": KLEIN, "prompt": "a fox"}))
         with self.assertRaises(ValueError):
             imagegen.clean_request({"model": KLEIN, "prompt": "a fox", "request": 5})
+
+    def test_a_model_that_always_thinks_never_rewrites(self):
+        for name in ("mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit", "mlx-community/QwQ-32B-4bit",
+                     "lmstudio-community/gpt-oss-20b-MLX-8bit", "mlx-community/Qwen3-4B-Thinking-2507-4bit",
+                     "mlx-community/Phi-4-reasoning-plus-4bit", "mlx-community/Magistral-Small-2506-4bit"):
+            self.assertTrue(thinking.always_thinks(name), name)
+        for name in (CODER, GEMMA, "mlx-community/Qwen3-8B-4bit", "mlx-community/Llama-3.2-3B-Instruct-4bit"):
+            self.assertFalse(thinking.always_thinks(name), name)
+        add_model(self.hub, R1, real_config(R1))
+        engine.forget_scan()
+        with urllib.request.urlopen(self.base + "/api/tags", timeout=10) as response:
+            self.assertEqual(json.loads(response.read())["thinkers"], [R1])
+        self.assertIn("thinks before every answer", self.post("/api/rewrite", {"model": R1, "request": "a fox"})["error"])
 
     def test_a_picture_model_cannot_rewrite(self):
         self.download(KLEIN)

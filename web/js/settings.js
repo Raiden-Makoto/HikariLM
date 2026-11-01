@@ -1,6 +1,6 @@
 // The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { REWRITE_KEY, chatModels, isPictureModel, modelLabel, rewriteModel } from "./models.js";
+import { REWRITE_KEY, isPictureModel, modelLabel, rewriteModel, rewriters } from "./models.js";
 import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
@@ -83,7 +83,7 @@ function showRewriteSetting() {
   const select = document.querySelector("#rewrite-model");
   const writer = rewriteModel();
   select.replaceChildren(new Option("Don't rewrite", "off"),
-    ...chatModels().map((name) => new Option(modelLabel(name), name)));
+    ...rewriters().map((name) => new Option(modelLabel(name), name)));
   select.value = writer || "off";
 }
 
