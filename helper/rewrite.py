@@ -27,9 +27,19 @@ INSTRUCTION = (
 )
 
 
-def messages(request: str, reference: str = "") -> list[dict]:
+def messages(request: str, reference: str = "", shown: bool = False) -> list[dict]:
+    """`shown`: the picture model is given the reference picture too, so it copies the
+    subject from the picture and the prompt only needs to say what to do with it."""
     text = INSTRUCTION + "\n\nRequest: " + request.strip()
-    if reference.strip():
+    if shown:
+        text += ("\n\nThe picture model is also given a reference picture and copies the subject's look "
+                 "from it. So name the subject in a few words (for example \"the white rabbit-like "
+                 "character from the reference picture\") and spend the prompt on what the request asks "
+                 "for: the pose, action, setting, mood, style and framing. Keep the subject's look as it "
+                 "is unless the request changes it.")
+        if reference.strip():
+            text += " This is what the reference shows:\n" + reference.strip()
+    elif reference.strip():
         text += ("\n\nA reference picture is attached. Use it for how the subject looks, over what you "
                  "remember. This is what it shows:\n" + reference.strip())
     return [{"role": "user", "content": text}]

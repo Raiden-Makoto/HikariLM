@@ -6,11 +6,13 @@ It makes ~/.hikarilm/pictures-venv with mflux first if there is none, and runs i
 again with that venv's Python. First, every FLUX.2 model flux.py knows must be one mflux knows, with the same blocks
 and the same number of steps. That covers all of them without downloading any. Then
 each FLUX.2 model in the Hugging Face cache draws one small picture through the real
-worker, saved in /tmp, so you can look at it.
+worker, then a second one from the first as its reference, both saved in /tmp, so you
+can look at them: the fox in the meadow should be the fox from the snow.
 """
 
 from __future__ import annotations
 
+import base64
 import os
 import sys
 import time
@@ -51,22 +53,30 @@ def check_drawing() -> bool:
         return True
     good = True
     for name, picture in found.items():
-        request = imagegen.clean_request({"model": name, "prompt": "a red fox in fresh snow", "size": "small",
-                                          "seed": 42})
-        started = time.monotonic()
+        # The second picture is drawn from the first, so the worker swaps to Flux2KleinEdit.
+        image = b""
         try:
-            image = engine.make_picture(picture, request, lambda step, total: None, lambda: False)
-        except engine.ModelError as error:
-            print(f"FAIL  {picture['label']}: {error}")
-            good = False
-            continue
+            for kind, prompt in (("", "a red fox in fresh snow"),
+                                 ("-from-reference", "the same fox, now sitting in a sunny green meadow")):
+                payload = {"model": name, "prompt": prompt, "size": "small", "seed": 42}
+                if image:
+                    payload["references"] = [base64.b64encode(image).decode()]
+                request = imagegen.clean_request(payload)
+                started = time.monotonic()
+                try:
+                    image = engine.make_picture(picture, request, lambda step, total: None, lambda: False)
+                except engine.ModelError as error:
+                    print(f"FAIL  {picture['label']}{kind}: {error}")
+                    good = False
+                    break
+                out = Path("/tmp") / (name.replace("/", "--") + kind + ".png")
+                out.write_bytes(image)
+                ok = image.startswith(imagegen.PNG)
+                good = good and ok
+                print(f"{'ok  ' if ok else 'FAIL'}  {picture['label']}{kind}: drew in "
+                      f"{time.monotonic() - started:.0f} s, saved {out}")
         finally:
             engine.unload()
-        out = Path("/tmp") / (name.replace("/", "--") + ".png")
-        out.write_bytes(image)
-        ok = image.startswith(imagegen.PNG)
-        good = good and ok
-        print(f"{'ok  ' if ok else 'FAIL'}  {picture['label']}: drew in {time.monotonic() - started:.0f} s, saved {out}")
     return good
 
 

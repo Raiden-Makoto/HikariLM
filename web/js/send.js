@@ -370,9 +370,10 @@ async function makePicture(payload, signal, show) {
   throw new Error("The helper stopped before the picture was finished.");
 }
 
-function pictureRequest(prompt, model, request, reference) {
+function pictureRequest(prompt, model, request, reference, pictures) {
   const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
-  return { model, prompt, request: request || undefined, reference: reference || undefined, size: pictureSize.value || "square",
+  return { model, prompt, request: request || undefined, reference: reference || undefined,
+    references: pictures.length ? pictures : undefined, size: pictureSize.value || "square",
     seed: number(pictureSeed), steps: number(pictureSteps) };
 }
 
@@ -433,7 +434,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
   let prompt = "";
   const seen = [];
   try {
-    for (const file of references) {
+    for (const file of describer ? references : []) {
       const reader = modelLabel(describer);
       say("Loading " + reader + " to read " + file.name + "…");
       let live = "";
@@ -450,7 +451,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
     const response = await fetch("/api/rewrite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: writer, request, reference: seen.join("\n\n") }),
+      body: JSON.stringify({ model: writer, request, reference: seen.join("\n\n"), shown: references.length > 0 }),
       signal,
     });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "The prompt could not be rewritten.");
@@ -500,16 +501,11 @@ async function sendPicture(prompt, model) {
   const used = pending?.pictures || [];
   const newPictures = references.some((file) => !used.includes(file.image));
   if (pending && !newPictures) return drawPicture(prompt, model, pending.asIs ? "" : pending.request);
+  // The picture model sees references itself; a model that can see also reads them
+  // for the rewrite, when there is one.
   let writer = rewriteModel();
-  let describer = "";
-  if (references.length) {
-    describer = visionModel();
-    if (!describer) {
-      notify("A reference picture needs a model that can read it, such as Gemma 3 or Qwen2.5 VL. Remove the picture or download one.");
-      return;
-    }
-    writer ||= describer;
-  }
+  const describer = references.length ? visionModel() : "";
+  writer ||= describer;
   if (!writer) return drawPicture(prompt, model, "");
   return rewritePrompt(prompt, writer, describer, references, pending ? pending.request : prompt);
 }
@@ -544,7 +540,8 @@ async function drawPicture(prompt, model, request) {
   let record = null;
   let failure = "";
   try {
-    record = await makePicture(pictureRequest(prompt, model, request, pending?.asIs ? "" : pending?.seen), state.activeRequest.signal, show);
+    record = await makePicture(pictureRequest(prompt, model, request, pending?.asIs ? "" : pending?.seen,
+      files.filter((file) => file.image).map((file) => file.image)), state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") failure = plainError(error.message);
   } finally {
@@ -583,13 +580,22 @@ async function drawPicture(prompt, model, request) {
   messageBox.focus();
 }
 
-// Vary keeps the prompt, size and steps and draws with a new seed. The new
-// picture takes the old one's place, and the old file is deleted.
+// Vary keeps the prompt, size, steps and reference pictures and draws with a new seed.
+// The new picture takes the old one's place, and the old file is deleted.
 export async function varyPicture(message, figure) {
   if (state.activeRequest) return;
   const old = message.picture;
   if (!isPictureModel(old.model)) {
     notify(pictureLabel(old.model) + " is not set up for pictures any more, so this one cannot be varied.");
+    return;
+  }
+  // The references are in the message that asked for the picture. Chats are saved
+  // without their pictures, so after a reload they are gone.
+  const asked = state.messages[state.messages.indexOf(message) - 1];
+  const pictures = (asked?.files || []).filter((file) => file.image).map((file) => file.image);
+  if ((old.references || []).length && pictures.length !== old.references.length) {
+    notify("This picture was drawn from reference pictures, which are not kept after a reload. " +
+      "Attach them again and send to draw a new one.");
     return;
   }
   const line = document.createElement("div");
@@ -604,8 +610,8 @@ export async function varyPicture(message, figure) {
   state.lastContext = null;
   let record = null;
   try {
-    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, reference: old.reference, size: old.size,
-      steps: old.steps, seed: null },
+    record = await makePicture({ model: old.model, prompt: old.prompt, request: old.request, reference: old.reference,
+      references: old.references?.length ? pictures : undefined, size: old.size, steps: old.steps, seed: null },
       state.activeRequest.signal, show);
   } catch (error) {
     if (error.name !== "AbortError") notify("No new picture: " + plainError(error.message));

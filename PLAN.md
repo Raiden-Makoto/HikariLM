@@ -182,11 +182,16 @@ mflux's `Flux2KleinEdit` takes the same FLUX.2 klein weights plus `image_paths` 
 reference pictures' pixels (9B-KV caches them for the later steps). The read and the rewrite stay:
 the picture model gets the rewritten prompt and the pictures.
 
-- [ ] `flux_worker.py`: with references, `Flux2KleinEdit.generate_image(..., image_paths=...)`;
-  without, `Flux2Klein` as now. The pictures go to the worker as temporary files and are deleted after.
-- [ ] `/api/generate` takes the reference pictures; the record keeps which pictures were used
-  (by hash, not a copy), so Vary draws from them again while they are still in the chat.
-- [ ] The rewrite is told the picture model sees the reference too, so it describes the scene and
-  what changes rather than repeating every detail of the character.
-- [ ] `tests/check_flux.py` draws one picture from a reference on the Mac.
+- [x] `flux_worker.py`: with references, `Flux2KleinEdit.generate_image(..., image_paths=...)`;
+  without, `Flux2Klein` as now. `Flux2KleinEdit` cannot draw without a reference and the two
+  cannot share loaded weights, so the worker holds one and reloads when a picture needs the other.
+  The pictures go to the worker as temporary files and are deleted after.
+- [x] `/api/generate` takes `references` (at most 4 PNG, JPEG, WebP or GIF, 10 MB each); the
+  record keeps which were used (by hash, not a copy), so Vary draws from them again while they
+  are still in the chat. Chats are saved without pictures, so after a reload Vary says to attach
+  them again. A reference no longer needs a model that can see: without one, the read is skipped.
+- [x] The rewrite is told the picture model sees the reference too (`shown`), so it describes the
+  scene and what changes rather than repeating every detail of the character.
+- [ ] `tests/check_flux.py` draws a fox, then the same fox in a meadow from the first picture.
+  Run it on the Mac.
 - [ ] `__version__ = "4.2.0"`, tag `v4.2.0`.

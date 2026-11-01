@@ -28,6 +28,14 @@ class CleanTest(unittest.TestCase):
         seen = rewrite.messages("her on a beach", "A cream-colored rabbit with long ears.")[0]["content"]
         self.assertIn("Request: her on a beach", seen)
         self.assertIn("A cream-colored rabbit with long ears.", seen)
+        self.assertNotIn("also given a reference", seen)
+
+    def test_when_the_picture_model_sees_the_reference_the_prompt_is_about_the_scene(self):
+        for description in ("A cream-colored rabbit with long ears.", ""):
+            text = rewrite.messages("her on a beach", description, shown=True)[0]["content"]
+            self.assertIn("also given a reference picture", text)
+            self.assertIn("the pose, action, setting", text)
+            self.assertEqual(description in text, True)
 
 
 class RewriteTest(FluxCase):
@@ -70,6 +78,26 @@ class RewriteTest(FluxCase):
         self.assertEqual((saved["request"], saved["reference"]), ("Usagi from Chiikawa", "A cream rabbit with long ears."))
         kept = store.clean_picture(record)
         self.assertEqual((kept["request"], kept["reference"]), ("Usagi from Chiikawa", "A cream rabbit with long ears."))
+
+    def test_a_picture_is_drawn_from_its_references(self):
+        self.download(KLEIN)
+        drawn = self.post("/api/generate", {"model": KLEIN, "prompt": "the rabbit on a beach", "references": [PNG_B64]})
+        record = drawn[-1]["image"]
+        self.assertEqual(record["references"], [descriptions.image_key(PNG_B64)])
+        picture = imagegen.read(record["id"])
+        self.assertIn(b"refs=1 \x89PNG", picture)
+        self.assertEqual(store.clean_picture(record)["references"], record["references"])
+        self.assertEqual(list(self.home.glob(".reference.*")), [])
+        plain = self.post("/api/generate", {"model": KLEIN, "prompt": "a fox"})
+        self.assertIn(b"refs=0", imagegen.read(plain[-1]["image"]["id"]))
+        self.assertNotIn("references", plain[-1]["image"])
+
+    def test_references_must_be_pictures(self):
+        for references in (["bm90IGEgcGljdHVyZQ=="], ["%%%"], [PNG_B64] * 5, "x"):
+            with self.assertRaises(ValueError, msg=str(references)[:40]):
+                imagegen.clean_request({"model": KLEIN, "prompt": "a fox", "references": references})
+        jpeg = "/9j/4AAQSkZJRgABAQ=="
+        self.assertEqual(len(imagegen.clean_request({"model": KLEIN, "prompt": "a fox", "references": [jpeg]})["pictures"]), 1)
 
     def test_a_prompt_drawn_as_written_keeps_no_request(self):
         self.assertNotIn("request", imagegen.clean_request({"model": KLEIN, "prompt": "a fox", "request": "a fox"}))

@@ -616,7 +616,8 @@ class Handler(BaseHTTPRequestHandler):
             room = self._room(model, context.load_settings())
             think = thinking.think_value(model, show(model), {"enabled": False})
             router.begin(model)
-            response = open_chat(model, rewrite.messages(request, reference[:descriptions.MAX_TEXT]), KEEP_ALIVE,
+            response = open_chat(model, rewrite.messages(request, reference[:descriptions.MAX_TEXT],
+                                                         payload.get("shown") is True), KEEP_ALIVE,
                                  {"num_ctx": room["num_ctx"], "num_predict": rewrite.MAX_TOKENS}, think)
         except ModelError as error:
             self._send_json({"error": str(error)}, status=502)

@@ -106,6 +106,7 @@ def clean_messages(messages) -> list[dict]:
 
 
 PICTURE_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+PICTURE_HASH = re.compile(r"^[0-9a-f]{32}$")
 
 
 def clean_picture(value) -> dict:
@@ -120,6 +121,9 @@ def clean_picture(value) -> dict:
         number = value.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and 0 <= number < 2 ** 32:
             kept[key] = number
+    references = value.get("references")
+    if isinstance(references, list) and all(isinstance(key, str) and PICTURE_HASH.match(key) for key in references):
+        kept["references"] = references[:4]
     return kept
 
 

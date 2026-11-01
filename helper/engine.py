@@ -469,14 +469,21 @@ def make_picture(picture: dict, request: dict, on_progress, stopped) -> bytes | 
     if not _lock.acquire(timeout=WAIT_SECONDS):
         raise ModelError("Another reply is still being written.")
     out = None
+    references: list[str] = []
     try:
         process = _ready(picture["id"], picture)
         on_progress(0, 0)
         fd, out = tempfile.mkstemp(dir=store.home(), prefix=".drawing.", suffix=".png")
         os.close(fd)
+        for data in request.get("pictures") or []:
+            fd, path = tempfile.mkstemp(dir=store.home(), prefix=".reference.", suffix=".img")
+            references.append(path)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
         process.send({"op": "picture", "prompt": request["prompt"], "width": request["width"],
                       "height": request["height"], "seed": request["seed"],
-                      "steps": request["steps"] or picture["steps"], "guidance": picture["guidance"], "out": out})
+                      "steps": request["steps"] or picture["steps"], "guidance": picture["guidance"], "out": out,
+                      "references": references})
         deadline = time.monotonic() + WAIT_SECONDS
         while True:
             if stopped():
@@ -496,14 +503,17 @@ def make_picture(picture: dict, request: dict, on_progress, stopped) -> bytes | 
             deadline = time.monotonic() + WAIT_SECONDS
             if event.get("done"):
                 return Path(out).read_bytes()
+            if event.get("loading"):
+                on_progress(0, 0)
             if "progress" in event:
                 on_progress(int(event["progress"]), int(event.get("total") or 0))
     finally:
-        if out:
-            try:
-                os.unlink(out)
-            except OSError:
-                pass
+        for path in [out, *references]:
+            if path:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
         _lock.release()
 
 

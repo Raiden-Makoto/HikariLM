@@ -7,9 +7,14 @@ imports it. One model per process, named the way mflux names it:
 
 The first line written is {"ready": true}, or {"error": ...} if the model did not load.
 Then one command per line on stdin, {"op": "picture", "prompt", "width", "height",
-"seed", "steps", "guidance", "out"}, answered with {"progress": step, "total": steps}
-while it draws and {"done": true} once the PNG is at "out". Stopping a picture ends
-the process.
+"seed", "steps", "guidance", "out", "references"}, answered with {"progress": step,
+"total": steps} while it draws and {"done": true} once the PNG is at "out". Stopping a
+picture ends the process.
+
+"references" are picture files the model draws from as well as the prompt. mflux
+draws from them with Flux2KleinEdit, which loads the same weights as Flux2Klein but
+cannot draw without a reference, so the worker holds one of the two and swaps when
+a picture needs the other ({"loading": true} is written first).
 """
 
 from __future__ import annotations
@@ -34,23 +39,43 @@ class Progress:
         say({"progress": t + 1 - config.init_time_step, "total": config.num_inference_steps - config.init_time_step})
 
 
-def load(folder: str, variant: str):
-    from mflux.models.common.config.model_config import AVAILABLE_MODELS
-    from mflux.models.flux2.variants import Flux2Klein
+class Drawer:
+    """The loaded model: Flux2Klein for a prompt alone, Flux2KleinEdit with references."""
 
-    if not variant.startswith("flux2-") or variant not in AVAILABLE_MODELS:
-        raise ValueError(f"This mflux does not know {variant}. Update it: ~/.hikarilm/pictures-venv/bin/pip install -U mflux")
-    model = Flux2Klein(model_config=AVAILABLE_MODELS[variant], model_path=folder)
-    model.callbacks.register(Progress())
-    return model
+    def __init__(self, folder: str, variant: str) -> None:
+        from mflux.models.common.config.model_config import AVAILABLE_MODELS
 
+        if not variant.startswith("flux2-") or variant not in AVAILABLE_MODELS:
+            raise ValueError(f"This mflux does not know {variant}. Update it: ~/.hikarilm/pictures-venv/bin/pip install -U mflux")
+        self.folder, self.config = folder, AVAILABLE_MODELS[variant]
+        self.model, self.edits = None, False
+        self.load(edits=False)
 
-def draw(model, command: dict) -> None:
-    image = model.generate_image(
-        seed=int(command["seed"]), prompt=str(command["prompt"]), num_inference_steps=int(command["steps"]),
-        width=int(command["width"]), height=int(command["height"]), guidance=float(command["guidance"]))
-    image.image.save(command["out"], format="PNG")
-    say({"done": True})
+    def load(self, edits: bool) -> None:
+        import gc
+
+        import mlx.core as mx
+        from mflux.models.flux2.variants import Flux2Klein, Flux2KleinEdit
+
+        self.model = None
+        gc.collect()
+        mx.clear_cache()
+        kind = Flux2KleinEdit if edits else Flux2Klein
+        self.model = kind(model_config=self.config, model_path=self.folder)
+        self.model.callbacks.register(Progress())
+        self.edits = edits
+
+    def draw(self, command: dict) -> None:
+        references = [str(path) for path in command.get("references") or []]
+        if bool(references) != self.edits:
+            say({"loading": True})
+            self.load(edits=bool(references))
+        options = {"image_paths": references} if references else {}
+        image = self.model.generate_image(
+            seed=int(command["seed"]), prompt=str(command["prompt"]), num_inference_steps=int(command["steps"]),
+            width=int(command["width"]), height=int(command["height"]), guidance=float(command["guidance"]), **options)
+        image.image.save(command["out"], format="PNG")
+        say({"done": True})
 
 
 def main() -> None:
@@ -59,7 +84,7 @@ def main() -> None:
     parser.add_argument("--variant", required=True)
     args = parser.parse_args()
     try:
-        model = load(args.model, args.variant)
+        drawer = Drawer(args.model, args.variant)
     except Exception as error:
         traceback.print_exc()
         say({"error": f"The picture model could not load: {type(error).__name__}: {error}"})
@@ -73,7 +98,7 @@ def main() -> None:
         if command.get("op") != "picture":
             continue
         try:
-            draw(model, command)
+            drawer.draw(command)
         except Exception as error:
             traceback.print_exc()
             say({"error": f"The picture could not be made: {type(error).__name__}: {error}"})

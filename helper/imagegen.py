@@ -6,6 +6,9 @@ runs them). They are listed apart and never answer messages.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import os
 import platform
@@ -125,6 +128,7 @@ def clean_request(payload: dict) -> dict:
     if reference is not None and (not isinstance(reference, str) or len(reference) > MAX_REFERENCE):
         raise ValueError(f"reference must be text of at most {MAX_REFERENCE} characters")
     reference = (reference or "").strip()
+    pictures = _references(payload.get("references"))
     width, height = SIZES[size]
     cleaned = {"model": model.strip(), "prompt": prompt.strip(), "size": size, "width": width, "height": height,
                "seed": seed, "steps": steps}
@@ -132,7 +136,35 @@ def clean_request(payload: dict) -> dict:
         cleaned["request"] = request
     if reference:
         cleaned["reference"] = reference
+    if pictures:
+        cleaned["pictures"] = pictures
     return cleaned
+
+
+# Picture files a FLUX.2 model can draw from: PNG, JPEG, WebP and GIF.
+PICTURE_STARTS = (PNG, b"\xff\xd8\xff", b"GIF87a", b"GIF89a")
+MAX_REFERENCES = 4
+MAX_REFERENCE_BYTES = 10_000_000
+
+
+def _references(value) -> list[bytes]:
+    """The reference pictures sent as base64, decoded and checked."""
+    if value in (None, []):
+        return []
+    if not isinstance(value, list) or len(value) > MAX_REFERENCES:
+        raise ValueError(f"references must be a list of at most {MAX_REFERENCES} pictures")
+    out = []
+    for item in value:
+        try:
+            data = base64.b64decode(item, validate=True) if isinstance(item, str) else b""
+        except (binascii.Error, ValueError):
+            data = b""
+        if not (data.startswith(PICTURE_STARTS) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")):
+            raise ValueError("A reference is not a PNG, JPEG, WebP or GIF picture.")
+        if len(data) > MAX_REFERENCE_BYTES:
+            raise ValueError("A reference picture is over 10 MB.")
+        out.append(data)
+    return out
 
 
 # --- images/ -----------------------------------------------------------------------
@@ -174,6 +206,9 @@ def save(data: bytes, request: dict) -> dict:
     for key in ("request", "reference"):
         if request.get(key):
             record[key] = request[key]
+    # Which pictures it was drawn from, by hash: the chat keeps the pictures themselves.
+    if request.get("pictures"):
+        record["references"] = [hashlib.sha256(data).hexdigest()[:32] for data in request["pictures"]]
     _write(_path(image_id, ".json"), json.dumps(record, indent=2).encode())
     _write(_path(image_id, ".png"), data)
     return record

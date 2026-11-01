@@ -109,7 +109,9 @@ export function pictureFigure(message) {
     img.height = record.height;
   }
   const caption = document.createElement("figcaption");
-  caption.textContent = [record.width && record.width + " × " + record.height, "seed " + record.seed, pictureLabel(record.model)]
+  const references = (record.references || []).length;
+  caption.textContent = [record.width && record.width + " × " + record.height, "seed " + record.seed, pictureLabel(record.model),
+    references && "drawn from " + references + (references === 1 ? " reference picture" : " reference pictures")]
     .filter(Boolean).join(" · ");
   img.addEventListener("error", () => { caption.textContent = "The picture file is missing from the helper's images folder."; });
   const actions = document.createElement("div");

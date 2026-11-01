@@ -50,7 +50,8 @@ export async function addFiles(list) {
   let switched = "";
   const addImage = async (name, size, getData) => {
     const vision = visionModel();
-    if (!vision) {
+    const drawing = isPictureModel(modelSelect.value);
+    if (!vision && !drawing) {
       problems.push(name + " needs a model that can read pictures (such as Gemma 3 or Qwen2.5 VL), and none is installed");
       return false;
     }
@@ -66,7 +67,7 @@ export async function addFiles(list) {
     imageBytes += size;
     images += 1;
     // In picture mode it is a reference: the vision model reads it before drawing.
-    if (modelSelect.value !== vision && !isPictureModel(modelSelect.value)) {
+    if (modelSelect.value !== vision && !drawing) {
       modelSelect.value = vision;
       updatePictureMode();
       switched = vision;
@@ -184,6 +185,7 @@ export async function addFiles(list) {
   if (switched) notify("Switched to " + modelLabel(switched) + " to read your image.");
   else if (isPictureModel(modelSelect.value) && (problems.length || images > before)) {
     notify(problems.length ? notes.join(" ")
-      : "When you send, " + modelLabel(visionModel()) + " reads the picture and the prompt is rewritten to match it.");
+      : "The picture model draws from this picture" +
+        (visionModel() ? ", and " + modelLabel(visionModel()) + " reads it first for the rewrite." : "."));
   }
 }

@@ -25,6 +25,7 @@ def main():
     args = parser.parse_args()
     print("loading", args.variant, file=sys.stderr)
     say({"ready": True})
+    edits = False
     for line in sys.stdin:
         command = json.loads(line)
         if command["prompt"] == "crash":
@@ -36,8 +37,14 @@ def main():
             if command["prompt"] == "slow":
                 time.sleep(1)
             say({"progress": step, "total": command["steps"]})
+        references = command.get("references") or []
+        if bool(references) != edits:
+            say({"loading": True})
+        edits = bool(references)
+        seen = b"".join(open(path, "rb").read()[:4] for path in references)
         with open(command["out"], "wb") as handle:
-            handle.write(PNG + f" {args.variant} {command['steps']} {command['guidance']}".encode())
+            handle.write(PNG + f" refs={len(references)} ".encode() + seen
+                         + f" {args.variant} {command['steps']} {command['guidance']}".encode())
         say({"done": True})
 
 
