@@ -306,7 +306,7 @@ guidance. The distilled 4B comes after a check on the Mac.
   models to HikariLM now, not "fine-tunes": the page has people download one, and they are laid
   out like mlx-community's.
 - [x] The Copy button is one module (`js/copy.js`) for both setup pages.
-- [ ] `__version__ = "4.4.9"`, tag `v4.4.9`.
+- [x] `__version__ = "4.4.9"`, tag `v4.4.9`. Released.
 
 ### v4.5.0: LoRAs from Hugging Face, on the base 4B
 
