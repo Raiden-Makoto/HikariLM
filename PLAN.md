@@ -217,4 +217,4 @@ the picture model gets the rewritten prompt and the pictures.
   unless another chat has the same picture. Chats saved before 4.2.0 have no hashes, so theirs stay.
 - [x] Looks of a reference ("-look") were notes in 4.1, so they could turn up as context in any
   chat. They are not notes any more, and the helper removes the old ones when it starts.
-- [ ] `__version__ = "4.2.0"`, tag `v4.2.0`.
+- [x] `__version__ = "4.2.0"`, tag `v4.2.0`. Released.
