@@ -74,15 +74,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .choice:disabled { opacity: 0.4; cursor: default; }
 .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
 .note.warning { color: var(--danger); }
-#picture-setup { width: min(34rem, 92vw); }
-#picture-setup code { word-break: break-all; }
-.setup-list { list-style: none; padding: 0; margin: 0.75rem 0; }
-.setup-list li { display: flex; gap: 0.5rem; padding: 0.3rem 0; }
-.setup-list .mark { width: 1.2rem; flex: none; }
-.setup-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 0.5rem 0; }
-.setup-bar div { height: 100%; width: 0; background: var(--you); transition: width 0.4s; }
-#picture-setup .choices { margin-top: 0.75rem; }
-#picture-setup .choice[hidden] { display: none; }
+#picture-get { word-break: break-all; }
 #setup-start { background: var(--send); color: var(--send-ink); }
 #picture-setting details summary { cursor: pointer; margin-top: 0.5rem; }
 #settings .dialog-body { max-height: 75vh; overflow-y: auto; }
@@ -107,6 +99,5 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 #new-chat-keys { min-width: 7rem; font-variant-numeric: tabular-nums; }
 #new-chat-keys[aria-pressed="true"] { color: var(--you); }
 .field-row input[type="text"] { flex: 1; min-width: 0; max-width: 16rem; }
-#pic-models { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
 .setting textarea { box-sizing: border-box; width: 100%; min-height: 6rem; margin-top: 0.5rem; resize: vertical; font-size: 0.82rem; }
 .setting details summary { cursor: pointer; margin-top: 0.75rem; font-size: 0.9rem; }

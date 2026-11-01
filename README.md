@@ -30,10 +30,13 @@ If you are not sure where to start, these fit a Mac with less than 18 GB of RAM 
 | General chat, with thinking | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
 | General chat, the smallest | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+| Making pictures | `mlx-community/FLUX.2-Klein-4B-4bit` | 4.6 GB |
 
 Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM runs TII's files as they are and computes each layer the way TII's code does.
 
 Other BitNet models work the same way: the rest of the Falcon3 and Falcon-E 1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T` (and its `-bf16` master weights, packed when loaded), `HF1BitLLM/Llama3-8B-1.58-100B-tokens`, and mlx-community's copies of them. `tests/check_bitnet_forms.py` compares each form with transformers on tiny made-up models, with nothing to download; `tests/check_bitnet.py` does it for a real model you have. GGUF files (for bitnet.cpp) and BitNet experiments with their own code, such as `1bitLLM/bitnet_b1_58-large`, are not MLX models and are not listed.
+
+Pictures are drawn by Black Forest Labs' FLUX.2 klein through [mflux](https://github.com/filipstrand/mflux). Every FLUX.2 klein works: 4B and 9B, 9B-KV, and the base 4B and 9B (slower, 50 steps, with guidance), from `black-forest-labs` or mlx-community's MLX copies at any bit width. Once one is downloaded, `./start.sh` puts mflux in a venv of its own, `~/.hikarilm/pictures-venv`, once, so it never changes the packages the chat models run with. Only the models themselves are listed: fine-tunes, LoRA adapters and other people's re-uploads are left out, and the start window says which were skipped. `tests/check_flux.py` checks HikariLM's list against mflux's and draws one picture with each model you have.
 
 With more memory, take bigger ones or less quantized ones (8-bit instead of 4-bit, say) from [mlx-community](https://huggingface.co/mlx-community).
 
@@ -48,7 +51,7 @@ Models are found in the Hugging Face cache, and in folders of their own in `~/.h
 - **Chat** with any of your models. Replies are drawn as Markdown, with tables, code, and math. A model's thinking is folded into one line, and Settings can cap how long it thinks.
 - **Attach files**: text and code, PDFs, Word and Excel files, and pictures. A picture goes to a model that can read it (any vision model mlx-vlm runs, such as Gemma 3 or Qwen2.5-VL). Long documents are read in parts so they fit the model's context, or only the passages closest to the question are sent.
 - **Remembers earlier chats**: a few notes from earlier chats and pictures that match your question are sent along with it. They are found by meaning with nomic-embed-text, which HikariLM runs in MLX beside the chat model (0.3 GB). Settings can turn this off.
-- **Make pictures** with your own picture models. Pick *Set up picture making…* in the model list for a one-click start with FLUX.2 klein: it downloads `sd-server` and the model once (about 5 GB) and runs them only while a picture is being made. In Settings you can add any other model `sd-server` runs, or point HikariLM at a picture server you already run (AUTOMATIC1111, Forge, Draw Things).
+- **Make pictures** with FLUX.2 klein: pick it under *Make pictures* in the model list and describe the picture. It takes the chat model's place in memory while it draws and leaves after the keepalive, like any other model.
 - **Code editor**: open a folder, edit a file, and ask about it in the chat beside it. It has syntax colours, suggestions as you type (Tab takes one), and a Markdown preview. Apply works like Cursor's. The model labels code meant for a file with that file's path, and Apply puts it into that file, or creates the file if it is new. A block can leave out unchanged code with `... existing code ...` comments. If it can't be placed exactly, the chosen model writes the file with the change in it. Each change then shows in red and green to accept or reject. Commands, output and examples get no Apply button. Nothing is written until you press Save.
 - **Long chats** are summarized when they get close to the context length, the way Open WebUI does it. The whole chat stays saved. Settings sets the context length, and how the model keeps what it has read (the KV cache: 8-bit by default, which holds about twice as much).
 - **Organize chats**: pin them, put them in folders, rename them. New chats are named from their first message.
@@ -67,7 +70,7 @@ Models are found in the Hugging Face cache, and in folders of their own in `~/.h
 
 ## Where things are saved
 
-Everything is in `~/.hikarilm`: chats, drafts, settings, pictures you made, the notes of earlier chats (`index/`), and the MLX venv. The models are in the Hugging Face cache (`~/.cache/huggingface/hub`). Your project folders stay where they are.
+Everything is in `~/.hikarilm`: chats, drafts, settings, pictures you made, the notes of earlier chats (`index/`), and the two venvs (MLX, and mflux for pictures). The models are in the Hugging Face cache (`~/.cache/huggingface/hub`). Your project folders stay where they are.
 
 ## Settings from the environment
 

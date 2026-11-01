@@ -14,9 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from helper import (__version__, budget, context, descriptions, documents, engine, imagegen, names, notes, picsetup, sdserver,
+from helper import (__version__, budget, context, descriptions, documents, engine, flux, imagegen, names, notes,
                     store, thinking, workspace)
-from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
+from helper.models import (EMBED_NAME, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
 from helper.version import code_stamp
@@ -37,18 +37,7 @@ VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirr
 PAGE_PART = re.compile(r"/(js|css)/([a-z0-9-]+\.(?:js|css))")
 IMAGES = "/api/images"
 
-managed = sdserver.Managed(KEEP_ALIVE)
-
-
-def unload_any(model: str) -> None:
-    """Free a large model, wherever it runs: sd-server is stopped, an MLX worker ended."""
-    if model.startswith(imagegen.SD_PREFIX):
-        managed.stop()
-    elif not model.startswith(imagegen.REMOTE_PREFIX):
-        unload(model)
-
-
-router = ModelRouter(unload_any)
+router = ModelRouter(unload)
 work = Work()
 indexer = notes.Indexer(embed)
 STARTED_WITH = code_stamp()
@@ -85,10 +74,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({**self._loaded(), "code": STARTED_WITH, "version": __version__})
             return
         if self.path == "/api/pictures":
-            self._send_json(self._picture_setup())
-            return
-        if self.path == "/api/pictures/setup":
-            self._send_json(picsetup.SETUP.status())
+            pictures, notes_ = imagegen.picture_models()
+            self._send_json({"models": [item["label"] for item in pictures], "notes": notes_,
+                             "ready": engine.pictures_ready(), "get": imagegen.GET_ONE})
             return
         if self.path.startswith(IMAGES + "/") and self.path.endswith(".png"):
             try:
@@ -117,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/tags":
             # Picture models are listed apart: they answer with a picture, never with words.
             chat = tags()
-            pictures, notes_ = imagegen.picture_models(context.load_settings())
+            pictures, notes_ = imagegen.picture_models()
             self._send_json({"models": chat, "vision": imagegen.vision_models(chat, show), "pictures": pictures,
                              "picture_notes": notes_, "sizes": imagegen.SIZES})
             return
@@ -273,17 +261,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/generate":
             self._generate()
-            return
-        if self.path == "/api/pictures/setup":
-            action = self._body(MAX_BODY).get("action")
-            if action == "start":
-                picsetup.SETUP.start()
-            elif action == "stop":
-                picsetup.SETUP.stop()
-            else:
-                self._send_json({"error": "action must be start or stop"}, status=400)
-                return
-            self._send_json(picsetup.SETUP.status())
             return
         if self.path == "/api/search":
             self._search()
@@ -596,8 +573,8 @@ class Handler(BaseHTTPRequestHandler):
         """Make one picture. Streams {"hikarilm":"loading"}, then {"progress", "total"} lines,
         then {"image": notes} once it is saved. Stop (the page going away) saves nothing.
 
-        The model id says where the picture is made: "sd:<name>" is an sd-server the
-        helper starts, "remote:<name>" a picture server the user runs.
+        The model is a FLUX.2 model flux.py found; it runs in the same worker slot as the
+        chat models, so the chat model leaves memory first.
         """
         try:
             request = imagegen.clean_request(self._body(MAX_BODY))
@@ -605,27 +582,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": str(error)}, status=400)
             return
         model = request["model"]
-        settings = context.load_settings()
-        pictures = settings["pictures"]
-        spec = program = None
-        try:
-            if model.startswith(imagegen.SD_PREFIX):
-                spec = imagegen.find_sd_model(settings, model)
-                if spec is None:
-                    raise ValueError(f"{model[len(imagegen.SD_PREFIX):]} is not in the picture models in Settings.")
-                program = sdserver.find_program(pictures["program"])
-                if not program:
-                    raise ValueError("sd-server, the program that draws the pictures, is not set up yet. "
-                                     "Pick \"Set up picture making…\" in the model list.")
-                if not sdserver.model_files(spec["args"]):
-                    raise ValueError(f"None of the model files for {spec['name']} were found. Check its line in Settings.")
-            elif model.startswith(imagegen.REMOTE_PREFIX):
-                if not pictures["address"]:
-                    raise ValueError("No picture server address is set in Settings.")
+        picture = flux.find(model)
+        if picture is None:
+            if model in engine.names():
+                message = f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model."
             else:
-                raise ValueError(f"{names.label(model)} answers messages and cannot make pictures. Choose a picture model.")
-        except ValueError as error:
-            self._send_json({"error": str(error)}, status=400)
+                message = f"{model} is not a downloaded FLUX.2 model. Get one with:  {imagegen.GET_ONE}"
+            self._send_json({"error": message}, status=400)
             return
         busy = work.start_picture()
         if busy:
@@ -635,70 +598,37 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_start()
             self._stream_line({"hikarilm": "loading", "model": model, "unloading": router.large
                                if router.large and router.large != model else None})
-            self._picture_from_server(request, spec, program, pictures["address"])
+            with KEEPER.using(model):
+                self._draw(request, picture)
         finally:
             work.end_picture()
 
-    def _picture_from_server(self, request: dict, spec: dict | None, program: str | None, address: str) -> None:
+    def _draw(self, request: dict, picture: dict) -> None:
         model = request["model"]
-        try:
-            # The chat model leaves memory before sd-server loads its own.
-            router.begin(model)
-            base = managed.ensure(program, spec) if spec is not None else address
+
+        def progress(step: int, total: int) -> None:
             router.commit(model)
-            if not self._stream_line({"progress": 0, "total": 0}):
+            self._stream_line({"progress": step, "total": total})
+
+        try:
+            router.begin(model)
+            image = engine.make_picture(picture, request, progress, lambda: getattr(self, "_gone", False))
+            if image is None or not self._stream_line({"progress": -1, "total": 0}):
                 return
-            image = sdserver.txt2img(
-                base, request, lambda step, total: self._stream_line({"progress": step, "total": total}),
-                lambda: getattr(self, "_gone", False))
-            if not image or not self._stream_line({"progress": -1, "total": 0}):
-                # Stopped: sd-server is stopped outright, which also frees its memory.
-                if spec is not None:
-                    managed.stop()
-                else:
-                    sdserver.interrupt(base)
-                return
-            record = imagegen.save(imagegen.decode(image), request)
-            self._stream_line({"image": record})
-        except sdserver.PictureError as error:
-            self._stream_line({"error": str(error)})
-        except ValueError as error:
+            self._stream_line({"image": imagegen.save(image, request)})
+        except (ModelError, ValueError) as error:
             self._stream_line({"error": str(error)})
         except OSError as error:
             self._stream_line({"error": f"The picture could not be saved: {error.strerror or error}"})
-        finally:
-            if spec is not None:
-                managed.touch()
 
     def _loaded(self) -> dict:
-        """What is really in memory, asked of the MLX worker and sd-server rather than
-        remembered, since models leave on their own when the keepalive runs out."""
-        large = router.large or ""
-        if large.startswith(imagegen.SD_PREFIX):
-            running_sd = managed.running()
-            return {"large_model": large if running_sd else None,
-                    "unloads_at": managed.stops_at if running_sd else None}
+        """What is really in memory, asked of the MLX worker rather than remembered, since
+        models leave on their own when the keepalive runs out."""
         loaded = [item for item in running() if item["name"] and item["name"] != EMBED_NAME]
         if not loaded:
             return {"large_model": None, "unloads_at": None}
         pick = loaded[0]
         return {"large_model": pick["name"], "unloads_at": KEEPER.leaves_at(pick["name"])}
-
-    def _picture_setup(self) -> dict:
-        """What Settings shows under Pictures: what was found and what is wrong."""
-        pictures = context.load_settings()["pictures"]
-        models, problems = sdserver.parse_models(pictures["models"])
-        program = sdserver.find_program(pictures["program"])
-        missing = [f"{model['name']}: its files are not downloaded yet; Set up picture making fetches them." for model in models
-                   if not sdserver.model_files(model["args"])]
-        server = None
-        if pictures["address"]:
-            try:
-                server = {"model": sdserver.current_model(pictures["address"])}
-            except sdserver.PictureError as error:
-                server = {"error": str(error)}
-        return {"program": program, "models": [model["name"] for model in models], "problems": problems + missing,
-                "server": server, "program_dir": str(sdserver.program_dir())}
 
     def _search(self) -> None:
         """A few earlier notes close to a question. Never an error: a send must not wait on this."""
@@ -894,7 +824,7 @@ def _stop_on_signal(*_args) -> None:
 
 
 def main() -> None:
-    # A helper that is told to stop must not leave sd-server holding its model in memory.
+    # A helper that is told to stop must not leave a worker holding its model in memory.
     signal.signal(signal.SIGTERM, _stop_on_signal)
     moved = store.move_old_home()
     if moved:
@@ -910,6 +840,5 @@ def main() -> None:
         print("\nstopping", flush=True)
     finally:
         stopping.set()
-        managed.stop()
         engine.unload()
         server.server_close()

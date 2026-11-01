@@ -5,7 +5,8 @@
   big three below are only suggestions for Macs with less than 18 GB of RAM. No Ollama, no LM Studio.
 - **v3.1**: nomic-embed-text in MLX, and with it RAG: earlier chats and pictures found again.
 - **v3.5**: Falcon3 1.58-bit from TII's own files, checked against TII's code. Released.
-- **v4**: the models we convert ourselves, from their makers' official weights.
+- **v4**: the models from their makers' official weights, and pictures with FLUX.2 klein through mflux.
+  Only the models themselves: no LoRA, no fine-tunes.
 
 | Model | Version | Runs with | Weights | About |
 |---|---|---|---|---|
@@ -14,7 +15,7 @@
 | Gemma 3 12B (reads pictures) | v3 | mlx-vlm | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
 | Falcon3 10B BitNet | v3.5 | mlx-lm | `tiiuae/Falcon3-10B-Instruct-1.58bit`, TII's own files | 4 GB |
 | nomic-embed-text | v3.1 | our own MLX port | `nomic-ai/nomic-embed-text-v1.5` | 0.3 GB |
-| FLUX.2 klein 4B | v4 | mflux | `black-forest-labs/FLUX.2-klein-4B`, made 4-bit by us | 15 GB download, 4.6 GB kept |
+| FLUX.2 klein 4B | v4 | mflux | `mlx-community/FLUX.2-Klein-4B-4bit` (any FLUX.2 klein works) | 4.6 GB |
 
 Rules that carry over: one large model in memory at a time, RAM first, nothing
 written to disk until Save, chats and notes keep working across each upgrade.
@@ -97,7 +98,7 @@ and long files fell back to shared words.
 - [x] Long files: the closest passages by meaning again.
 - [x] `__version__ = "3.1.0"`, tag `v3.1.0`, once the Mac check passes.
 
-## v4.0.0: our own conversions, from official weights only
+## v4.0.0: official weights only
 
 Each one is checked against its makers' own code before it is used.
 
@@ -124,8 +125,19 @@ Each one is checked against its makers' own code before it is used.
 - [x] On the Mac: `tests/check_bitnet_forms.py` passes. Released in v3.5.1, with a "Report a problem" button in Settings. It needs no downloads: it writes a tiny random
   model in each form and compares MLX with transformers on it. (`tests/check_bitnet.py` does the same
   for a real repo, for anyone who has one.)
-- [ ] FLUX.2 klein: mflux with Black Forest Labs' weights, made 4-bit and saved once (`mflux-save`).
-  Picture setup in the page downloads and converts it, with progress.
-- [ ] Delete `sdserver.py` and `picsetup.py`, and the settings that only mattered for sd-server.
-- [ ] All tests pass, and a picture made on the Mac.
+### Pictures with mflux
+
+- [x] Every FLUX.2 klein mflux runs (4B, 9B, 9B-KV, base 4B, base 9B), from Black Forest Labs or
+  mlx-community's copies at any bit width; no conversion of our own. `flux.py` names each one the
+  way mflux does, from the repo's name, checked against the transformer's blocks in the weights.
+- [x] Only the models themselves: fine-tunes, LoRA adapters and other makers' re-uploads are left out,
+  with a note saying why.
+- [x] `flux_worker.py` runs in `~/.hikarilm/pictures-venv` (mflux pins its own MLX and wants torch and
+  transformers 5), installed by `start.py` once a FLUX.2 model is downloaded. It shares the one worker
+  slot with the chat models, so the one-large-model rule holds, and the keepalive frees it.
+- [x] Delete `sdserver.py` and `picsetup.py`, the setup window, the picture server address, and the
+  picture settings.
+- [x] Tests with a fake picture worker.
+- [ ] On the Mac: `~/.hikarilm/pictures-venv/bin/python tests/check_flux.py` passes (mflux's table, then
+  a picture from each downloaded model), and a picture made in the page.
 - [ ] `__version__ = "4.0.0"`, tag `v4.0.0`.

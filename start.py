@@ -61,14 +61,15 @@ def port_is_free(host: str, port: int) -> bool:
 
 
 def report_pictures() -> None:
-    """Say which picture models are ready."""
-    from helper import context, imagegen
+    """Say which picture models are ready. mflux is installed once there is one to run."""
+    from helper import engine, imagegen
 
-    pictures, notes = imagegen.picture_models(context.load_settings())
+    pictures, notes = imagegen.picture_models()
     if pictures:
+        engine.prepare_pictures(say)
         say("Picture models: " + ", ".join(item["label"] for item in pictures))
     else:
-        say("No picture models yet. To make pictures in Chat, set up sd-server in Settings.")
+        say("No picture models yet. To make pictures in Chat, get FLUX.2 klein:  " + imagegen.GET_ONE)
     for note in notes:
         say("  " + note)
 

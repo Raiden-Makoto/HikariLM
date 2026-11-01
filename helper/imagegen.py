@@ -1,25 +1,22 @@
 """Making pictures: which models make them, the requests, and the images/ folder.
 
-Pictures are made by sd-server, which the helper starts, or by a picture server
-the user runs. Their models are listed apart and never answer messages.
+Pictures are drawn by FLUX.2 models through mflux (flux.py finds them, engine.py
+runs them). They are listed apart and never answer messages.
 """
 
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import os
 import platform
 import re
 import secrets
-import shlex
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 
-from helper import store
+from helper import flux, store
 
 SIZES = {
     "square": (1024, 1024),
@@ -48,35 +45,8 @@ def apple_silicon() -> bool:
         return False
 
 
-# FLUX.2 klein 4B for sd-server, as stable-diffusion.cpp's docs/flux2.md sets it up. None
-# of these needs a Hugging Face account (the small-decoder VAE stands in for FLUX.2-dev's,
-# which is behind a sign-in).
-KLEIN_FILES = (
-    ("--diffusion-model", "flux-2-klein-4b-Q4_0.gguf",
-     "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q4_0.gguf"),
-    ("--vae", "full_encoder_small_decoder.safetensors",
-     "https://huggingface.co/black-forest-labs/FLUX.2-small-decoder/resolve/main/full_encoder_small_decoder.safetensors"),
-    ("--llm", "Qwen3-4B-Q4_K_M.gguf",
-     "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"),
-)
-KLEIN_OPTIONS = "--cfg-scale 1.0 --steps 4"
-
-
-def models_dir() -> Path:
-    return store.home() / "models"
-
-
-def klein_setup() -> dict:
-    """The files FLUX.2 klein needs, whether each is in the models folder yet, and the line
-    for Settings that uses them."""
-    folder = models_dir()
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-    files = [{"name": name, "url": url, "found": (folder / name).is_file()} for _, name, url in KLEIN_FILES]
-    line = "flux2-klein: " + " ".join(f"{flag} {shlex.quote(str(folder / name))}" for flag, name, _ in KLEIN_FILES)
-    return {"folder": str(folder), "files": files, "line": f"{line} {KLEIN_OPTIONS}"}
+SUGGESTED = "mlx-community/FLUX.2-Klein-4B-4bit"
+GET_ONE = f"~/.hikarilm/venv/bin/hf download {SUGGESTED}"
 
 
 def vision_models(names: list[str], show) -> list[str]:
@@ -91,59 +61,22 @@ def vision_models(names: list[str], show) -> list[str]:
     return vision
 
 
-# --- where pictures come from -------------------------------------------------------
-
-SD_PREFIX = "sd:"          # an sd-server model the helper starts and stops
-REMOTE_PREFIX = "remote:"  # a picture server the user runs, reached by its address
-
+# --- which models make pictures -------------------------------------------------------
 
 def is_picture_model(model: str) -> bool:
-    return model.startswith((SD_PREFIX, REMOTE_PREFIX))
-PICTURE_DEFAULTS = {"program": "", "models": "", "address": ""}
+    return flux.find(model) is not None
 
 
-def clean_picture_settings(raw) -> dict:
-    raw = raw if isinstance(raw, dict) else {}
-    out = {}
-    for key, limit in (("program", 1000), ("models", 20000), ("address", 500)):
-        value = raw.get(key)
-        out[key] = value.strip()[:limit] if isinstance(value, str) else ""
-    if out["address"] and not out["address"].startswith(("http://", "https://")):
-        out["address"] = "http://" + out["address"]
-    return out
-
-
-def picture_models(settings: dict) -> tuple[list[dict], list[str]]:
-    """Every model that can make a picture now, for the picker, and a plain note for each
-    source that is set up but not usable."""
-    from helper import sdserver
-
-    found, notes = [], []
-    pictures = settings.get("pictures") or PICTURE_DEFAULTS
-    models, problems = sdserver.parse_models(pictures["models"])
-    notes += problems
-    if models:
-        program = sdserver.find_program(pictures["program"])
-        if program:
-            found += [{"id": SD_PREFIX + model["name"], "label": model["name"], "kind": "sd"} for model in models]
-        else:
-            notes.append(f"sd-server was not found{' at ' + pictures['program'] if pictures['program'] else ''}, "
-                         "so its models are hidden. Use \"Set up picture making…\".")
-    if pictures["address"]:
-        try:
-            name = sdserver.current_model(pictures["address"])
-            found.append({"id": REMOTE_PREFIX + name, "label": name + " (picture server)", "kind": "remote"})
-        except sdserver.PictureError as error:
-            notes.append(str(error))
-    return found, notes
-
-
-def find_sd_model(settings: dict, model_id: str) -> dict | None:
-    from helper import sdserver
-
-    name = model_id[len(SD_PREFIX):]
-    models, _ = sdserver.parse_models((settings.get("pictures") or PICTURE_DEFAULTS)["models"])
-    return next((model for model in models if model["name"] == name), None)
+def picture_models() -> tuple[list[dict], list[str]]:
+    """Every downloaded FLUX.2 model, for the picker, and a plain note for each one left out.
+    Two copies of the same model keep their repo names, so both can be told apart."""
+    found, notes = flux.scan()
+    items = [{"id": name, "label": model["label"]} for name, model in found.items()]
+    labels = [item["label"] for item in items]
+    for item in items:
+        if labels.count(item["label"]) > 1:
+            item["label"] = item["id"].split("/")[-1]
+    return items, notes
 
 
 # --- a request ------------------------------------------------------------------
@@ -212,20 +145,10 @@ def _write(path: Path, data: bytes) -> None:
         raise
 
 
-def decode(image_b64) -> bytes:
-    if not isinstance(image_b64, str) or not image_b64:
-        raise ValueError("The picture server sent no picture.")
-    try:
-        data = base64.b64decode(image_b64, validate=True)
-    except (binascii.Error, ValueError):
-        raise ValueError("The picture server sent a picture that could not be read.") from None
-    if not data.startswith(PNG):
-        raise ValueError("The picture server sent something that is not a PNG picture.")
-    return data
-
-
 def save(data: bytes, request: dict) -> dict:
     """Write the picture and its notes. The picture goes last, so a crash never shows half of one."""
+    if not isinstance(data, bytes) or not data.startswith(PNG):
+        raise ValueError("The picture model finished without a PNG picture.")
     folder = images_dir()
     folder.mkdir(parents=True, exist_ok=True)
     image_id = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3)

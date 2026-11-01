@@ -19,6 +19,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072, 
 # R1 distills write <think> themselves, so their templates do not show it.
 THINKERS = re.compile(r"deepseek-r1|qwq", re.IGNORECASE)
 SETUP = "MLX is not set up yet. Stop HikariLM and run ./start.sh again; it installs mlx-lm and mlx-vlm once."
+PICTURE_SETUP = ("mflux, which draws the pictures, is not set up yet. Stop HikariLM and run ./start.sh again; "
+                 "it installs mflux once a FLUX.2 model is downloaded.")
 
 
 class ModelError(Exception):
@@ -55,32 +58,75 @@ def python() -> Path:
     return Path(os.environ.get("HIKARILM_MLX_PYTHON") or venv() / "bin" / "python")
 
 
+def _prepare_venv(folder: Path, interpreter: Path, packages: tuple[str, ...], what: str, say,
+                  base_python: str) -> bool:
+    mark = folder / READY_MARK
+    try:
+        if mark.read_text(encoding="utf-8").split() == list(packages):
+            return True
+    except OSError:
+        pass
+    say(f"Setting up {what} in {folder} (once)…")
+    try:
+        if not interpreter.exists():
+            subprocess.run([base_python, "-m", "venv", str(folder)], check=True)
+        subprocess.run([str(interpreter), "-m", "pip", "install", "--upgrade", *packages], check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        say(f"  {what} could not be set up ({error}). Run ./start.sh again to retry.")
+        return False
+    mark.write_text(" ".join(packages) + "\n", encoding="utf-8")
+    say(f"  {what} is ready.")
+    return True
+
+
 def prepare(say, base_python: str = sys.executable) -> bool:
     """Make ~/.hikarilm/venv and install the MLX packages into it, once. True when it is ready.
     Nothing is checked when HIKARILM_MLX_PYTHON names another Python."""
     if os.environ.get("HIKARILM_MLX_PYTHON"):
         return True
-    mark = venv() / READY_MARK
-    if mark.is_file():
+    return _prepare_venv(venv(), python(), PACKAGES, "MLX", say, base_python)
+
+
+# mflux pins its own MLX and wants torch and transformers 5, so it has a venv of its
+# own and never changes the one the chat models run in.
+PICTURE_PACKAGES = ("mflux",)
+PICTURE_WORKER = Path(__file__).with_name("flux_worker.py")
+
+
+def picture_venv() -> Path:
+    return store.home() / "pictures-venv"
+
+
+def picture_python() -> Path:
+    return Path(os.environ.get("HIKARILM_PICTURE_PYTHON") or picture_venv() / "bin" / "python")
+
+
+def picture_worker() -> Path:
+    return Path(os.environ.get("HIKARILM_PICTURE_WORKER") or PICTURE_WORKER)
+
+
+def prepare_pictures(say, base_python: str = sys.executable) -> bool:
+    """Make ~/.hikarilm/pictures-venv with mflux, once. True when it is ready."""
+    if os.environ.get("HIKARILM_PICTURE_PYTHON"):
         return True
-    say(f"Setting up MLX in {venv()} (once, about 1 GB to download)…")
+    return _prepare_venv(picture_venv(), picture_python(), PICTURE_PACKAGES, "mflux (for pictures)", say,
+                         base_python)
+
+
+def pictures_ready() -> bool:
+    if os.environ.get("HIKARILM_PICTURE_PYTHON"):
+        return picture_python().exists()
     try:
-        if not python().exists():
-            subprocess.run([base_python, "-m", "venv", str(venv())], check=True)
-        subprocess.run([str(python()), "-m", "pip", "install", "--upgrade", *PACKAGES], check=True)
-    except (OSError, subprocess.CalledProcessError) as error:
-        say(f"  MLX could not be set up ({error}). Run ./start.sh again to retry.")
+        return (picture_venv() / READY_MARK).read_text(encoding="utf-8").split() == list(PICTURE_PACKAGES)
+    except OSError:
         return False
-    mark.write_text(" ".join(PACKAGES) + "\n", encoding="utf-8")
-    say("  MLX is ready.")
-    return True
 
 
 def worker() -> Path:
     return Path(os.environ.get("HIKARILM_MLX_WORKER") or WORKER)
 
 
-def _hub() -> Path:
+def hub() -> Path:
     if os.environ.get("HF_HUB_CACHE"):
         return Path(os.environ["HF_HUB_CACHE"])
     if os.environ.get("HF_HOME"):
@@ -110,7 +156,7 @@ def is_bitnet(config: dict | None) -> bool:
     return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet"
 
 
-def _snapshot(repo: Path) -> Path | None:
+def snapshot(repo: Path) -> Path | None:
     try:
         return repo / "snapshots" / (repo / "refs" / "main").read_text(encoding="utf-8").strip()
     except OSError:
@@ -129,15 +175,15 @@ def found() -> dict[str, Path]:
         if time.monotonic() - _scan[0] < SCAN_SECONDS:
             return _scan[1]
         out: dict[str, Path] = {}
-        hub = _hub()
-        for repo in sorted(hub.glob("models--*")) if hub.is_dir() else []:
+        cache = hub()
+        for repo in sorted(cache.glob("models--*")) if cache.is_dir() else []:
             if any(repo.glob("blobs/*.incomplete")):
                 continue
-            snapshot = _snapshot(repo)
+            folder = snapshot(repo)
             name = repo.name[len("models--"):].replace("--", "/", 1)
             trusted = name.startswith("mlx-community/") or "mlx" in re.split(r"[-_.]", name.split("/")[-1].lower())
-            if snapshot and _is_mlx(snapshot, trusted):
-                out[name] = snapshot
+            if folder and _is_mlx(folder, trusted):
+                out[name] = folder
         own = store.home() / "models"
         for folder in sorted(own.iterdir()) if own.is_dir() else []:
             if folder.is_dir() and _is_mlx(folder, trusted=True):
@@ -223,14 +269,17 @@ def show(model: str) -> dict:
 class _Worker:
     """The worker process and the lines it writes, read by a thread into a queue."""
 
-    def __init__(self, model: str, folder: Path, flags: list[str], log_name: str = "mlx-worker.log") -> None:
-        if not python().exists():
-            raise ModelError(SETUP)
+    def __init__(self, model: str, folder: Path, flags: list[str], log_name: str = "mlx-worker.log",
+                 interpreter: Path | None = None, script: Path | None = None, size: int | None = None) -> None:
+        interpreter = interpreter or python()
+        if not interpreter.exists():
+            raise ModelError(SETUP if interpreter == python() else PICTURE_SETUP)
         self.model = model
-        self.size = _size(folder)
+        self.size = _size(folder) if size is None else size
+        self.log_name = log_name
         store.home().mkdir(parents=True, exist_ok=True)
         log = open(store.home() / log_name, "wb")
-        command = [str(python()), str(worker()), "--model", str(folder)] + flags
+        command = [str(interpreter), str(script or worker()), "--model", str(folder)] + flags
         try:
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
                                             text=True, encoding="utf-8", bufsize=1)
@@ -282,23 +331,28 @@ _worker: _Worker | None = None
 _lock = threading.Lock()      # held from opening a reply until it is closed
 
 
-def _died(model: str) -> str:
+def _died(model: str, log_name: str = "mlx-worker.log") -> str:
     return (f"The MLX worker stopped while running {label(model)}. What it said is in "
-            f"{store.home() / 'mlx-worker.log'}.")
+            f"{store.home() / log_name}.")
 
 
-def _ready(model: str) -> _Worker:
-    """The worker with this model loaded, starting it (and ending any other) if needed."""
+def _ready(model: str, picture: dict | None = None) -> _Worker:
+    """The worker with this model loaded, starting it (and ending any other) if needed.
+    A picture model, found by flux.py, runs in the picture venv."""
     global _worker
     if _worker is not None and _worker.model == model and _worker.alive():
         return _worker
     _end()
-    folder = _folder(model)
-    started = _Worker(model, folder, ["--vision"] if "vision_config" in (_config(folder) or {}) else [])
+    if picture is not None:
+        started = _Worker(model, picture["folder"], ["--variant", picture["variant"]], "picture-worker.log",
+                          picture_python(), picture_worker(), picture["size"])
+    else:
+        folder = _folder(model)
+        started = _Worker(model, folder, ["--vision"] if "vision_config" in (_config(folder) or {}) else [])
     event = started.next(LOAD_SECONDS)
     if not event or not event.get("ready"):
         started.end()
-        raise ModelError((event or {}).get("error") or _died(model))
+        raise ModelError((event or {}).get("error") or _died(model, started.log_name))
     _worker = started
     return started
 
@@ -385,7 +439,7 @@ def _forget(process: _Worker) -> None:
 
 
 def _kv_bits() -> int:
-    from helper import context  # context imports imagegen; only needed once a chat starts
+    from helper import context  # only needed once a chat starts
 
     return context.load_settings()["kv_cache"]["bits"]
 
@@ -404,6 +458,53 @@ def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict |
         _lock.release()
         raise
     return Reply(model, process)
+
+
+PICTURE_POLL = 0.5
+
+
+def make_picture(picture: dict, request: dict, on_progress, stopped) -> bytes | None:
+    """Draw one picture with a FLUX.2 model found by flux.py and return the PNG. None if
+    stopped() said so first; the worker is ended then, which also frees its memory."""
+    if not _lock.acquire(timeout=WAIT_SECONDS):
+        raise ModelError("Another reply is still being written.")
+    out = None
+    try:
+        process = _ready(picture["id"], picture)
+        on_progress(0, 0)
+        fd, out = tempfile.mkstemp(dir=store.home(), prefix=".drawing.", suffix=".png")
+        os.close(fd)
+        process.send({"op": "picture", "prompt": request["prompt"], "width": request["width"],
+                      "height": request["height"], "seed": request["seed"],
+                      "steps": request["steps"] or picture["steps"], "guidance": picture["guidance"], "out": out})
+        deadline = time.monotonic() + WAIT_SECONDS
+        while True:
+            if stopped():
+                _forget(process)
+                return None
+            try:
+                event = process.lines.get(timeout=PICTURE_POLL)
+            except queue.Empty:
+                if time.monotonic() > deadline:
+                    _forget(process)
+                    raise ModelError(f"{picture['label']} stopped answering.") from None
+                continue
+            if event is None or "error" in event:
+                if event is None or not process.alive():
+                    _forget(process)
+                raise ModelError((event or {}).get("error") or _died(picture["id"], process.log_name))
+            deadline = time.monotonic() + WAIT_SECONDS
+            if event.get("done"):
+                return Path(out).read_bytes()
+            if "progress" in event:
+                on_progress(int(event["progress"]), int(event.get("total") or 0))
+    finally:
+        if out:
+            try:
+                os.unlink(out)
+            except OSError:
+                pass
+        _lock.release()
 
 
 def _plain(message: dict) -> dict:
@@ -427,9 +528,9 @@ _embed_lock = threading.Lock()
 
 def embed_folder() -> Path | None:
     """Where Nomic's files are, once all of them are downloaded."""
-    snapshot = _snapshot(_hub() / ("models--" + EMBED_REPO.replace("/", "--")))
-    if snapshot and all((snapshot / name).is_file() for name in EMBED_FILES):
-        return snapshot
+    folder = snapshot(hub() / ("models--" + EMBED_REPO.replace("/", "--")))
+    if folder and all((folder / name).is_file() for name in EMBED_FILES):
+        return folder
     return None
 
 

@@ -1,10 +1,9 @@
-import base64
 import os
 import tempfile
 import unittest
 from unittest import mock
 
-from helper import imagegen, sdserver, store
+from helper import imagegen, store
 from helper.router import Work
 
 PNG = imagegen.PNG + b"rest of a picture"
@@ -31,11 +30,6 @@ class AppleSiliconTest(unittest.TestCase):
 
 
 class ModelsTest(unittest.TestCase):
-    def test_picture_models_are_named_by_where_they_run(self):
-        self.assertTrue(imagegen.is_picture_model("sd:flux2-klein"))
-        self.assertTrue(imagegen.is_picture_model("remote:sdxl"))
-        self.assertFalse(imagegen.is_picture_model("mlx-community/gemma-3-12b-it-4bit"))
-
     def test_vision_from_capabilities_and_unreadable_left_out(self):
         def show(name):
             if name == "broken":
@@ -67,7 +61,7 @@ class FolderTest(unittest.TestCase):
 
     def test_save_read_delete(self):
         request = imagegen.clean_request({"model": "flux", "prompt": "a fox", "seed": 3})
-        record = imagegen.save(imagegen.decode(base64.b64encode(PNG).decode()), request)
+        record = imagegen.save(PNG, request)
         self.assertEqual((record["prompt"], record["seed"]), ("a fox", 3))
         self.assertEqual(imagegen.read(record["id"]), PNG)
         self.assertTrue(imagegen.delete(record["id"]))
@@ -75,8 +69,8 @@ class FolderTest(unittest.TestCase):
         self.assertFalse(imagegen.delete(record["id"]))
 
     def test_a_chat_keeps_only_the_notes_of_its_picture(self):
-        record = imagegen.save(PNG, imagegen.clean_request({"model": "sd:flux", "prompt": "a fox", "seed": 9}))
-        store.save("c1", "sd:flux", [{"role": "user", "content": "a fox"},
+        record = imagegen.save(PNG, imagegen.clean_request({"model": "flux", "prompt": "a fox", "seed": 9}))
+        store.save("c1", "flux", [{"role": "user", "content": "a fox"},
                                      {"role": "assistant", "content": "", "picture": {**record, "image": "AAAA"}}])
         kept = store.load("c1")["messages"][1]["picture"]
         self.assertEqual((kept["id"], kept["seed"], kept["prompt"]), (record["id"], 9, "a fox"))
@@ -84,47 +78,13 @@ class FolderTest(unittest.TestCase):
         self.assertEqual(store.picture_ids("c1"), [record["id"]])
 
     def test_bad_input_is_refused(self):
-        for bad in ("", "not base64!", base64.b64encode(b"GIF89a").decode()):
+        request = imagegen.clean_request({"model": "flux", "prompt": "a fox"})
+        for bad in (b"", b"GIF89a", "not bytes"):
             with self.assertRaises(ValueError):
-                imagegen.decode(bad)
+                imagegen.save(bad, request)
         for bad in ("../x", "20260101-000000-zzzzzz", ""):
             with self.assertRaises(ValueError):
                 imagegen.read(bad)
-
-
-class SdServerTest(unittest.TestCase):
-    def test_model_lines(self):
-        models, problems = sdserver.parse_models(
-            "# my models\n"
-            "flux2-klein: --diffusion-model ~/m/flux.gguf --vae ~/m/ae.sft --llm '/m/qwen 3.gguf'\n"
-            "bad line without colon\n"
-            "z: --listen-port 9\n"
-            "flux2-klein: -m x\n")
-        self.assertEqual([m["name"] for m in models], ["flux2-klein"])
-        self.assertEqual(models[0]["args"][1], os.path.expanduser("~/m/flux.gguf"))
-        self.assertEqual(models[0]["args"][-1], "/m/qwen 3.gguf")
-        self.assertEqual(len(problems), 3)
-
-    def test_size_counts_only_files_that_exist(self):
-        with tempfile.NamedTemporaryFile() as handle:
-            handle.write(b"x" * 1000)
-            handle.flush()
-            self.assertEqual(sdserver.model_size(["--diffusion-model", handle.name, "--vae", "/nope"]), 1000)
-
-    def test_keepalive(self):
-        self.assertEqual(sdserver.keepalive_seconds("5m"), 300)
-        self.assertEqual(sdserver.keepalive_seconds("30s"), 30)
-        self.assertEqual(sdserver.keepalive_seconds("nonsense"), 300)
-
-    def test_picker_lists_every_source(self):
-        settings = {"pictures": {"program": "", "models": "flux: -m /x.gguf", "address": ""}}
-        with mock.patch.object(sdserver, "find_program", return_value="/bin/sd-server"):
-            found, notes = imagegen.picture_models(settings)
-        self.assertEqual(([item["id"] for item in found], notes), (["sd:flux"], []))
-        with mock.patch.object(sdserver, "find_program", return_value=None):
-            found, notes = imagegen.picture_models(settings)
-        self.assertEqual(found, [])
-        self.assertIn("sd-server was not found", notes[0])
 
 
 class WorkTest(unittest.TestCase):

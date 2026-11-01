@@ -76,7 +76,7 @@ export const pictureSeed = document.querySelector("#picture-seed");
 export const pictureSteps = document.querySelector("#picture-steps");
 export const pictureToggle = document.querySelector("#picture-toggle");
 export const isPictureModel = (value) => allPictures.some((item) => item.id === value);
-export const pictureLabel = (id) => allPictures.find((item) => item.id === id)?.label || id.replace(/^(sd|remote):/, "");
+export const pictureLabel = (id) => allPictures.find((item) => item.id === id)?.label || modelLabel(id.replace(/^(sd|remote):/, ""));
 
 function fillPictureSizes(sizes) {
   if (pictureSize.options.length || !Object.keys(sizes).length) return;
@@ -162,7 +162,7 @@ export function fillModels(problem = modelProblem) {
     const picturePlace = group("Make pictures");
     for (const item of pictures) picturePlace.append(new Option(item.label, item.id));
   } else if (!inCodeView()) {
-    group("Make pictures").append(new Option("Set up picture making…", SETUP_PICTURES));
+    group("Make pictures").append(new Option("Get a picture model…", SETUP_PICTURES));
   }
   const values = [...models, ...pictures.map((item) => item.id)];
   modelSelect.value = values.includes(saved) ? saved : values[0];

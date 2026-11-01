@@ -1,7 +1,6 @@
-// The Settings window, and the one-time picture setup window.
-import { state } from "./state.js";
+// The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
-import { allPictures, isPictureModel, loadModels, modelLabel } from "./models.js";
+import { isPictureModel, modelLabel } from "./models.js";
 import { applyBackground } from "./page.js";
 
 // Earlier chats and pictures: the helper keeps small notes of what was
@@ -26,7 +25,6 @@ async function showNotesSetting() {
 
 // Context length and compaction live in the helper, which enforces them.
 let serverSettings = null;
-const gigabytes = (bytes) => (bytes / 1024 ** 3).toFixed(1) + " GB";
 const numberOrNull = (input) => (input.value.trim() === "" ? null : Number(input.value));
 
 // Context length belongs to chat models; a picture model has none.
@@ -55,15 +53,11 @@ async function showContextSetting() {
   document.querySelector("#think-limit").value = serverSettings.thinking.budget ?? "";
   document.querySelector("#kv-bits").value = String(serverSettings.kv_cache.bits);
   showKvWarning();
-  const pictures = serverSettings.pictures;
-  document.querySelector("#pic-program").value = pictures.program;
-  document.querySelector("#pic-models").value = pictures.models;
-  document.querySelector("#pic-address").value = pictures.address;
-  showPictureSetup();
+  showPictureSetting();
   await showContext();
 }
 
-async function showPictureSetup(saved = false) {
+async function showPictureSetting() {
   const note = document.querySelector("#picture-note");
   let body;
   try {
@@ -72,115 +66,24 @@ async function showPictureSetup(saved = false) {
     note.textContent = "Could not reach the helper.";
     return;
   }
-  const parts = saved ? ["Saved."] : [];
+  document.querySelector("#picture-get").textContent = body.get;
+  const parts = [];
   if (body.models.length) {
-    parts.push(body.program
-      ? "sd-server: " + body.program + ". Models: " + body.models.join(", ") + "."
-      : (serverSettings.pictures.program
-        ? "sd-server is not at the place written in \"Where sd-server is\". Empty that box, or use Set up picture making."
-        : "sd-server is not in " + body.program_dir + " yet. Use Set up picture making."));
-  } else if (!body.server) {
-    parts.push("No picture model is set up yet.");
+    parts.push("Downloaded: " + body.models.join(", ") + ".");
+    if (!body.ready) parts.push("mflux is not set up yet. Run ./start.sh again to install it.");
+  } else {
+    parts.push("No FLUX.2 model is downloaded yet.");
   }
-  if (body.server) parts.push(body.server.error ? plainError(body.server.error) : "Picture server: " + body.server.model + ".");
-  parts.push(...body.problems);
+  parts.push(...body.notes);
   note.textContent = parts.join(" ");
 }
 
-// The one-time picture setup: the helper downloads sd-server and FLUX.2 klein
-// into the app folder and adds the model; this window shows how far it is.
-const pictureSetup = document.querySelector("#picture-setup");
-const KLEIN_ID = "sd:flux2-klein";
-let setupTimer = null;
-let setupReloaded = false;
-
-async function refreshSetup() {
-  const note = document.querySelector("#setup-note");
-  let body;
-  try {
-    body = await (await fetch("/api/pictures/setup")).json();
-  } catch (error) {
-    note.textContent = "Could not reach the HikariLM helper.";
-    return;
-  }
-  document.querySelector("#setup-folder").textContent = body.klein.folder.replace(/[\\/]models$/, "");
-  const parts = [{ key: "sd-server", label: "sd-server, the program that draws", ready: Boolean(body.program) },
-    ...body.klein.files.map((file) => ({ key: file.name, label: file.name, ready: file.found }))];
-  const list = document.querySelector("#setup-list");
-  list.replaceChildren();
-  for (const part of parts) {
-    const item = document.createElement("li");
-    const mark = document.createElement("span");
-    mark.className = "mark";
-    const now = body.running && body.file === part.key;
-    mark.textContent = part.ready ? "✓" : now ? "↓" : "·";
-    const label = document.createElement("span");
-    label.textContent = part.label + (now && body.total ? " (" + Math.round((100 * body.done) / body.total) + "%)" : "");
-    item.append(mark, label);
-    list.append(item);
-  }
-  const allReady = parts.every((part) => part.ready);
-  const usable = allPictures.some((item) => item.id === KLEIN_ID);
-  if (body.finished && !usable && !setupReloaded) {
-    setupReloaded = true;
-    loadModels();
-  }
-  const bar = document.querySelector("#setup-bar");
-  bar.hidden = !(body.running && body.total);
-  if (!bar.hidden) bar.firstElementChild.style.width = ((100 * body.done) / body.total).toFixed(1) + "%";
-  note.textContent = body.running
-    ? "Downloading " + body.file + (body.total ? ": " + gigabytes(body.done) + " of " + gigabytes(body.total) : "…") +
-      ". You can close this window; the download keeps going."
-    : body.error || (usable ? "Done. Pick flux2-klein under Make pictures in the model list, then describe a picture." : "");
-  const start = document.querySelector("#setup-start");
-  start.hidden = body.running || usable;
-  start.textContent = allReady ? "Finish setup" : parts.some((part) => part.ready) ? "Carry on" : "Download and set up";
-  document.querySelector("#setup-stop").hidden = !body.running;
-  document.querySelector("#setup-use").hidden = !usable || body.running;
-}
-
+// From the model list when no picture model is downloaded: Settings says how to get one.
 export function openPictureSetup() {
-  setupReloaded = false;
-  pictureSetup.showModal();
-  refreshSetup();
-  clearInterval(setupTimer);
-  setupTimer = setInterval(refreshSetup, 1000);
-}
-const setupAction = async (action) => {
-  await fetch("/api/pictures/setup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action }),
-  }).catch(() => {});
-  refreshSetup();
-};
-
-async function savePictureSetting() {
-  const wanted = {
-    context: serverSettings.context,
-    compaction: serverSettings.compaction,
-    thinking: serverSettings.thinking,
-    kv_cache: serverSettings.kv_cache,
-    pictures: {
-      program: document.querySelector("#pic-program").value,
-      models: document.querySelector("#pic-models").value,
-      address: document.querySelector("#pic-address").value,
-    },
-  };
-  const response = await fetch("/api/settings", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(wanted),
-  });
-  const body = await response.json();
-  if (!response.ok) {
-    document.querySelector("#picture-note").textContent = "Not saved: " + plainError(body.error || "the helper refused it");
-    return;
-  }
-  serverSettings = body;
-  document.querySelector("#pic-address").value = body.pictures.address;
-  await showPictureSetup(true);
-  if (!state.activeRequest) loadModels();
+  showNotesSetting();
+  showContextSetting();
+  settings.showModal();
+  document.querySelector("#picture-setting").scrollIntoView({ block: "center" });
 }
 
 // Steps of 1,024 up to 8K, then a quarter of each doubling, so there is
@@ -247,7 +150,6 @@ async function saveContextSetting() {
       budget: numberOrNull(document.querySelector("#think-limit")),
     },
     kv_cache: { bits: Number(document.querySelector("#kv-bits").value) },
-    pictures: serverSettings.pictures,
   };
   showKvWarning();
   const note = document.querySelector("#compact-note");
@@ -268,7 +170,6 @@ async function saveContextSetting() {
   await showContext();
 }
 
-// Listeners and first steps, run by main.js once every part is loaded.
 const ISSUES = "https://github.com/Raiden-Makoto/HikariLM/issues/new";
 
 // Read ahead of the click: Safari blocks a window opened after an await.
@@ -286,33 +187,18 @@ function reportIssue() {
   window.open(ISSUES + "?" + new URLSearchParams({ body }), "_blank", "noopener");
 }
 
+// Listeners and first steps, run by main.js once every part is loaded.
 export function start() {
   document.querySelector("#notes-toggle").addEventListener("change", (event) => {
     localStorage.setItem(NOTES_KEY, event.target.checked ? "on" : "off");
     showNotesSetting();
   });
-  pictureSetup.addEventListener("close", () => clearInterval(setupTimer));
-  document.querySelector("#close-picture-setup").addEventListener("click", () => pictureSetup.close());
-  document.querySelector("#setup-start").addEventListener("click", () => { setupReloaded = false; setupAction("start"); });
-  document.querySelector("#setup-stop").addEventListener("click", () => setupAction("stop"));
-  document.querySelector("#setup-use").addEventListener("click", () => {
-    pictureSetup.close();
-    modelSelect.value = KLEIN_ID;
-    modelSelect.dispatchEvent(new Event("change"));
-    messageBox.focus();
-  });
-  document.querySelector("#open-picture-setup").addEventListener("click", () => {
-    settings.close();
-    openPictureSetup();
-  });
   for (let size = 8192; size <= 262144; size *= 2) {
     for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
   }
 
-  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not([id^=pic-]), #compact-prompt, #kv-bits")
+  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file), #compact-prompt, #kv-bits")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
-  document.querySelectorAll("#picture-setting input, #pic-models")
-    .forEach((input) => input.addEventListener("change", () => { if (serverSettings) savePictureSetting(); }));
 
   document.querySelector("#open-settings").addEventListener("click", () => {
     showNotesSetting();
