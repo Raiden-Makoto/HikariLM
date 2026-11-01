@@ -11,12 +11,20 @@ No Docker, no Ollama, no account. Your chats never leave your computer.
 HikariLM runs only on a Mac with Apple Silicon (M1 or newer). You need Python 3.9 or newer.
 
 ```bash
-./start.sh            # or: python3 start.py
+./start.sh            # start it; the terminal can be closed after
+./start.sh stop       # stop it
+./start.sh restart    # stop it and start it again
+./start.sh status     # whether it runs, and what is loaded
+./start.sh log        # the end of its log
 ```
 
-The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. Then it lists your models and opens http://127.0.0.1:8787. Press Ctrl+C to stop. Running it again while it is running just opens the page.
+The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. You see that in the terminal. Then HikariLM keeps running in the background and opens http://127.0.0.1:8787, and the terminal can be closed. Running `./start.sh` again while it runs just opens the page; if the files were updated since it started, it restarts it first.
 
-Options: `--port 9000` for another port, `--no-browser` to skip opening the page, `--version`.
+What it prints goes to `~/.hikarilm/hikarilm.log`, which keeps only its last 2,000 lines. Only failed requests are logged, not every one.
+
+**Updating**: *Update* in Settings runs `git pull` in the HikariLM folder and, when that brought anything, restarts HikariLM and reloads the page. It says first how many changes GitHub has. It needs a copy made with `git clone`, and refuses while a reply or a picture is being made. Chats, settings and models are kept.
+
+Options: `--foreground` to run in the terminal until Ctrl+C, as before 4.3.0; `--port 9000` for another port; `--no-browser` to skip opening the page; `--version`.
 
 ## Models
 

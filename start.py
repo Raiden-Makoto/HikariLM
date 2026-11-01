@@ -240,6 +240,9 @@ def main() -> None:
         say("HikariLM did not start. The end of its log:")
         show_log(20)
         sys.exit(1)
+    if args.after:
+        say(f"Restarted after the update, at {url}.")
+        return
     say()
     say(f"HikariLM is running in the background at {url}. You can close this window.")
     say("  ./start.sh stop     stops it")

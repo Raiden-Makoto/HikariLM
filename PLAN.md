@@ -236,6 +236,28 @@ the picture model gets the rewritten prompt and the pictures.
 - [x] With the 4B and the 9B both downloaded, the list says "FLUX.2 klein 4B" and "FLUX.2 klein 9B".
 - [x] `__version__ = "4.2.1"`, tag `v4.2.1`. Released.
 
+## v4.3.0: running in the background, and Update
+
+- [x] `./start.sh` runs the first-start steps in the terminal (so the installs show), then starts
+  the helper in a session of its own (`helper/daemon.py`) and returns; the terminal can be
+  closed. `stop`, `restart`, `status` and `log`; `--foreground` runs it in the terminal as before.
+  The pid is kept in `~/.hikarilm/hikarilm.pid` and checked against `ps`, so a reused pid is never
+  stopped. Starting while a copy from before the files changed runs restarts it.
+- [x] The log, `~/.hikarilm/hikarilm.log`: everything the helper and its children print, taken at
+  the file-descriptor level. At most 2,000 lines; past that the oldest half goes. Requests are
+  logged only when they fail.
+- [x] *Update* in Settings: says the version, the commit and how many changes GitHub has (git
+  fetch). Pressing it runs `git pull --ff-only`; when that brought anything, a new copy starts that
+  waits for this one to stop (and runs the first-start steps, for new packages), and the page
+  reloads once the new copy answers. Refused while a reply or a picture is being made; a copy not
+  made with git clone says to download the release.
+- [x] Tried in WSL on a scratch clone one commit behind its origin, with the start steps that need
+  a Mac skipped: start, close the terminal, still running; Update from Settings pulled, restarted
+  under a new pid and reloaded the page; 3,000 failed requests left the log at about 1,000 lines;
+  restart, stop and status.
+- [ ] Try it on the Mac, including closing the Terminal window.
+- [ ] `__version__ = "4.3.0"`, tag `v4.3.0`.
+
 ## v5.0.0: voice
 
 Speak a prompt instead of typing it, and have answers read aloud. All of it runs on the Mac, like
