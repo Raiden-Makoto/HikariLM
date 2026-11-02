@@ -139,19 +139,19 @@ export function updateChangeNote() {
     !(rewriteModel() || (state.attached.some((file) => file.image) && visionModel()));
 }
 
-// The chat model that rewrites picture prompts, or "" when Settings turned it off.
-// Models that think before every answer (R1, gpt-oss) never do: a short prompt
-// would wait on pages of reasoning. Unchosen, a general model goes before a coder,
-// since it is likelier to know a character.
+// The chat model that rewrites picture prompts, or "" when Settings turned it off or
+// none fits. Models that think before every answer (R1, gpt-oss) never do: a short
+// prompt would wait on pages of reasoning. Nor do coders: they know code, not how a
+// character or a place looks, and tend to answer a picture request with code.
 export const REWRITE_KEY = "hikarilm-rewrite";
 let thinkers = [];
-export const rewriters = () => allModels.filter((name) => !thinkers.includes(name));
+export const rewriters = () => allModels.filter((name) => !thinkers.includes(name) && codeRank(name) === 2);
 export function rewriteModel() {
   const chosen = localStorage.getItem(REWRITE_KEY);
   if (chosen === "off") return "";
   const choices = rewriters();
   if (chosen && choices.includes(chosen)) return chosen;
-  return choices.find((name) => codeRank(name) === 2) || choices[0] || "";
+  return choices[0] || "";
 }
 
 // A rewrite waiting in the box: { request, writer }, or asIs when the user took their
