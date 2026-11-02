@@ -92,7 +92,7 @@ BINARY = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, 
           ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod, ast.Pow: None}
 UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 
-# How models and people write maths that Python does not read.
+# How models and people write math that Python does not read.
 _WRITTEN = (("×", "*"), ("·", "*"), ("÷", "/"), ("−", "-"), ("√", "sqrt"), ("²", "**2"), ("³", "**3"),
             ("^", "**"))
 _FACTORIAL = re.compile(r"(\d+(?:\.\d+)?|\))\s*!(?!=)")

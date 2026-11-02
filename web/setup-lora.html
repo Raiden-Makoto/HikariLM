@@ -59,7 +59,7 @@
       <p>For every picture, the model tries to explain what it sees with the caption. What the caption names, it puts down to those words. What the caption never names, but is in every picture, it can only put down to the one word that is in every caption: the trigger word. So:</p>
       <ul>
         <li><strong>Describe</strong> what is different in each picture: the pose, the place, the clothes that change, the light, the framing. Those stay yours to choose in a prompt.</li>
-        <li><strong>Leave out</strong> what is the same in every picture and is what you want: a character's face, fur and colours, or a style's brushwork and palette. That goes into the trigger word.</li>
+        <li><strong>Leave out</strong> what is the same in every picture and is what you want: a character's face, fur and colors, or a style's brushwork and palette. That goes into the trigger word.</li>
       </ul>
 
       <div class="setup-example">
@@ -76,13 +76,13 @@
       </div>
 
       <div class="setup-example">
-        <p><strong>Example: a style.</strong> Forty paintings with soft watercolour edges and a muted teal-and-orange palette. Trigger word <code>zq_style</code>.</p>
+        <p><strong>Example: a style.</strong> Forty paintings with soft watercolor edges and a muted teal-and-orange palette. Trigger word <code>zq_style</code>.</p>
         <table>
           <tr><th>The picture</th><th>Caption</th></tr>
           <tr><td>A lighthouse at sunset</td><td><code>zq_style, a lighthouse on a cliff at sunset, waves below</code></td></tr>
           <tr><td>A cat on a windowsill</td><td><code>zq_style, a cat sleeping on a windowsill, potted plants</code></td></tr>
         </table>
-        <p>Say what is in the picture, never how it is painted: no "watercolour", "soft edges" or "teal". Then <code>zq_style, a busy train station</code> comes out in that style.</p>
+        <p>Say what is in the picture, never how it is painted: no "watercolor", "soft edges" or "teal". Then <code>zq_style, a busy train station</code> comes out in that style.</p>
       </div>
 
       <p>One or two plain sentences each, the way you would prompt. HikariLM can write first drafts: attach a picture in Chat and ask what is in it, then cross out the words about what the LoRA should learn and put the trigger word first.</p>
@@ -182,9 +182,9 @@
           <tr><td><code>a white rabbit girl riding a bicycle by the sea</code></td><td>A rabbit girl who may look a little like Usagi, but not reliably: a loaded LoRA leans on every picture somewhat, but it is the trigger word that calls her up.</td></tr>
         </table>
         <ul>
-          <li>Do not describe her look in the prompt; the trigger word already does, and spelling it out can pull her towards the model's own idea of those words.</li>
+          <li>Do not describe her look in the prompt; the trigger word already does, and spelling it out can pull her toward the model's own idea of those words.</li>
           <li>The trigger word only works with the LoRA loaded (<code>--lora</code>). Without it, <code>zq_usagi</code> is a word the model has never seen and means nothing to it.</li>
-          <li>Too strong (stiff poses, the same face and framing every time, colours burnt) or too weak (she looks off)? Change the 1.0 after the file name: 0.7 for less, 1.2 for more. Strength is chosen when you draw, so the file stays as it is.</li>
+          <li>Too strong (stiff poses, the same face and framing every time, colors burnt) or too weak (she looks off)? Change the 1.0 after the file name: 0.7 for less, 1.2 for more. Strength is chosen when you draw, so the file stays as it is.</li>
         </ul>
       </div>
     </section>

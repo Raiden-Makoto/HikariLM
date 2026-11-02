@@ -71,8 +71,8 @@ function languageFor(path) {
   return make ? [make()] : [];
 }
 
-// The colours come from CSS variables on the page, so the light and dark
-// switch recolours the editor with no rebuild of anything.
+// The colors come from CSS variables on the page, so the light and dark
+// switch recolors the editor with no rebuild of anything.
 const theme = EditorView.theme({
   "&": {
     height: "100%",
@@ -147,7 +147,7 @@ const theme = EditorView.theme({
   ".cm-deletedChunk .cm-chunkButtons button[name=accept]": { background: "#16a34a", borderColor: "#16a34a", color: "#fff" },
 });
 
-const colours = HighlightStyle.define([
+const colors = HighlightStyle.define([
   { tag: [t.keyword, t.modifier, t.operatorKeyword, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], color: "var(--syn-keyword)" },
   { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: "var(--syn-comment)", fontStyle: "italic" },
   { tag: [t.string, t.special(t.string), t.regexp, t.character], color: "var(--syn-string)" },
@@ -241,7 +241,7 @@ export function createEditor(parent, { onChange, onSelection, onSave, onReview }
       highlightActiveLine(), highlightSelectionMatches(), suggestions,
       indentUnit.of("    "), EditorState.tabSize.of(4),
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap]),
-      theme, syntaxHighlighting(colours),
+      theme, syntaxHighlighting(colors),
       languageFor(path),
       editable.of([EditorView.editable.of(!disabled), EditorState.readOnly.of(disabled)]),
       reviewing.of([]),

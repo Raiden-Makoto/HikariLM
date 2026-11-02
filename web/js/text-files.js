@@ -20,7 +20,7 @@ export function isTextKind(name) {
   return dot > 0 || (dot === 0 && lower.length > 1) ? TEXT_EXTENSIONS.has(lower.slice(dot + 1)) : false;
 }
 
-// Read bytes as text. Honours a byte-order mark (Excel writes UTF-16 and
+// Read bytes as text. Honors a byte-order mark (Excel writes UTF-16 and
 // UTF-8 BOMs), tries UTF-8, then falls back to Windows-1252, which is what
 // older CSV exports use. Returns null for binary data.
 export function decodeText(bytes, truncated) {

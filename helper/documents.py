@@ -326,12 +326,12 @@ def notes(docs: list[dict], model: str, num_ctx: int, room: int, ask: Ask,
             written.append(_note(ask(prompt, cap + 64), part_text, cap))
             data["notes"][key] = written
             save(doc, data)
-        labelled = [f"Part {number} of {len(groups)}{_pages(group)}:\n{text}"
+        labeled = [f"Part {number} of {len(groups)}{_pages(group)}:\n{text}"
                     for number, (group, text) in enumerate(zip(groups, written), 1)]
-        labelled = _condense(doc["name"], labelled, room * tokens(doc["text"]) // max(1, sum(tokens(d["text"]) for d in docs)),
+        labeled = _condense(doc["name"], labeled, room * tokens(doc["text"]) // max(1, sum(tokens(d["text"]) for d in docs)),
                              num_ctx, ask)
         files.append({"name": doc["name"], "parts": len(groups)})
-        sections.append(given(doc["name"], "notes", "\n\n".join(labelled),
+        sections.append(given(doc["name"], "notes", "\n\n".join(labeled),
                               f"The file is too long to send whole, so it was read in full beforehand, in "
                               f"{len(groups)} part{'s' if len(groups) != 1 else ''}, and written down as the notes "
                               f"below, in order. These notes are the file's content"))
@@ -348,12 +348,12 @@ def given(name: str, form: str, body: str, how: str) -> str:
             f"the document was not provided.]\n<document name=\"{name}\" form=\"{form}\">\n{body}\n</document>")
 
 
-def _condense(name: str, labelled: list[str], room: int, num_ctx: int, ask: Ask) -> list[str]:
-    """Merge neighbouring notes until they fit in `room` tokens."""
-    while sum(tokens(text) for text in labelled) > room and len(labelled) > 1:
-        groups = _groups([{"text": text} for text in labelled], max(600, num_ctx - NOTE_MAX - PART_OVERHEAD))
-        if len(groups) == len(labelled):
-            groups = [labelled[i:i + 2] for i in range(0, len(labelled), 2)]
+def _condense(name: str, labeled: list[str], room: int, num_ctx: int, ask: Ask) -> list[str]:
+    """Merge neighboring notes until they fit in `room` tokens."""
+    while sum(tokens(text) for text in labeled) > room and len(labeled) > 1:
+        groups = _groups([{"text": text} for text in labeled], max(600, num_ctx - NOTE_MAX - PART_OVERHEAD))
+        if len(groups) == len(labeled):
+            groups = [labeled[i:i + 2] for i in range(0, len(labeled), 2)]
             groups = [[{"text": text} for text in group] for group in groups]
         cap = max(NOTE_MIN, min(NOTE_MAX, room // len(groups) - 20))
         merged = []
@@ -361,8 +361,8 @@ def _condense(name: str, labelled: list[str], room: int, num_ctx: int, ask: Ask)
             text = "\n\n".join(item["text"] for item in group)
             merged.append(_note(ask(CONDENSE_PROMPT.format(name=name, text=text, words=cap * 3 // 4), cap + 64),
                                 text, cap))
-        labelled = merged
-    return labelled
+        labeled = merged
+    return labeled
 
 
 def _note(written: str, source: str, cap: int) -> str:

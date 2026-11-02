@@ -143,7 +143,7 @@ input[type="search"]:focus-visible, #browse-input:focus-visible { outline: 2px s
 .editor-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 #file-title { flex: 1; min-width: 8rem; font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }
 /* The editor (CodeMirror) fills this box. Its own look is set in the bundle,
-   from the page's colour variables. */
+   from the page's color variables. */
 #file-text { position: relative; flex: 1; min-height: 8rem; min-width: 0; }
 #file-text .cm-editor { position: absolute; inset: 0; }
 #file-text[hidden], #file-preview[hidden], .editor-bar .choice[hidden] { display: none; }

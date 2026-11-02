@@ -28,7 +28,7 @@ Any MLX model works; these are the ones to start with. Get one with
 
 - **Qwen3 8B** follows *Let models think* in Settings: off, it answers straight away (quick
   questions, "what is the square root of 4761"); on, it works things out first. One download for both.
-- **DeepSeek R1** always thinks, which is what it is for: maths, logic and puzzles. On trivial
+- **DeepSeek R1** always thinks, which is what it is for: math, logic and puzzles. On trivial
   questions it thinks far longer than it needs to; use Qwen3 with thinking off for those, or the
   calculator (4.8) if it calls it.
 - **Qwen2.5 Coder** for the code editor and code questions. It does not think.
@@ -172,7 +172,7 @@ when it loads, and on a saved q4 model the baked layers become 8-bit; DoRA files
 
 - [ ] On the Mac: the same LoRAs (a Hugging Face one and a local one), prompts and seeds on the base
   4B (50 steps) and the distilled 4B (4 steps), at strengths 0.5, 0.8 and 1.0; look whether the
-  distilled pictures show the LoRA as well as the base ones and stay clean (no burnt colours,
+  distilled pictures show the LoRA as well as the base ones and stay clean (no burnt colors,
   no mush). Try a q4 and a q8 distilled 4B, since baking makes q4 layers 8-bit.
 - [ ] Write down what was found here. If it works: v6.0.1. If not: LoRAs stay on the base 4B, and
   the line under the picker says why.

@@ -42,7 +42,7 @@ LAYER = "model.layers.0.self_attn.q_proj"
 MIN_LAYER = 0.9999     # cosine of one layer's outputs
 MIN_COSINE = 0.99      # lowest cosine of the logits at any position
 MIN_TOP1 = 0.95        # share of positions where both pick the same next token
-MAX_TIE = 0.10         # where MLX picks another token than exact, exact may favour its own by this much at most
+MAX_TIE = 0.10         # where MLX picks another token than exact, exact may favor its own by this much at most
 PROMPTS = [
     "What is the capital of France?",
     "Write a Python function that reverses a linked list.",

@@ -17,7 +17,7 @@ from helper import calculator
 MAX_CALLS = 20   # an answer; then the model is told to answer with what it has
 
 DESCRIPTION = (
-    "A scientific calculator. Use it for any arithmetic or maths instead of working it out by hand, "
+    "A scientific calculator. Use it for any arithmetic or math instead of working it out by hand, "
     "then answer from the result. The expression is written like Python or a calculator: "
     "+ - * / // % and ** or ^ for powers, brackets, 5! for factorial, whole numbers of any size; "
     "sqrt, cbrt, root(x, n), exp, ln, log(x) (natural), log(x, base), log10, log2; "
