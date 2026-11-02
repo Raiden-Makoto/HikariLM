@@ -135,23 +135,29 @@ export function updateChangeNote() {
     document.querySelector("#change-toggle").textContent = changing ? "Draw a new one instead" : "Change the picture above instead";
   }
   // A change is said in the user's own words; only a new picture is rewritten.
-  document.querySelector("#picture-rewrite").hidden = !isPictureModel(modelSelect.value) || changing ||
+  const rewriteButton = document.querySelector("#picture-rewrite");
+  rewriteButton.hidden = !isPictureModel(modelSelect.value) || changing ||
     !(rewriteModel() || (state.attached.some((file) => file.image) && visionModel()));
+  const writer = rewriteModel() || visionModel();
+  if (writer) rewriteButton.title = "Have " + modelLabel(writer) + " rewrite the prompt into how things look, to read and edit before drawing. Settings, Rewrite prompts with, picks the model.";
 }
 
 // The chat model that rewrites picture prompts, or "" when Settings turned it off or
 // none fits. Models that think before every answer (R1, gpt-oss) never do: a short
-// prompt would wait on pages of reasoning. Nor do coders: they know code, not how a
-// character or a place looks, and tend to answer a picture request with code.
+// prompt would wait on pages of reasoning. Settings offers the rest, general models
+// first; a coder only rewrites when chosen there, since it knows code, not how a
+// character or a place looks.
 export const REWRITE_KEY = "hikarilm-rewrite";
 let thinkers = [];
-export const rewriters = () => allModels.filter((name) => !thinkers.includes(name) && codeRank(name) === 2);
+const general = (name) => codeRank(name) === 2;
+export const rewriters = () => allModels.filter((name) => !thinkers.includes(name))
+  .sort((a, b) => Number(general(b)) - Number(general(a)));
 export function rewriteModel() {
   const chosen = localStorage.getItem(REWRITE_KEY);
   if (chosen === "off") return "";
   const choices = rewriters();
   if (chosen && choices.includes(chosen)) return chosen;
-  return choices[0] || "";
+  return choices.find(general) || "";
 }
 
 // A rewrite waiting in the box: { request, writer }, or asIs when the user took their

@@ -415,8 +415,9 @@ class Handler(BaseHTTPRequestHandler):
             # Thinking takes context too: never more than is left after the prompt and the reply.
             left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
             budget_tokens = max(256, min(budget_tokens or left, left))
-        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if settings["tools"]["calculator"] else None
-        calls = 0
+        calculator = settings["tools"]["calculator"]
+        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if calculator else None
+        asked, answers, seen = sent, [], set()
         while True:
             try:
                 router.begin(model)
@@ -426,23 +427,29 @@ class Handler(BaseHTTPRequestHandler):
                     self._stream_line({"error": str(error)})
                 return
             router.commit(model)
-            watch = tools.CallWatch() if offer else None
+            watch = tools.CallWatch() if calculator else None
             thought = self._stream_reply(response, budget_tokens, watch)
             if getattr(self, "_gone", False) or not (watch and watch.call):
                 break
+            if offer is None:
+                # Given its results with no tool, it called again anyway: the answer ends here.
+                self._stream_line({"message": {"role": "assistant", "content": ""}, "done": True})
+                return
+            key = tools.same_call(watch.call)
+            if key in seen or len(answers) >= tools.MAX_CALLS:
+                # Small models can ask for the same sum over and over. They get what was worked
+                # out as text with the question, and no tool, so they answer from it.
+                sent, offer = tools.answer_from(asked, answers), None
+                continue
+            seen.add(key)
             # The model asked the calculator: answer it, and it goes on from the result.
-            calls += 1
             answer = tools.run(watch.call)
-            if calls > tools.MAX_CALLS:
-                answer = {"name": answer["name"], "expression": answer["expression"],
-                          "error": f"the calculator was used {tools.MAX_CALLS} times in this answer; "
-                                   "answer with what you have"}
-                offer = None
+            answers.append(answer)
             # Not "error": that ends the reply on the page.
-            shown = {("tool_error" if key == "error" else key): value for key, value in answer.items()}
+            shown = {("tool_error" if field == "error" else field): value for field, value in answer.items()}
             if not self._stream_line({"hikarilm": "tool", **shown}):
                 return
-            sent = sent + tools.as_messages(watch.written(), watch.call, answer, calls)
+            sent = sent + tools.as_messages(watch.written(), watch.call, answer, len(answers))
         if thought is None or getattr(self, "_gone", False):
             return
         # Thinking reached the limit before any answer: ask again with thinking off and

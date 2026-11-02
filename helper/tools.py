@@ -14,7 +14,7 @@ import re
 
 from helper import calculator
 
-MAX_CALLS = 20   # an answer; then the model is told to answer with what it has
+MAX_CALLS = 10   # different calls an answer; then it answers from the results it has
 
 DESCRIPTION = (
     "A scientific calculator. Use it for any arithmetic or math instead of working it out by hand, "
@@ -58,6 +58,28 @@ def run(call: dict) -> dict:
         return {**out, "result": calculator.calculate(expression)}
     except calculator.CalcError as error:
         return {**out, "error": str(error)}
+
+
+def same_call(call: dict) -> str:
+    """Calls that ask for the same thing give the same key."""
+    expression = call.get("expression") if isinstance(call.get("expression"), str) else ""
+    return f"{call.get('name')}:{''.join(expression.split())}:{call.get('error', '')}"
+
+
+def answer_from(messages: list[dict], answers: list[dict]) -> list[dict]:
+    """The chat as it was asked, with the results worked out so far added to the question as
+    text, for a last answer with no tool. Plain text, since some templates (Falcon3's) leave
+    tool results out when no tools are given."""
+    lines = [f"{a['expression']} = " + (a["result"] if "result" in a else "error: " + a.get("error", ""))
+             for a in answers]
+    note = ("[Calculator results: " + "; ".join(lines) + ". Answer with these; the calculator cannot be used "
+            "again in this answer.]") if lines else "[Answer now, without the calculator.]"
+    out = list(messages)
+    for at in range(len(out) - 1, -1, -1):
+        if out[at]["role"] == "user":
+            out[at] = {**out[at], "content": str(out[at].get("content") or "") + "\n\n" + note}
+            return out
+    return out + [{"role": "user", "content": note}]
 
 
 def as_messages(written: str, call: dict, answer: dict, number: int) -> list[dict]:

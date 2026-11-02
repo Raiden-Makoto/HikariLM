@@ -184,12 +184,35 @@ class LoopTest(unittest.TestCase):
         self.assertIn("I should use the calculator.", thought)
         self.assertNotIn("tool_call", thought)
 
-    def test_twenty_calls_an_answer(self):
-        shown, calls, _ = self.chat("calc-many: 1+1")
-        self.assertEqual(len(calls), tools.MAX_CALLS + 1)
-        self.assertTrue(all(call.get("result") == "2" for call in calls[:-1]))
-        self.assertIn("20 times", calls[-1]["tool_error"])
-        self.assertIn('"tools": false', shown)
+    def test_the_same_call_again_gets_the_results_as_text(self):
+        # Falcon3 asked for sqrt(4489) over and over.
+        shown, calls, _ = self.chat("calc-repeat: sqrt(4489)")
+        self.assertEqual([call["result"] for call in calls], ["67"])
+        self.assertTrue(shown.endswith("no tools | [Calculator results: sqrt(4489) = 67. Answer with these; "
+                                       "the calculator cannot be used again in this answer.]"), shown)
+        self.assertNotIn("tool_call", shown)
+
+    def test_ten_different_calls_an_answer(self):
+        shown, calls, _ = self.chat("calc-many: 1")
+        self.assertEqual([call["result"] for call in calls], [str(1 + n) for n in range(tools.MAX_CALLS)])
+        self.assertIn("[Calculator results: 1+0 = 1; 1+1 = 2;", shown)
+
+    def test_a_call_after_that_ends_the_answer(self):
+        shown, calls, lines = self.chat("calc-stubborn: 2+2")
+        self.assertEqual([call["result"] for call in calls], ["4"])
+        self.assertNotIn("tool_call", shown)
+        self.assertEqual(sum(1 for line in lines if line.get("done")), 1)
+
+    def test_answer_from_keeps_the_chat_and_adds_to_the_question(self):
+        chat = [{"role": "system", "content": "Rules."}, {"role": "user", "content": "sqrt 4489?", "images": ["x"]}]
+        out = tools.answer_from(chat, [{"expression": "sqrt(4489)", "result": "67"},
+                                       {"expression": "1/0", "error": "division by zero"}])
+        self.assertEqual(chat[1]["content"], "sqrt 4489?")
+        self.assertEqual(out[1]["images"], ["x"])
+        self.assertTrue(out[1]["content"].startswith(
+            "sqrt 4489?\n\n[Calculator results: sqrt(4489) = 67; 1/0 = error: division by zero."))
+        self.assertEqual(tools.same_call({"name": "calculate", "expression": "sqrt( 4489 )"}),
+                         tools.same_call({"name": "calculate", "expression": "sqrt(4489)"}))
 
     def test_the_switch(self):
         context.save_settings({**context.load_settings(), "tools": {"calculator": False}})
