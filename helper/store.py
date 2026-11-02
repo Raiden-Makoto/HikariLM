@@ -130,8 +130,28 @@ def clean_messages(messages) -> list[dict]:
         picture = clean_picture(message.get("picture"))
         if picture and role == "assistant":
             entry["picture"] = picture
+        calls = clean_tool_calls(message.get("tools"))
+        if calls and role == "assistant":
+            entry["tools"] = calls
         cleaned.append(entry)
     return cleaned
+
+
+def clean_tool_calls(calls) -> list[dict]:
+    """The calculator's uses in an answer, as the page shows them."""
+    if not isinstance(calls, list):
+        return []
+    out = []
+    for call in calls[:50]:
+        if not isinstance(call, dict) or not isinstance(call.get("expression"), str):
+            continue
+        entry = {"expression": call["expression"][:1000]}
+        for key, limit in (("result", 5000), ("error", 500)):
+            if isinstance(call.get(key), str):
+                entry[key] = call[key][:limit]
+        if len(entry) == 2:
+            out.append(entry)
+    return out
 
 
 PICTURE_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")

@@ -7,6 +7,7 @@ and writes JSON lines on stdout:
 
     {"op": "chat", "messages": [...], "num_ctx": 8192, "num_predict": 512, "think": true}
         -> {"text": "..."} as it is written, then {"done": true, ...counts}
+        (with "tools": [...] and "tools_text": "..." the model may call them; see tool_chat)
     {"op": "stop"}   ends the reply being written; its "done" line still comes.
 
 Started with --embed, it runs nomic-embed-text (nomic_mlx.py) instead:
@@ -293,10 +294,14 @@ class TextModel:
         self.cached: list[int] = []
         self.kv_bits = 0
 
-    def _prompt(self, messages: list[dict], think) -> tuple[list[int], str]:
+    def _prompt(self, messages: list[dict], think, request: dict | None = None) -> tuple[list[int], str]:
         """Token ids to send, and text the model is taken to have written already."""
-        chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
+        request = request or {}
+        native = "tools" in str(getattr(self.tokenizer, "chat_template", "") or "")
+        chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), native)
         extra = {"enable_thinking": bool(think)} if self.template_switch and think is not None else {}
+        if native and request.get("tools"):
+            extra["tools"] = request["tools"]
         text = with_system(lambda turns: self.tokenizer.apply_chat_template(
             turns, add_generation_prompt=True, tokenize=False, **extra), chat)
         lead = ""
@@ -336,7 +341,7 @@ class TextModel:
         return all(type(entry).__name__ in ("KVCache", "QuantizedKVCache") for entry in self.cache)
 
     def chat(self, request: dict, stop: threading.Event):
-        ids, lead = self._prompt(request["messages"], request.get("think"))
+        ids, lead = self._prompt(request["messages"], request.get("think"), request)
         if lead:
             yield {"text": lead}
         bits = request.get("kv_bits") if request.get("kv_bits") in (4, 8) else 0
@@ -388,7 +393,8 @@ class VisionModel:
     def chat(self, request: dict, stop: threading.Event):
         messages = request["messages"]
         pictures = [image for m in messages for image in m.get("images") or []]
-        chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
+        # mlx-vlm's templates are not given tools, so the calculator goes in as text.
+        chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), False)
         prompt = with_system(lambda turns: self.template(self.processor, self.model.config, turns,
                                                          num_images=len(pictures)), chat)
         with tempfile.TemporaryDirectory() as folder:
@@ -417,6 +423,33 @@ class VisionModel:
                 yield {"text": rest}
         _clear_cache(self.mx)
         yield _counts(last, 0, stop.is_set())
+
+
+def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dict]:
+    """The chat for a template. One with tools of its own gets the calls and results as they
+    are; for one without, the tool is described in the system message and the calls and
+    results are written out as text, the way the description asks for them."""
+    chat = []
+    for m in messages:
+        entry = {"role": m["role"], "content": _text(m.get("content"))}
+        if native:
+            for key in ("tool_calls", "name", "tool_call_id"):
+                if m.get(key):
+                    entry[key] = m[key]
+        elif m["role"] == "tool":
+            entry = {"role": "user", "content": "<tool_response>\n" + entry["content"] + "\n</tool_response>"}
+        elif m.get("tool_calls"):
+            for call in m["tool_calls"]:
+                function = call.get("function") or {}
+                entry["content"] += "\n<tool_call>\n" + json.dumps(
+                    {"name": function.get("name"), "arguments": function.get("arguments")}) + "\n</tool_call>"
+        chat.append(entry)
+    if tools and not native and tools_text:
+        if chat and chat[0]["role"] == "system":
+            chat[0] = {**chat[0], "content": chat[0]["content"] + "\n\n" + tools_text}
+        else:
+            chat.insert(0, {"role": "system", "content": tools_text})
+    return chat
 
 
 def with_system(render, chat: list[dict]):

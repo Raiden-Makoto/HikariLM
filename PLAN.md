@@ -2,7 +2,7 @@
 
 What is coming, in order. What is already in is in the README and the release notes.
 
-- **v4.8**: a calculator the models can call, so they stop doing sums by hand.
+- **After 4.8**: find out on the Mac which models call the calculator.
 - **v5**: voice, on the Mac: speech to text with Whisper (5.0), then answers read aloud with
   Kokoro (5.5).
 - **v6**: LoRA files from this Mac, and LoRAs on the distilled 4B if a check shows they work.
@@ -30,7 +30,7 @@ Any MLX model works; these are the ones to start with. Get one with
   questions, "what is the square root of 4761"); on, it works things out first. One download for both.
 - **DeepSeek R1** always thinks, which is what it is for: maths, logic and puzzles. On trivial
   questions it thinks far longer than it needs to; use Qwen3 with thinking off for those, or the
-  calculator once 4.8 is in.
+  calculator (4.8) if it calls it.
 - **Qwen2.5 Coder** for the code editor and code questions. It does not think.
 - **Gemma 3 12B** reads attached pictures and reference pictures, and chats too.
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
@@ -50,38 +50,22 @@ settings keep working across each upgrade. Real-model checks run on the Mac in `
 a check downloads what it needs and deletes it after, unless it was there before. Unit tests
 download nothing.
 
-## v4.8.0: a calculator the models can use
+## After 4.8.0: which models call the calculator
 
-Asked "what is the square root of 4761", DeepSeek R1 works it out by hand in its thinking ("it is
-between 60 and 70, try 69, (60+9)^2 = …"). That is how reasoning models are trained, and the small
-ones overdo it; telling them to "use Python" does not help when nothing runs the code. So the
-models get a tool: they ask, the helper works it out, and they answer from the result, the way
-ChatGPT and Claude run code.
+4.8.0 gives the chat models a scientific calculator. Models whose chat template takes `tools`
+get it there; the rest get it described in the system message, in the `<tool_call>` format. The
+helper reads calls in Qwen's, Mistral's, DeepSeek's and Gemma's formats. Whether each model
+actually calls it is not known yet.
 
-- [ ] Check on the Mac first: which of the suggested chat models write tool calls their chat
-  template defines (DeepSeek-R1-0528-Qwen3-8B, Qwen2.5 Coder, Gemma 3, gpt-oss, Falcon3), and
-  that mlx-lm and mlx-vlm pass `tools` through the template. Write down what was found here.
-  Models that do not call tools reliably are left without it; nothing breaks for them.
-- [ ] **`calculate(expression)`**: the helper evaluates math only, by walking the expression's
-  syntax tree: numbers, `+ - * / // % **`, brackets, the `math` functions and constants, `abs`,
-  `round`, `min`, `max`, fractions, and whole numbers of any size. No names, attributes, imports,
-  calls or strings beyond those, so it can never touch files or the network and needs no
-  sandbox. Limits: 1,000 characters an expression, exponents and results kept to a size that
-  answers in well under a second, 20 calls an answer.
-- [ ] **The loop**: the model writes a call (in its thinking or its answer), the helper stops the
-  stream, works it out, adds the call and the result to the messages as the template says, and
-  the model goes on. Errors go back to it as the result ("division by zero"), so it can fix the
-  expression.
-- [ ] **On the page**: each call is a line in the answer, *Calculated: sqrt(4761) = 69*, shown as
-  it happens; open it for the exact expression and result. Saved with the chat.
-- [ ] **Settings**: *Let models use the calculator*, on to start. Off sends no tools.
-- [ ] Context: the tool's description counts in the context figures; calls and results are
-  compacted like the rest of the chat.
-- [ ] Tests: the evaluator (right answers, big numbers, every refused kind of expression, the
-  limits), the loop with the fake worker writing a call, an error going back, the per-answer
-  limit, the switch. `tests/check_tools.py` on the Mac asks each downloaded chat model a few
-  sums and checks it called the tool and gave the right answer.
-- [ ] README, `__version__ = "4.8.0"`, tag `v4.8.0`.
+- [ ] Run `python3 tests/check_tools.py` on the Mac with the suggested chat models (Qwen3 8B,
+  DeepSeek R1 8B, Qwen2.5 Coder, Gemma 3 12B, Falcon3, and gpt-oss if it is there). It asks
+  each one four sums and says whether it called the calculator and got them right. Write down
+  what it found here.
+- [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
+  Harmony is the likely one), read it too.
+- [ ] A model that does not call it reliably, or gets worse answers with it, is left without
+  it: a list in the helper, so it never sees the description.
+- [ ] Recommended models: note which ones use the calculator.
 
 ### Later: full Python (no version yet)
 

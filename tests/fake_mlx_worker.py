@@ -45,6 +45,26 @@ def embed_loop():
         send({"vectors": [vector(text) for text in command["texts"]], "pid": os.getpid()})
 
 
+def calc_pieces(command, asked):
+    """"calc: EXPR" calls the calculator with EXPR (and writes a made-up result after the call,
+    which must never be seen), then answers with the result it is given and what it was sent.
+    "calc-think:" calls it from inside its thinking; "calc-many:" keeps calling while it may."""
+    kind, expression = asked.split(":", 1)
+    messages = command["messages"]
+    results = [m["content"] for m in messages if m["role"] == "tool"]
+    if results and (kind != "calc-many" or not command.get("tools")):
+        sent = {"results": results, "roles": [m["role"] for m in messages], "tools": bool(command.get("tools")),
+                "calls": [c["function"]["arguments"] for m in messages for c in m.get("tool_calls") or []],
+                "written": [m["content"] for m in messages if m.get("tool_calls")]}
+        return iter(["The answer is ", results[-1], ". ", json.dumps(sent)])
+    if not command.get("tools"):
+        return iter(["no tools"])
+    call = '<tool_call>\n{"name": "calculate", "arguments": {"expression": ' + json.dumps(expression.strip()) + "}}\n</tool_call>"
+    lead = "<think>I should use the calculator. " if kind == "calc-think" else "Let me work it out. "
+    text = lead + call + " The result is 42, I made it up."
+    return iter(text[i:i + 3] for i in range(0, len(text), 3))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
@@ -76,10 +96,16 @@ def main():
             return
         stop.clear()
         last = command["messages"][-1]["content"]
+        asked = next((m["content"] for m in reversed(command["messages"]) if m["role"] == "user"), "")
+        if asked.startswith(("calc:", "calc-think:", "calc-many:")):
+            pieces = calc_pieces(command, asked)
+            last = ""
         if last == "crash":
             send({"text": "half"})
             os._exit(1)
-        if last == "slow":
+        if not last:
+            pass
+        elif last == "slow":
             pieces = (f"word{n} " for n in range(10000))
         elif last == "system":
             first = command["messages"][0]
@@ -93,7 +119,7 @@ def main():
             pieces = iter(("echo: " + last).split(" "))
         count = 0
         for piece in pieces:
-            send({"text": piece if count == 0 else " " + piece})
+            send({"text": piece if count == 0 or not last else " " + piece})
             count += 1
             if stop.is_set():
                 break

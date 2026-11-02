@@ -53,6 +53,7 @@ async function showContextSetting() {
   document.querySelector("#compact-note").textContent = "";
   document.querySelector("#think-toggle").checked = serverSettings.thinking.enabled;
   document.querySelector("#think-limit").value = serverSettings.thinking.budget ?? "";
+  document.querySelector("#calc-toggle").checked = serverSettings.tools.calculator;
   document.querySelector("#kv-bits").value = String(serverSettings.kv_cache.bits);
   showKvWarning();
   showPictureSetting();
@@ -169,6 +170,7 @@ async function saveContextSetting() {
       budget: numberOrNull(document.querySelector("#think-limit")),
     },
     kv_cache: { bits: Number(document.querySelector("#kv-bits").value) },
+    tools: { calculator: document.querySelector("#calc-toggle").checked },
   };
   showKvWarning();
   const note = document.querySelector("#compact-note");

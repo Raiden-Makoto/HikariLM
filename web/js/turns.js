@@ -30,11 +30,14 @@ export function addTurn(role, text, thought, files, message, question) {
   const view = { box, label, text: thoughtText, full: "" };
   box.addEventListener("toggle", () => { if (box.open) thoughtText.textContent = view.full; });
   showThought(view, thought || "", { seconds: message?.thoughtSeconds ?? null, cut: Boolean(message?.thinkingCut) });
+  const calls = document.createElement("div");
+  calls.className = "tool-calls";
+  for (const call of message?.tools || []) showToolCall(calls, call);
   const answer = document.createElement("div");
   if (role === "assistant" && text) renderMarkdown(answer, text);
   else answer.textContent = text;
   if (message?.picture) answer.append(pictureFigure(message));
-  block.append(who, thinking, box, answer);
+  block.append(who, thinking, box, calls, answer);
   if (files?.length) {
     const row = document.createElement("div");
     row.className = "chips";
@@ -51,6 +54,7 @@ export function addTurn(role, text, thought, files, message, question) {
   if (role === "user") {
     thinking.remove();
     box.remove();
+    calls.remove();
     if (message) {
       const actions = document.createElement("div");
       actions.className = "prompt-actions";
@@ -68,7 +72,24 @@ export function addTurn(role, text, thought, files, message, question) {
   }
   log.append(block);
   scrollLog();
-  return { block, thinking, thought: view, answer };
+  return { block, thinking, thought: view, calls, answer };
+}
+
+const SHORT = 40;
+const short = (text) => (text.length > SHORT ? text.slice(0, SHORT) + "…" : text);
+
+// One use of the calculator: "Calculated: sqrt(4761) = 69", opening to the whole expression and result.
+export function showToolCall(container, call) {
+  const box = document.createElement("details");
+  box.className = "tool-call" + (call.error ? " failed" : "");
+  const line = document.createElement("summary");
+  line.textContent = call.error
+    ? "Calculator: " + short(call.expression) + " could not be worked out"
+    : "Calculated: " + short(call.expression) + " = " + short(call.result);
+  const full = document.createElement("pre");
+  full.textContent = call.expression + "\n= " + (call.error ? "Error: " + call.error : call.result);
+  box.append(line, full);
+  container.append(box);
 }
 
 // In the code editor, a finished reply's code blocks get Apply, as in Cursor. Which

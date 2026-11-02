@@ -481,8 +481,10 @@ def _kv_bits() -> int:
     return context.load_settings()["kv_cache"]["bits"]
 
 
-def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict | None = None, think=None) -> Reply:
-    """Start a reply. The caller closes it; closing it early stops the model."""
+def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict | None = None, think=None,
+              tools: dict | None = None) -> Reply:
+    """Start a reply. The caller closes it; closing it early stops the model. `tools` is
+    {"tools": [...], "tools_text": "..."} for a model that may call them."""
     if not _lock.acquire(timeout=WAIT_SECONDS):
         raise ModelError("Another reply is still being written.")
     try:
@@ -490,7 +492,7 @@ def open_chat(model: str, messages: list[dict], keep_alive=None, options: dict |
         options = options or {}
         process.send({"op": "chat", "messages": [_plain(m) for m in messages], "think": think,
                       "num_ctx": options.get("num_ctx"), "num_predict": options.get("num_predict"),
-                      "kv_bits": _kv_bits()})
+                      "kv_bits": _kv_bits(), **(tools or {})})
     except BaseException:
         _lock.release()
         raise
@@ -558,6 +560,9 @@ def _plain(message: dict) -> dict:
     out = {"role": message.get("role", "user"), "content": str(message.get("content") or "")}
     if message.get("images"):
         out["images"] = list(message["images"])
+    for key in ("tool_calls", "name", "tool_call_id"):
+        if message.get(key):
+            out[key] = message[key]
     return out
 
 

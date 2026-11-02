@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, lora,
-                    names, notes, rewrite, rules, store, thinking, update, workspace)
+                    names, notes, rewrite, rules, store, thinking, tools, update, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -367,7 +367,8 @@ class Handler(BaseHTTPRequestHandler):
         summary = decision["summary"]
         self._stream_start()
         started = True
-        self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"],
+        offered = tools.text_tokens() if settings["tools"]["calculator"] else 0
+        self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"] + offered,
                            "threshold": decision["threshold"]})
         if ruled_by:
             self._stream_line({"hikarilm": "rules", "from": ruled_by, "num_ctx": num_ctx,
@@ -414,15 +415,34 @@ class Handler(BaseHTTPRequestHandler):
             # Thinking takes context too: never more than is left after the prompt and the reply.
             left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
             budget_tokens = max(256, min(budget_tokens or left, left))
-        try:
-            router.begin(model)
-            response = open_chat(model, sent, keep_alive, options, think)
-        except ModelError as error:
-            if started:
-                self._stream_line({"error": str(error)})
-            return
-        router.commit(model)
-        thought = self._stream_reply(response, budget_tokens)
+        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if settings["tools"]["calculator"] else None
+        calls = 0
+        while True:
+            try:
+                router.begin(model)
+                response = open_chat(model, sent, keep_alive, options, think, offer)
+            except ModelError as error:
+                if started:
+                    self._stream_line({"error": str(error)})
+                return
+            router.commit(model)
+            watch = tools.CallWatch() if offer else None
+            thought = self._stream_reply(response, budget_tokens, watch)
+            if getattr(self, "_gone", False) or not (watch and watch.call):
+                break
+            # The model asked the calculator: answer it, and it goes on from the result.
+            calls += 1
+            answer = tools.run(watch.call)
+            if calls > tools.MAX_CALLS:
+                answer = {"name": answer["name"], "expression": answer["expression"],
+                          "error": f"the calculator was used {tools.MAX_CALLS} times in this answer; "
+                                   "answer with what you have"}
+                offer = None
+            # Not "error": that ends the reply on the page.
+            shown = {("tool_error" if key == "error" else key): value for key, value in answer.items()}
+            if not self._stream_line({"hikarilm": "tool", **shown}):
+                return
+            sent = sent + tools.as_messages(watch.written(), watch.call, answer, calls)
         if thought is None or getattr(self, "_gone", False):
             return
         # Thinking reached the limit before any answer: ask again with thinking off and
@@ -443,10 +463,12 @@ class Handler(BaseHTTPRequestHandler):
             self._stream_line({"hikarilm": "thinking_cut", "budget": budget_tokens, "final": True})
             self._stream_line({"message": {"role": "assistant", "content": ""}, "done": True})
 
-    def _stream_reply(self, response, budget_tokens: int | None) -> str | None:
+    def _stream_reply(self, response, budget_tokens: int | None, watch: tools.CallWatch | None = None) -> str | None:
         """Pass a chat stream to the page, with inline <think> text moved to `thinking`.
         Returns the reasoning if thinking reached budget_tokens before any answer (the
-        stream is stopped there), otherwise None. Each streamed piece is about one token."""
+        stream is stopped there), otherwise None. Each streamed piece is about one token.
+        With a watch, a tool call is kept from the page and the stream stops once it is
+        written; watch.call has it then."""
         split = thinking.InlineThink()
         thought, pieces, answered = "", 0, False
         try:
@@ -460,8 +482,13 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 message = event.get("message")
                 if isinstance(message, dict):
-                    inline, content = split.feed(str(message.get("content") or ""))
-                    if event.get("done"):
+                    written = str(message.get("content") or "")
+                    if watch:
+                        written = watch.feed(written) + (watch.flush() if event.get("done") else "")
+                    inline, content = split.feed(written)
+                    if watch and watch.call:
+                        event["done"] = False
+                    if event.get("done") or (watch and watch.call):
                         more_thought, more_content = split.flush()
                         inline, content = inline + more_thought, content + more_content
                     taken_back = split.take_back()
@@ -478,6 +505,8 @@ class Handler(BaseHTTPRequestHandler):
                     if content.strip():
                         answered = True
                 if not self._stream_line(event):
+                    return None
+                if watch and watch.call:
                     return None
                 if budget_tokens and not answered and pieces >= budget_tokens and not event.get("done"):
                     return thought

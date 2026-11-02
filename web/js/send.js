@@ -4,7 +4,7 @@ import { messageBox, modelSelect, plainError, scrollLog, showEmpty, status } fro
 import { renderChips } from "./attachments.js";
 import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
-import { addTurn, pictureFigure, setBusy, updateApply } from "./turns.js";
+import { addTurn, pictureFigure, setBusy, showToolCall, updateApply } from "./turns.js";
 import {
   changeTarget, clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed,
   pictureSize, pictureSteps, refreshState, rewriteModel, updateChangeNote, visionModel,
@@ -122,6 +122,7 @@ async function send() {
   let thinkEnd = 0;
   let answerStart = 0;
   let thinkingCut = false;
+  const calls = [];
   const thinkSeconds = () => (thinkStart ? ((thinkEnd || Date.now()) - thinkStart) / 1000 : null);
   const drawThought = () => showThought(reply.thought, thought,
     { seconds: thinkSeconds(), live: Boolean(thinkStart && !thinkEnd), cut: thinkingCut });
@@ -265,6 +266,14 @@ async function send() {
           drawThought();
           continue;
         }
+        if (event.hikarilm === "tool") {
+          const call = { expression: event.expression, ...(event.tool_error ? { error: event.tool_error } : { result: event.result }) };
+          calls.push(call);
+          showToolCall(reply.calls, call);
+          status.textContent = "Calculated " + event.expression.slice(0, 40) + ". Streaming from " + modelLabel(model) + "…";
+          scrollLog();
+          continue;
+        }
         if (event.hikarilm === "thinking_cut") {
           thinkingCut = true;
           if (!event.final) status.textContent = "Thinking reached " + event.budget.toLocaleString() + " tokens, so " + modelLabel(model) + " is answering now…";
@@ -328,6 +337,7 @@ async function send() {
       state.messages.push({
         role: "assistant", content: answer, thinking: thought || undefined, model, usage,
         thoughtSeconds: thought ? Math.round(thinkSeconds()) : undefined, thinkingCut: thinkingCut || undefined,
+        tools: calls.length ? calls : undefined,
       });
       if (usage && state.lastContext) state.lastContext.used = usage.prompt_eval_count + usage.eval_count;
       saved = true;

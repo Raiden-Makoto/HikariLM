@@ -49,8 +49,8 @@ def embed(texts: list[str]) -> list[list[float]]:
 
 
 def open_chat(model: str, messages: list[dict], keep_alive: str = KEEP_ALIVE, options: dict | None = None,
-              think=None):
-    return engine.open_chat(model, messages, keep_alive, options, think)
+              think=None, tools: dict | None = None):
+    return engine.open_chat(model, messages, keep_alive, options, think, tools)
 
 
 def complete(model: str, messages: list[dict], options: dict, keep_alive: str = KEEP_ALIVE, think=None) -> str:
