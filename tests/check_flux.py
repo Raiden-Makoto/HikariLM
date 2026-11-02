@@ -86,13 +86,36 @@ def check_drawing() -> bool:
     return good
 
 
+def base_4b_report(found_models: dict) -> str:
+    """Why no base 4B was found: what the scan did find, and each base 4B download it passed over."""
+    named = [name + " (" + picture["variant"] + ")" for name, picture in found_models.items()]
+    lines = ["Found: " + (", ".join(named) or "none") + "."]
+    hub = engine.hub()
+    lines.append(f"Hugging Face cache: {hub}.")
+    for repo in sorted(hub.glob("models--*")) if hub.is_dir() else []:
+        name = repo.name[len("models--"):].replace("--", "/", 1)
+        if (flux.variant_of(name) or ("",))[0] != lora.VARIANT:
+            continue
+        snapshot = engine.snapshot(repo)
+        if any(repo.glob("blobs/*.incomplete")):
+            why = "a download is unfinished (an .incomplete file in blobs)"
+        elif not snapshot:
+            why = "it has no snapshot (refs/main)"
+        else:
+            why = flux.identify(name, snapshot)[1] or "it looks whole"
+        lines.append(f"{name}: {why.rstrip('.')}.")
+    return " ".join(lines)
+
+
 def check_loras() -> bool:
     """Look up, add and download a public LoRA, draw with it on the base 4B (beside the same
     seed without it, and from a reference picture with it, so Flux2KleinEdit loads it too),
     then take it off the list and delete it. What was there before the check is left alone."""
-    bases = [(name, picture) for name, picture in flux.scan()[0].items() if picture["variant"] == lora.VARIANT]
+    flux.forget_scan()
+    found_models = flux.scan()[0]
+    bases = [(name, picture) for name, picture in found_models.items() if picture["variant"] == lora.VARIANT]
     if not bases:
-        print("      No LoRA was drawn: that needs FLUX.2 klein base 4B downloaded.")
+        print("      No LoRA was drawn: no FLUX.2 klein base 4B was found. " + base_4b_report(found_models))
         return True
     name, picture = bases[0]
     try:
