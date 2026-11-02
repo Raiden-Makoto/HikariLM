@@ -25,6 +25,7 @@ import base64
 import json
 import os
 import queue
+import re
 import sys
 import tempfile
 import threading
@@ -297,7 +298,7 @@ class TextModel:
     def _prompt(self, messages: list[dict], think, request: dict | None = None) -> tuple[list[int], str]:
         """Token ids to send, and text the model is taken to have written already."""
         request = request or {}
-        native = "tools" in str(getattr(self.tokenizer, "chat_template", "") or "")
+        native = native_tools(str(getattr(self.tokenizer, "chat_template", "") or ""))
         chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), native)
         extra = {"enable_thinking": bool(think)} if self.template_switch and think is not None else {}
         if native and request.get("tools"):
@@ -425,6 +426,18 @@ class VisionModel:
         yield _counts(last, 0, stop.is_set())
 
 
+# How a template that writes past calls the standard way reads one: tool_call.function.name and
+# the like. Falcon3's takes tools but prints the calls as they come and leaves the assistant's
+# turn out when it has no text, so the model reads its own call as the user's.
+STANDARD_CALLS = re.compile(r"""tool_call(?:s\[\d\])?\.function|tool_call\[['"]function['"]\]|\.function\.(?:name|arguments)"""
+                            r"""|['"]function['"]\]\[['"](?:name|arguments)""")
+
+
+def native_tools(template: str) -> bool:
+    """Whether a chat template is given the tools and the calls as they are, not as text."""
+    return "tools" in template and bool(STANDARD_CALLS.search(template))
+
+
 def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dict]:
     """The chat for a template. One with tools of its own gets the calls and results as they
     are; for one without, the tool is described in the system message and the calls and
@@ -454,11 +467,12 @@ def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dic
 
 def with_system(render, chat: list[dict]):
     """Render the chat with its template. Some templates refuse a system message (Gemma 2's
-    raises "System role not supported"); then it goes at the start of the first message."""
+    raises "System role not supported", Mistral 7B v0.3's "Conversation roles must alternate");
+    then it goes at the start of the first message. Any other error is still raised."""
     try:
         return render(chat)
-    except Exception as error:
-        if not chat or chat[0]["role"] != "system" or "system" not in str(error).lower():
+    except Exception:
+        if not chat or chat[0]["role"] != "system":
             raise
     system, rest = chat[0]["content"], chat[1:]
     if rest and rest[0]["role"] == "user":

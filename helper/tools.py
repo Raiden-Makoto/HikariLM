@@ -96,8 +96,10 @@ def as_messages(written: str, call: dict, answer: dict, number: int) -> list[dic
 # --- spotting a call ----------------------------------------------------------
 # Where each format starts. Qwen2.5 and Qwen3 (Hermes): <tool_call>{json}</tool_call>. Mistral:
 # [TOOL_CALLS][{json}]. DeepSeek: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>
-# calculate ```json {args} ```. Gemma: ```tool_code calculate("…") ```.
-STARTS = ("<tool_call>", "[TOOL_CALLS]", "<｜tool▁calls▁begin｜>", "<｜tool▁call▁begin｜>", "```tool_code")
+# calculate ```json {args} ```. Gemma: ```tool_code calculate("…") ```. gpt-oss (Harmony):
+# to=functions.calculate<|channel|>commentary json<|message|>{args}<|call|>.
+STARTS = ("<tool_call>", "[TOOL_CALLS]", "<｜tool▁calls▁begin｜>", "<｜tool▁call▁begin｜>", "```tool_code",
+          "to=functions.")
 _CALL_IN_CODE = re.compile(r"""(\w+)\(\s*(?:expression\s*=\s*)?("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)""")
 
 
@@ -150,6 +152,10 @@ def _parse(start: str, rest: str) -> dict | None:
             return None
         name = "calculate" if "calculate" in head else (re.findall(r"(\w+)\s*(?:```|$)", head) or ["?"])[-1]
         return _call_from({"name": name, "arguments": value})
+    if start == "to=functions.":
+        name = re.match(r"\w*", rest).group(0) or "?"
+        value = _json_after(rest.split("<|message|>", 1)[-1], "{")
+        return None if value is None else _call_from({"name": name, "arguments": value})
     value = _json_after(rest)
     return None if value is None else _call_from(value)
 

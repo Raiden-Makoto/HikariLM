@@ -103,6 +103,8 @@ class CallWatchTest(unittest.TestCase):
             "deepseek": "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>calculate\n```json\n"
                         '{"expression": "2^10"}\n```<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             "gemma": '```tool_code\nprint(calculate(expression="2^10"))\n```',
+            "gpt-oss": 'to=functions.calculate<|channel|>commentary json<|message|>'
+                       '{"expression": "2^10"}<|call|>',
             "arguments as a string": '<tool_call>{"name": "calculate", "arguments": "{\\"expression\\": \\"2^10\\"}"}</tool_call>',
             "parameters": '<tool_call>{"name": "calculate", "parameters": {"expression": "2^10"}}</tool_call>',
         }
@@ -148,6 +150,30 @@ class WorkerChatTest(unittest.TestCase):
         self.assertEqual(chat[3], {"role": "user", "content": "<tool_response>\n69\n</tool_response>"})
         # With the tool off (or used up), its description is left out.
         self.assertEqual(mlx_worker.tool_chat(self.CHAT[:2], None, tools.AS_TEXT, False)[0]["content"], "Rules.")
+
+
+class TemplateKindTest(unittest.TestCase):
+    def test_only_templates_that_read_calls_the_standard_way_get_them_as_they_are(self):
+        qwen = "{% if tools %}...{% for tool_call in message.tool_calls %}{% set tool_call = tool_call.function %}"
+        deepseek = "{{ tool['function']['name'] }}"  # no tools of its own
+        falcon = "{% if tools %}<tools>{{ tools|tojson }}</tools>{{ message.tool_calls|tojson(indent=2) }}"
+        self.assertTrue(mlx_worker.native_tools(qwen))
+        self.assertFalse(mlx_worker.native_tools(deepseek))
+        self.assertFalse(mlx_worker.native_tools(falcon))
+
+    def test_a_template_that_wants_roles_to_alternate_gets_the_system_message_in_the_first(self):
+        def mistral(chat):
+            roles = [turn["role"] for turn in chat]
+            if roles != ["user", "assistant", "user", "assistant", "user"][:len(roles)]:
+                raise ValueError("Conversation roles must alternate user/assistant/user/assistant/...")
+            return chat
+
+        chat = mlx_worker.tool_chat([{"role": "user", "content": "sqrt 4489?"}], tools.TOOLS, tools.AS_TEXT, False)
+        self.assertEqual(chat[0]["role"], "system")
+        rendered = mlx_worker.with_system(mistral, chat)
+        self.assertEqual([turn["role"] for turn in rendered], ["user"])
+        self.assertTrue(rendered[0]["content"].startswith("You have a calculator tool."))
+        self.assertTrue(rendered[0]["content"].endswith("\n\nsqrt 4489?"))
 
 
 class LoopTest(unittest.TestCase):

@@ -57,6 +57,18 @@ get it there; the rest get it described in the system message, in the `<tool_cal
 helper reads calls in Qwen's, Mistral's, DeepSeek's and Gemma's formats. Whether each model
 actually calls it is not known yet.
 
+What `tests/check_templates.py` found, from the templates alone (no model):
+
+| Model | The calculator goes in | Notes |
+|---|---|---|
+| Qwen3 8B, Qwen2.5 Coder | as the template's own tools | Hermes `<tool_call>` format |
+| gpt-oss 20B | as the template's own tools | Harmony calls (`to=functions.calculate`), read since 4.8.0; its thinking channels are not split off yet |
+| DeepSeek R1 8B (mlx-community), Gemma 3, Mistral 7B v0.3 | as text in the system message | their templates take no tools; Gemma 3 runs in mlx-vlm |
+| Falcon3 | as text in the system message | its template takes tools but put the model's call in the user's turn, so it called again and again |
+
+Mistral 7B v0.3's template refuses a system message ("roles must alternate"), so the rules and
+the calculator go at the start of the first message.
+
 - [ ] Run `python3 tests/check_tools.py` on the Mac with the suggested chat models (Qwen3 8B,
   DeepSeek R1 8B, Qwen2.5 Coder, Gemma 3 12B, Falcon3, and gpt-oss if it is there). It asks
   each one four sums and says whether it called the calculator and got them right. Write down
