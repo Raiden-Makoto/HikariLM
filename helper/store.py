@@ -274,6 +274,8 @@ def save(chat_id: str, model, messages) -> dict:
                 kept["pinned"] = True
             if existing.get("folder"):
                 kept["folder"] = str(existing["folder"])
+            if existing.get("rules") is False:
+                kept["rules"] = False
         except (OSError, ValueError, json.JSONDecodeError):
             pass
     data = {
@@ -369,7 +371,8 @@ def rename_folder(old, new) -> dict:
 
 
 def patch(chat_id: str, fields: dict) -> dict:
-    """Change a chat's title, pinned flag, or folder without touching its messages.
+    """Change a chat's title, pinned flag, folder, or whether your rules apply in it, without
+    touching its messages.
     Only the keys present in fields change. A folder of "" or null means no folder."""
     path = _path(chat_id)
     data = _read(path)
@@ -382,13 +385,21 @@ def patch(chat_id: str, fields: dict) -> dict:
         if not isinstance(fields["pinned"], bool):
             raise ValueError("pinned must be true or false")
         data["pinned"] = fields["pinned"]
+    if "rules" in fields:
+        # Your rules are on in a chat unless it turns them off.
+        if not isinstance(fields["rules"], bool):
+            raise ValueError("rules must be true or false")
+        if fields["rules"]:
+            data.pop("rules", None)
+        else:
+            data["rules"] = False
     if "folder" in fields:
         folder = clean_folder(fields["folder"])
         if folder:
             data["folder"] = _same_folder_spelling(folder, leaving=str(data.get("folder") or ""))
         else:
             data.pop("folder", None)
-    if not any(key in fields for key in ("title", "pinned", "folder")):
+    if not any(key in fields for key in ("title", "pinned", "folder", "rules")):
         raise ValueError("nothing to change")
     _write(path, data)
     return {
@@ -396,6 +407,7 @@ def patch(chat_id: str, fields: dict) -> dict:
         "title": data["title"],
         "pinned": bool(data.get("pinned")),
         "folder": data.get("folder", ""),
+        "rules": data.get("rules") is not False,
     }
 
 
@@ -509,6 +521,7 @@ def listing() -> list[dict]:
                 "updated": float(data.get("updated", 0)),
                 "pinned": data.get("pinned") is True,
                 "folder": str(data.get("folder") or ""),
+                "rules": data.get("rules") is not False,
             }
         )
     chats.sort(key=lambda chat: chat["updated"], reverse=True)

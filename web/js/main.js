@@ -17,6 +17,7 @@ import { start as startApply } from "./apply.js";
 import { start as startLayout } from "./layout.js";
 import { start as startShortcuts } from "./shortcuts.js";
 import { start as startLoras } from "./loras.js";
+import { start as startRules } from "./rules.js";
 
 startCore();
 startMarkdown();
@@ -32,6 +33,7 @@ startApply();
 startLayout();
 startShortcuts();
 startLoras();
+startRules();
 
 applyTheme(localStorage.getItem("hikarilm-theme") || "light");
 applyBackground(localStorage.getItem("hikarilm-bg") || "");

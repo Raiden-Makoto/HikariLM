@@ -2,6 +2,7 @@
 
 The last message picks what it does: "crash" ends the process mid-reply, "slow"
 writes many pieces until it is stopped, "options" answers with what it was sent,
+"system" answers with the first message it was sent (and how many there were),
 anything else is echoed back word by word.
 
 With --embed it stands in for nomic: each text becomes a unit vector of its
@@ -80,6 +81,10 @@ def main():
             os._exit(1)
         if last == "slow":
             pieces = (f"word{n} " for n in range(10000))
+        elif last == "system":
+            first = command["messages"][0]
+            pieces = iter([json.dumps({"role": first["role"], "content": first["content"],
+                                       "count": len(command["messages"])})])
         elif last == "options":
             sent = {key: command.get(key) for key in ("think", "num_ctx", "num_predict", "kv_bits")}
             sent.update(vision=args.vision, pid=os.getpid(), images=len(command["messages"][-1].get("images") or []))

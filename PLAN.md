@@ -2,7 +2,6 @@
 
 What is coming, in order. What is already in is in the README and the release notes.
 
-- **v4.7.5**: your own rules for the models, like `CLAUDE.md`: in Settings, and per folder.
 - **v4.8**: a calculator the models can call, so they stop doing sums by hand.
 - **v5**: voice, on the Mac: speech to text with Whisper (5.0), then answers read aloud with
   Kokoro (5.5).
@@ -50,42 +49,6 @@ model in memory at a time, RAM first, nothing written to disk until Save, and ch
 settings keep working across each upgrade. Real-model checks run on the Mac in `tests/check_*.py`;
 a check downloads what it needs and deletes it after, unless it was there before. Unit tests
 download nothing.
-
-## v4.7.5: your own rules for the models
-
-Standing instructions the models follow in every chat, the way Claude Code reads `CLAUDE.md`
-and Cursor reads its rules: "You are a senior engineer. Answer with the code first, then a short
-why. Use British spelling." They go in the system message, at the very start of what the model
-reads, so every chat model takes them the same way. Small models follow them more loosely than
-large ones; the Settings note says so.
-
-- [ ] **Your rules**, in Settings: a text box, saved in `~/.hikarilm/rules.md` (plain Markdown, so
-  it can be edited outside HikariLM too and is kept across updates). They apply to every chat
-  and in the code editor. A switch turns them off without deleting them.
-- [ ] **Folder rules**, in the code editor: `HIKARILM.md` at the top of the open folder, read when
-  the folder opens and again when it changes, added after your rules. If the folder has no
-  `HIKARILM.md` but has `AGENTS.md`, `CLAUDE.md` or `.cursorrules`, that one is read instead and the
-  page says which. The header says *Rules: yours + HIKARILM.md* (or which ones), and clicking it
-  opens the file.
-- [ ] **Per chat**: a chat can turn the rules off for itself (in the chat's menu); the choice is
-  saved with the chat. A new chat starts with them on.
-- [ ] **Where they go**: one system message, your rules first, then the folder's, then the code
-  editor's own instructions for writing code to a file (those stay last, so Apply keeps
-  working). A chat model that has no system role in its chat template gets them at the start of
-  the first message instead; find out on the Mac which of the suggested models need that.
-- [ ] **Where they do not go**: rewriting prompts for pictures, Apply's merge, the compaction
-  summary, the notes model, reading pictures for the chat, and picture models. Those have their
-  own instructions, and a rule like "answer in Spanish" would break them.
-- [ ] **Context**: the rules count in the context figures and are never compacted away (the
-  system message is already kept whole). Limit: 8,000 characters for yours and 8,000 for the
-  folder's; past that the box says how much is cut. If the rules take more than a quarter of the
-  model's context, the page says so before sending.
-- [ ] Thinking models get them too; nothing about thinking changes.
-- [ ] Tests: the rules reach the model first and the code editor's instructions last (the fake
-  worker echoes the system message), they are left out of rewrite, Apply, compaction and notes,
-  the per-chat switch, the folder file and the `AGENTS.md`/`CLAUDE.md` fallback, the limits, and a
-  chat saved before 4.7.5 opens with the rules on. A browser check of Settings and the header.
-- [ ] README, `__version__ = "4.7.5"`, tag `v4.7.5`.
 
 ## v4.8.0: a calculator the models can use
 

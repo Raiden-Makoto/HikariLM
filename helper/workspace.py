@@ -23,7 +23,7 @@ EXTENSIONS = {
     ".php", ".swift", ".cs", ".scala", ".lua", ".pl", ".js", ".ts", ".jsx", ".tsx",
     ".sh", ".sql", ".tex",
 }
-NAMES = {"makefile", "dockerfile", "readme", "license"}
+NAMES = {"makefile", "dockerfile", "readme", "license", ".cursorrules"}
 SKIP_DIRS = {"node_modules", "__pycache__", "venv"}
 
 

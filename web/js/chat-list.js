@@ -184,6 +184,8 @@ function showMainMenu(chat, row) {
       showFolderMenu(chat, row);
       placeMenu(menuButton);
     }),
+    menuItem(chat.rules === false ? "Use your rules in this chat" : "Turn off your rules in this chat",
+      () => changeChat(chat.id, { rules: chat.rules === false })),
     document.createElement("hr"),
   );
   let armed = false;

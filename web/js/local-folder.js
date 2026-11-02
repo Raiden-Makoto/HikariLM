@@ -8,7 +8,7 @@ import { MAX_FILE } from "./attachments.js";
 // refusal if the file changed since it was opened.
 const LOCAL_EXTENSIONS = new Set(("txt md rst log csv tsv json yaml yml toml ini xml html css py r c h cpp hpp " +
   "java kt go rs rb php swift cs scala lua pl js ts jsx tsx sh sql tex").split(" "));
-const LOCAL_NAMES = new Set(["makefile", "dockerfile", "readme", "license"]);
+const LOCAL_NAMES = new Set(["makefile", "dockerfile", "readme", "license", ".cursorrules"]);
 const LOCAL_SKIP = new Set(["node_modules", "__pycache__", "venv"]);
 const LOCAL_MAX_FILES = 200;
 const LOCAL_MAX_DEPTH = 4;

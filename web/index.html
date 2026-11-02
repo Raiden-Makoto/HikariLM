@@ -79,6 +79,7 @@
         <span id="folder-label">No folder open</span>
       </div>
       <p class="note" id="folder-note" role="status">Choose a folder to start.</p>
+      <p class="note" id="folder-rules" hidden></p>
       <div class="files-body">
         <div class="file-side" id="file-side">
           <input id="file-filter" type="search" spellcheck="false" autocomplete="off" placeholder="Search files" aria-label="Search files" disabled>
@@ -230,6 +231,15 @@
           <input class="switch" id="notes-toggle" type="checkbox" role="switch">
         </label>
         <p class="note" id="notes-note" role="status"></p>
+      </div>
+      <div class="setting" id="rules-setting">
+        <label class="switch-row">
+          <span class="setting-label">Your rules</span>
+          <input class="switch rules-input" id="rules-toggle" type="checkbox" role="switch">
+        </label>
+        <textarea id="rules-text" maxlength="8000" aria-label="Your rules" placeholder="Instructions every chat model follows, for example: You are a senior engineer. Answer with the code first, then a short why. Use British spelling."></textarea>
+        <p class="note">Sent first, before every message, in Chat and the code editor. In the code editor a folder's own HIKARILM.md (or AGENTS.md, CLAUDE.md or .cursorrules) comes after them. A chat can turn them off in its menu. Small models follow them more loosely than large ones. Kept in ~/.hikarilm/rules.md.</p>
+        <p class="note" id="rules-note" role="status"></p>
       </div>
       <div class="setting" id="keys-setting">
         <span class="setting-label">Keyboard shortcuts</span>

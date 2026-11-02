@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, lora,
-                    names, notes, rewrite, store, thinking, update, workspace)
+                    names, notes, rewrite, rules, store, thinking, update, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -34,6 +34,7 @@ PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 SETUP_PICTURES = "/setup/pictures"
 SETUP_LORA = "/setup/lora"
 LORAS = "/api/loras"
+RULES = "/api/rules"
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
           "/vendor/katex.min.js")
 # The page's own scripts and styles: web/js/*.js and web/css/*.css, plain names only.
@@ -98,6 +99,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/settings":
             self._send_json(context.load_settings())
+            return
+        if self.path == RULES:
+            self._send_json({**rules.load(), "folder_files": list(rules.FOLDER_FILES)})
             return
         if self.path == LORAS:
             self._send_json({"loras": lora.listing(), "for": lora.VARIANT})
@@ -180,6 +184,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/settings":
             try:
                 self._send_json(context.save_settings(self._body(MAX_BODY)))
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+            except OSError as error:
+                self._send_json({"error": f"could not save: {error.strerror or error}"}, status=500)
+            return
+        if self.path == RULES:
+            try:
+                self._send_json(rules.save(self._body(MAX_BODY)))
             except ValueError as error:
                 self._send_json({"error": str(error)}, status=400)
             except OSError as error:
@@ -336,6 +348,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._refuse_picture_model(model):
             return
+        messages, ruled_by, added = rules.apply(messages, self._rules)
         self._models.enter_context(KEEPER.using(model, keep_alive))
         settings = context.load_settings()
         try:
@@ -356,6 +369,9 @@ class Handler(BaseHTTPRequestHandler):
         started = True
         self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"],
                            "threshold": decision["threshold"]})
+        if ruled_by:
+            self._stream_line({"hikarilm": "rules", "from": ruled_by, "num_ctx": num_ctx,
+                               "tokens": context.estimate_tokens(messages[0]["content"])})
         if decision["cut"] is not None:
             # Like Open WebUI: summarize the older part with the same model, keep the rest.
             self._stream_line({"hikarilm": "compaction", "done": False})
@@ -375,7 +391,8 @@ class Handler(BaseHTTPRequestHandler):
                 summary = written.strip() or context.fallback_summary(summary, compacted)
                 active = system + recent
                 first = cut
-                self._stream_line({"hikarilm": "compaction", "done": True, "checkpoint": cut,
+                # The page counts its own messages, without a system message added for the rules.
+                self._stream_line({"hikarilm": "compaction", "done": True, "checkpoint": cut - added,
                                    "summary": summary, "dropped": len(compacted), "kept": len(recent)})
             except ModelError as error:
                 # Like Open WebUI: a failed compaction sends the whole active window instead.
@@ -935,6 +952,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("keep_alive must be a duration such as 5m")
         question = payload.get("question")
         self._question = question if isinstance(question, str) else cleaned[-1]["content"]
+        self._rules = payload.get("rules")
         return model.strip(), cleaned, keep_alive.strip()
 
     def _send_json(self, payload: dict, status: int = 200) -> None:

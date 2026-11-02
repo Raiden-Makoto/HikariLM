@@ -297,7 +297,8 @@ class TextModel:
         """Token ids to send, and text the model is taken to have written already."""
         chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
         extra = {"enable_thinking": bool(think)} if self.template_switch and think is not None else {}
-        text = self.tokenizer.apply_chat_template(chat, add_generation_prompt=True, tokenize=False, **extra)
+        text = with_system(lambda turns: self.tokenizer.apply_chat_template(
+            turns, add_generation_prompt=True, tokenize=False, **extra), chat)
         lead = ""
         if think is False and not self.template_switch:
             # An R1 distill always reasons; an empty reasoning block makes it answer at once.
@@ -388,7 +389,8 @@ class VisionModel:
         messages = request["messages"]
         pictures = [image for m in messages for image in m.get("images") or []]
         chat = [{"role": m["role"], "content": _text(m.get("content"))} for m in messages]
-        prompt = self.template(self.processor, self.model.config, chat, num_images=len(pictures))
+        prompt = with_system(lambda turns: self.template(self.processor, self.model.config, turns,
+                                                         num_images=len(pictures)), chat)
         with tempfile.TemporaryDirectory() as folder:
             paths = []
             for number, image in enumerate(pictures):
@@ -415,6 +417,22 @@ class VisionModel:
                 yield {"text": rest}
         _clear_cache(self.mx)
         yield _counts(last, 0, stop.is_set())
+
+
+def with_system(render, chat: list[dict]):
+    """Render the chat with its template. Some templates refuse a system message (Gemma 2's
+    raises "System role not supported"); then it goes at the start of the first message."""
+    try:
+        return render(chat)
+    except Exception as error:
+        if not chat or chat[0]["role"] != "system" or "system" not in str(error).lower():
+            raise
+    system, rest = chat[0]["content"], chat[1:]
+    if rest and rest[0]["role"] == "user":
+        rest = [{**rest[0], "content": system + "\n\n" + rest[0]["content"]}, *rest[1:]]
+    else:
+        rest = [{"role": "user", "content": system}, *rest]
+    return render(rest)
 
 
 def _room(request: dict, prompt_tokens: int) -> int:

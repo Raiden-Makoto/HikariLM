@@ -15,6 +15,7 @@ import { announce, askNotifyPermission } from "./page.js";
 import { notesOn } from "./settings.js";
 import { editorPrompt } from "./edit-blocks.js";
 import { findLora, loraRequest } from "./loras.js";
+import { rulesRequest, rulesWarning } from "./rules.js";
 
 // Ask the helper to have a vision model write one picture down as text. It
 // answers from the saved description when it has one, so the vision model
@@ -167,11 +168,14 @@ async function send() {
     }
     // In the code editor the model is told how to write code for a file, so Apply knows where it goes.
     const system = inCodeView() ? [{ role: "system", content: editorPrompt(state.folderName, state.openPath) }] : [];
+    const rules = await rulesRequest(inCodeView());
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
+        // The helper puts your rules (and the folder's) first in the system message.
+        rules,
         // What the documents are searched with, without the earlier notes in front.
         question: content,
         messages: [...system, ...state.messages.map((message, index) => {
@@ -214,6 +218,11 @@ async function send() {
         if (event.error) throw new Error(event.error);
         if (event.hikarilm === "context") {
           state.lastContext = event;
+          continue;
+        }
+        if (event.hikarilm === "rules") {
+          const warning = rulesWarning(event);
+          if (warning) notify(warning);
           continue;
         }
         if (event.hikarilm === "compaction") {
