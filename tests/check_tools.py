@@ -27,7 +27,7 @@ from helper import context, engine, server  # noqa: E402
 
 SUMS = [
     ("What is the square root of 4761?", "69"),
-    ("What is 2^64 - 1? Give the exact whole number.", str(2 ** 64 - 1)),
+    ("What is 2 to the power of 40?", str(2 ** 40)),
     ("What is 1234567 times 7654321?", str(1234567 * 7654321)),
     ("What is the sine of 30 degrees, times 12.5?", "6.25"),
 ]

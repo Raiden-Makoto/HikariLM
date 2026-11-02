@@ -19,17 +19,19 @@ MAX_CALLS = 20   # an answer; then the model is told to answer with what it has
 DESCRIPTION = (
     "A scientific calculator. Use it for any arithmetic or math instead of working it out by hand, "
     "then answer from the result. The expression is written like Python or a calculator: "
-    "+ - * / // % and ** or ^ for powers, brackets, 5! for factorial, whole numbers of any size; "
+    "+ - * / // % and ** or ^ for powers, brackets, 5! for factorial; "
     "sqrt, cbrt, root(x, n), exp, ln, log(x) (natural), log(x, base), log10, log2; "
     "sin cos tan and asin acos atan atan2 in radians, sind cosd tand in degrees, sinh cosh tanh; "
     "degrees, radians, hypot, factorial, gamma, comb, perm, gcd, lcm, floor, ceil, abs, round(x, digits), "
-    "min, max; constants pi, e, tau. One expression per call.")
+    "min, max; constants pi, e, tau. Numbers are double-precision floats (about 15 significant digits, "
+    "up to about 1.8e308); past that range the result is an overflow or underflow error. "
+    "One expression per call.")
 
 CALCULATOR = {"type": "function", "function": {
     "name": "calculate",
     "description": DESCRIPTION,
     "parameters": {"type": "object", "required": ["expression"], "properties": {
-        "expression": {"type": "string", "description": "The expression, such as sqrt(4761) or 2^64 - 1"}}}}}
+        "expression": {"type": "string", "description": "The expression, such as sqrt(4761) or 2^40 * 3.5"}}}}}
 
 TOOLS = [CALCULATOR]
 

@@ -1,9 +1,14 @@
 """A scientific calculator for the models: calculate("sqrt(4761)") -> "69".
 
 The expression is parsed as Python and its syntax tree walked here: numbers, + - * / // % **
-(^ is a power too, as on a calculator; 5! a factorial), brackets, and the functions and constants below. Nothing
-else is allowed (no other names, attributes, strings or imports), so it can never touch files or
-the network. Whole numbers are exact at any size; sizes are capped so every answer is quick.
+(^ is a power too, as on a calculator; 5! a factorial), brackets, and the functions and constants
+below. Nothing else is allowed (no other names, attributes, strings or imports), so it can never
+touch files or the network.
+
+Every number is a double-precision float, as on a scientific calculator: about 15 significant
+digits, whole numbers exact up to 2^53. A result larger than about 1.8e308 is an overflow, and a
+nonzero one smaller than about 2.2e-308 (or one that comes out 0 only because it is that small) is
+an underflow; both are errors rather than inf or 0.
 """
 
 from __future__ import annotations
@@ -12,21 +17,30 @@ import ast
 import math
 import operator
 import re
+import sys
 
 MAX_CHARS = 1000
 MAX_NODES = 300
-MAX_DIGITS = 4000          # of any whole number along the way; Python prints up to 4,300
-MAX_FACTORIAL = 1400       # 1400! has 3,799 digits
-MAX_COMB = 10_000
-MAX_SHOWN = 15             # significant digits of a decimal result
+MAX_SHOWN = 15             # significant digits of a result
+WHOLE_SHOWN = 1e15         # whole results below this are shown in full, without an exponent
+LARGEST = sys.float_info.max
+SMALLEST = sys.float_info.min
+OVERFLOW = "overflow: the result is larger than about 1.8e308"
+UNDERFLOW = "underflow: the result is nonzero but smaller than about 2.2e-308"
 
 
 class CalcError(ValueError):
     """What went wrong, in words the model can act on."""
 
 
+def _whole(name, value) -> int:
+    if not float(value).is_integer():
+        raise CalcError(f"{name} needs whole numbers")
+    return int(value)
+
+
 def _cbrt(x):
-    return math.copysign(abs(x) ** (1 / 3), x) if not hasattr(math, "cbrt") else math.cbrt(x)
+    return math.cbrt(x) if hasattr(math, "cbrt") else math.copysign(abs(x) ** (1 / 3), x)
 
 
 def _log(x, base=None):
@@ -36,30 +50,37 @@ def _log(x, base=None):
 def _root(x, n):
     if n == 0:
         raise CalcError("the 0th root is not defined")
-    if x < 0 and int(n) == n and int(n) % 2:
+    if x < 0 and float(n).is_integer() and int(n) % 2:
         return -((-x) ** (1 / n))
-    return x ** (1 / n)
+    return _power(x, 1 / n)
+
+
+def _exp(x):
+    if x < -745.2:
+        raise CalcError(UNDERFLOW)
+    return math.exp(x)
 
 
 def _factorial(n):
-    if isinstance(n, float):
-        if not n.is_integer():
-            raise CalcError("factorial needs a whole number; use gamma(x + 1) for others")
-        n = int(n)
-    if n > MAX_FACTORIAL:
-        raise CalcError(f"factorial is limited to {MAX_FACTORIAL}!")
-    return math.factorial(n)
+    n = _whole("factorial", n)
+    if n < 0:
+        raise CalcError("factorial is not defined for negative numbers; use gamma(x + 1) for others")
+    if n > 170:
+        raise CalcError(OVERFLOW)
+    return float(math.factorial(n))
 
 
-def _whole(name, *values, most=None):
-    out = []
-    for value in values:
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        if not isinstance(value, int) or (most and value > most):
-            raise CalcError(f"{name} needs whole numbers" + (f" up to {most:,}" if most else ""))
-        out.append(value)
-    return out
+def _choose(name, n, k, ordered):
+    n, k = _whole(name, n), _whole(name, k)
+    if n < 0 or k < 0:
+        raise CalcError(f"{name} needs numbers of 0 or more")
+    if k > n:
+        return 0.0
+    # Its size first, from log-gamma, so a huge one is an overflow before it is worked out.
+    size = math.lgamma(n + 1) - math.lgamma(n - k + 1) - (0 if ordered else math.lgamma(k + 1))
+    if size > 709.8:
+        raise CalcError(OVERFLOW)
+    return float(math.perm(n, k) if ordered else math.comb(n, k))
 
 
 def _degrees_trig(function):
@@ -67,29 +88,30 @@ def _degrees_trig(function):
 
 
 def _round(x, digits=0):
-    return round(x, int(digits)) if digits else round(x)
+    return float(round(x, _whole("round", digits)))
 
 
 FUNCTIONS = {
-    "sqrt": math.sqrt, "cbrt": _cbrt, "root": _root, "exp": math.exp,
+    "sqrt": math.sqrt, "cbrt": _cbrt, "root": _root, "exp": _exp,
     "log": _log, "ln": math.log, "log10": math.log10, "log2": math.log2,
     "sin": math.sin, "cos": math.cos, "tan": math.tan,
     "asin": math.asin, "acos": math.acos, "atan": math.atan, "atan2": math.atan2,
+    "arcsin": math.asin, "arccos": math.acos, "arctan": math.atan,
     "sind": _degrees_trig(math.sin), "cosd": _degrees_trig(math.cos), "tand": _degrees_trig(math.tan),
     "sinh": math.sinh, "cosh": math.cosh, "tanh": math.tanh,
     "asinh": math.asinh, "acosh": math.acosh, "atanh": math.atanh,
     "degrees": math.degrees, "radians": math.radians, "hypot": math.hypot,
     "factorial": _factorial, "gamma": math.gamma,
-    "comb": lambda n, k: math.comb(*_whole("comb", n, k, most=MAX_COMB)),
-    "perm": lambda n, k: math.perm(*_whole("perm", n, k, most=MAX_COMB)),
-    "gcd": lambda *v: math.gcd(*_whole("gcd", *v)), "lcm": lambda *v: math.lcm(*_whole("lcm", *v)),
-    "floor": math.floor, "ceil": math.ceil, "abs": abs, "round": _round, "min": min, "max": max,
+    "comb": lambda n, k: _choose("comb", n, k, False), "perm": lambda n, k: _choose("perm", n, k, True),
+    "gcd": lambda *v: float(math.gcd(*[_whole("gcd", x) for x in v])),
+    "lcm": lambda *v: float(math.lcm(*[_whole("lcm", x) for x in v])),
+    "floor": lambda x: float(math.floor(x)), "ceil": lambda x: float(math.ceil(x)),
+    "abs": abs, "round": _round, "min": min, "max": max,
 }
-FUNCTIONS["arcsin"], FUNCTIONS["arccos"], FUNCTIONS["arctan"] = math.asin, math.acos, math.atan
 CONSTANTS = {"pi": math.pi, "π": math.pi, "e": math.e, "tau": math.tau}
 
 BINARY = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
-          ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod, ast.Pow: None}
+          ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod}
 UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 
 # How models and people write math that Python does not read.
@@ -122,21 +144,30 @@ def _rewrite(expression: str) -> str:
         expression = expression[:start] + "factorial(" + expression[start:end] + ")" + expression[match.end():]
 
 
-def _digits(value):
-    if isinstance(value, int) and not isinstance(value, bool) and value.bit_length() > MAX_DIGITS * 3.33:
-        raise CalcError(f"the number is longer than {MAX_DIGITS:,} digits")
+def _checked(value, *inputs) -> float:
+    """A float in range: never inf, never NaN, never too small to hold."""
     if isinstance(value, complex):
         raise CalcError("the result is not a real number")
+    try:
+        value = float(value)
+    except OverflowError:
+        raise CalcError(OVERFLOW) from None
+    if math.isnan(value):
+        raise CalcError("the result is not a number")
+    if math.isinf(value) or abs(value) > LARGEST:
+        raise CalcError(OVERFLOW)
+    if 0 < abs(value) < SMALLEST or (value == 0 and inputs and all(x != 0 for x in inputs)):
+        raise CalcError(UNDERFLOW)
     return value
 
 
 def _power(base, exponent):
-    if isinstance(base, int) and isinstance(exponent, int) and exponent > 0 and abs(base) > 1:
-        if exponent * math.log10(abs(base)) > MAX_DIGITS:
-            raise CalcError(f"the number is longer than {MAX_DIGITS:,} digits")
-    if isinstance(base, (int, float)) and base < 0 and isinstance(exponent, float) and not exponent.is_integer():
+    if base < 0 and not float(exponent).is_integer():
         raise CalcError("a negative number to a fractional power is not a real number")
-    return base ** exponent
+    if base == 0 and exponent < 0:
+        raise ZeroDivisionError
+    # 0.5 ** 2000 and 2 ** -2000 come out 0 only because they are too small to hold.
+    return _checked(base ** exponent, base)
 
 
 def _evaluate(node):
@@ -145,7 +176,7 @@ def _evaluate(node):
     if isinstance(node, ast.Constant):
         if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
             raise CalcError("only numbers are allowed")
-        return _digits(node.value)
+        return _checked(node.value)
     if isinstance(node, ast.Name):
         if node.id in CONSTANTS:
             return CONSTANTS[node.id]
@@ -154,38 +185,31 @@ def _evaluate(node):
         raise CalcError(f"unknown name '{node.id}'")
     if isinstance(node, ast.UnaryOp) and type(node.op) in UNARY:
         return UNARY[type(node.op)](_evaluate(node.operand))
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+        return _power(_evaluate(node.left), _evaluate(node.right))
     if isinstance(node, ast.BinOp) and type(node.op) in BINARY:
         left, right = _evaluate(node.left), _evaluate(node.right)
-        if isinstance(node.op, ast.Pow):
-            return _digits(_power(left, right))
-        if isinstance(node.op, ast.Mult) and isinstance(left, int) and isinstance(right, int):
-            if (abs(left).bit_length() + abs(right).bit_length()) > MAX_DIGITS * 3.33:
-                raise CalcError(f"the number is longer than {MAX_DIGITS:,} digits")
-        if isinstance(node.op, ast.Div) and isinstance(left, int) and isinstance(right, int) and right \
-                and left % right == 0:
-            return left // right
-        return _digits(BINARY[type(node.op)](left, right))
+        value = BINARY[type(node.op)](left, right)
+        # A product or quotient of nonzero numbers that comes out 0 was too small to hold.
+        inputs = (left, right) if isinstance(node.op, ast.Mult) else (left,) if isinstance(node.op, ast.Div) else ()
+        return _checked(value, *inputs)
     if isinstance(node, ast.Call):
         if not isinstance(node.func, ast.Name) or node.func.id not in FUNCTIONS:
             name = node.func.id if isinstance(node.func, ast.Name) else ast.unparse(node.func)
             raise CalcError(f"unknown function '{name}'")
         if node.keywords:
             raise CalcError("functions take numbers only, not name=value")
-        return _digits(FUNCTIONS[node.func.id](*[_evaluate(arg) for arg in node.args]))
+        return _checked(FUNCTIONS[node.func.id](*[_evaluate(arg) for arg in node.args]))
     if isinstance(node, (ast.Tuple, ast.List)):
         raise CalcError("one expression at a time; a comma only separates a function's numbers")
     raise CalcError(f"'{ast.unparse(node)}' is not something the calculator does")
 
 
-def show(value) -> str:
-    """A result the way a calculator shows it: whole numbers in full, others to 15 digits."""
-    if isinstance(value, float):
-        if math.isinf(value) or math.isnan(value):
-            raise CalcError("the result is not a finite number")
-        if value.is_integer() and abs(value) < 1e15:
-            return str(int(value))
-        return format(value, f".{MAX_SHOWN}g")
-    return str(value)
+def show(value: float) -> str:
+    """A result the way a calculator shows it: whole numbers below 1e15 in full, others to 15 digits."""
+    if value.is_integer() and abs(value) < WHOLE_SHOWN:
+        return str(int(value))
+    return format(value, f".{MAX_SHOWN}g")
 
 
 def calculate(expression) -> str:
@@ -207,7 +231,7 @@ def calculate(expression) -> str:
     except ZeroDivisionError:
         raise CalcError("division by zero") from None
     except OverflowError:
-        raise CalcError("the result is too large") from None
+        raise CalcError(OVERFLOW) from None
     except (ValueError, TypeError) as error:
         text = str(error)
         raise CalcError("math domain error: that value is outside what the function takes"

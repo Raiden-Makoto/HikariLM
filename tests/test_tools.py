@@ -24,22 +24,40 @@ class CalculatorTest(unittest.TestCase):
             with self.subTest(expression):
                 self.assertEqual(calculate(expression), expected)
 
-    def test_whole_numbers_of_any_size_are_exact(self):
-        self.assertEqual(calculate("2**100"), str(2 ** 100))
-        self.assertEqual(calculate("2^64 - 1"), "18446744073709551615")
-        self.assertEqual(calculate("100!"), str(__import__("math").factorial(100)))
+    def test_double_precision_like_a_calculator(self):
+        self.assertEqual(calculate("1234567 * 7654321"), "9449772114007")
+        self.assertEqual(calculate("999999999999999"), "999999999999999")
+        self.assertEqual(calculate("2^64 - 1"), "1.84467440737096e+19")
+        self.assertEqual(calculate("2**100"), "1.26765060022823e+30")
+        self.assertEqual(calculate("170!"), "7.257415615308e+306")
+        self.assertEqual(calculate("exp(709)"), "8.21840746155497e+307")
+        self.assertEqual(calculate("1e-300 * 1e-7"), "1e-307")
+        self.assertEqual(calculate("0 * 1e-300"), "0")
+
+    def test_outside_the_range_is_overflow_or_underflow(self):
+        for expression in ("1e308 * 10", "1e400", "10^400", "9**9**9", "171!", "exp(710)", "gamma(172)",
+                           "comb(1030, 515)", "comb(10**6, 5*10**5)", "-1e308 * 10", "1" + "0" * 400):
+            with self.subTest(expression), self.assertRaises(CalcError) as caught:
+                calculate(expression)
+            self.assertTrue(str(caught.exception).startswith("overflow"), str(caught.exception))
+        for expression in ("1e-200 * 1e-200", "1e-310", "2^-2000", "0.5^2000", "exp(-1000)", "1e-300 / 1e10",
+                           "1e-308 - 0.99e-308"):
+            with self.subTest(expression), self.assertRaises(CalcError) as caught:
+                calculate(expression)
+            self.assertTrue(str(caught.exception).startswith("underflow"), str(caught.exception))
 
     def test_mistakes_come_back_in_words(self):
-        cases = {"1/0": "division by zero", "sqrt(-1)": "domain", "(-8)**(1/3)": "not a real number",
+        cases = {"1/0": "division by zero", "5 % 0": "division by zero", "0^-1": "division by zero",
+                 "sqrt(-1)": "domain", "(-8)**(1/3)": "not a real number",
                  "x + 1": "unknown name 'x'", "sqrt": "is a function", "factorial(2.5)": "whole number",
-                 "2 +": "could not be read", "(1": "could not be read", "1e308 * 10": "finite",
-                 "exp(1000)": "too large", "": "give an expression"}
+                 "factorial(-1)": "negative", "2 +": "could not be read", "(1": "could not be read",
+                 "": "give an expression"}
         for expression, words in cases.items():
             with self.subTest(expression), self.assertRaises(CalcError) as caught:
                 calculate(expression)
             self.assertIn(words, str(caught.exception))
 
-    def test_nothing_but_maths(self):
+    def test_nothing_but_math(self):
         for expression in ("__import__('os').system('ls')", "open('/etc/passwd')", "(1).real", "'a' * 3",
                            "[1, 2]", "2, 3", "lambda: 1", "True + 1", "x := 3", "[x for x in range(9)]",
                            "sqrt.__class__", "print(1)", "eval('1')", "{1: 2}", "1 if 1 else 2", "1 < 2",
@@ -49,13 +67,15 @@ class CalculatorTest(unittest.TestCase):
 
     def test_limits_answer_quickly(self):
         started = time.monotonic()
-        for expression in ("9**9**9", "10**4001", "1401!", "comb(10001, 5000)", "2**10000 * 2**10000",
-                           "factorial(10**9)", "1" + "+1" * 400):
-            with self.subTest(expression), self.assertRaises(CalcError):
-                calculate(expression)
+        for expression in ("9**9**9", "factorial(10**9)", "comb(10**15, 10**14)", "perm(10**12, 10**6)",
+                           "gcd(1e300, 1)", "1" + "+1" * 400):
+            with self.subTest(expression):
+                try:
+                    calculate(expression)
+                except CalcError:
+                    pass
         with self.assertRaises(CalcError):
             calculate("1" * (MAX_CHARS + 1))
-        self.assertEqual(len(calculate("1400!")), 3799)
         self.assertLess(time.monotonic() - started, 1.0)
 
 
