@@ -334,11 +334,15 @@ guidance. The distilled 4B comes after a check on the Mac.
   goes in front, wrong LoRAs are refused, another LoRA restarts the worker, the routes.
   Checked in the browser: the picker shows only for the base 4B, a real look-up, Add, Vary
   without the LoRA.
-- [ ] `tests/check_flux.py` on the Mac looks up, adds and downloads a public LoRA
+- [x] `tests/check_flux.py` on the Mac looks up, adds and downloads a public LoRA
   (`adirik/pixel-art-lora-flux.2-klein-4B`, 370 MB, trigger PXART4), draws with it on the base 4B,
   beside the same seed without it and from a reference picture with it, then takes it off the
-  list and deletes it (unless it was there before the check).
-- [ ] README, `__version__ = "4.5.0"`, tag `v4.5.0`.
+  list and deletes it (unless it was there before the check). Passed on the Mac.
+- [x] Found on the way: an `.incomplete` file left by a stopped download hid the whole model.
+  Now one counts as a running download only if it was written in the last 10 minutes, and a
+  model is listed only when every file its index names is there (else a note says to run the
+  same `hf download` again).
+- [x] README, `__version__ = "4.5.0"`, tag `v4.5.0`. Released.
 
 ### v4.5.1: your own LoRA files, on the base 4B
 
