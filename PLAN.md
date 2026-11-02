@@ -9,6 +9,7 @@
   Only the models themselves: no LoRA, no fine-tunes. Released.
 - **v4.5**: LoRAs from Hugging Face, drawn on FLUX.2 klein base 4B. Released.
 - **v4.7.5**: your own rules for the models, like `CLAUDE.md`: in Settings, and per folder.
+- **v4.8**: a calculator the models can call, so they stop doing sums by hand.
 - **v5**: voice, on the Mac: speech to text with Whisper (5.0), then answers read aloud with
   Kokoro (5.5).
 - **v6**: LoRA files from this Mac, and LoRAs on the distilled 4B if a check shows they work.
@@ -384,6 +385,45 @@ large ones; the Settings note says so.
   the per-chat switch, the folder file and the `AGENTS.md`/`CLAUDE.md` fallback, the limits, and a
   chat saved before 4.7.5 opens with the rules on. A browser check of Settings and the header.
 - [ ] README, `__version__ = "4.7.5"`, tag `v4.7.5`.
+
+## v4.8.0: a calculator the models can use
+
+Asked "what is the square root of 4761", DeepSeek R1 works it out by hand in its thinking ("it is
+between 60 and 70, try 69, (60+9)^2 = …"). That is how reasoning models are trained, and the small
+ones overdo it; telling them to "use Python" does not help when nothing runs the code. So the
+models get a tool: they ask, the helper works it out, and they answer from the result, the way
+ChatGPT and Claude run code.
+
+- [ ] Check on the Mac first: which of the suggested chat models write tool calls their chat
+  template defines (DeepSeek-R1-0528-Qwen3-8B, Qwen2.5 Coder, Gemma 3, gpt-oss, Falcon3), and
+  that mlx-lm and mlx-vlm pass `tools` through the template. Write down what was found here.
+  Models that do not call tools reliably are left without it; nothing breaks for them.
+- [ ] **`calculate(expression)`**: the helper evaluates math only, by walking the expression's
+  syntax tree: numbers, `+ - * / // % **`, brackets, the `math` functions and constants, `abs`,
+  `round`, `min`, `max`, fractions, and whole numbers of any size. No names, attributes, imports,
+  calls or strings beyond those, so it can never touch files or the network and needs no
+  sandbox. Limits: 1,000 characters an expression, exponents and results kept to a size that
+  answers in well under a second, 20 calls an answer.
+- [ ] **The loop**: the model writes a call (in its thinking or its answer), the helper stops the
+  stream, works it out, adds the call and the result to the messages as the template says, and
+  the model goes on. Errors go back to it as the result ("division by zero"), so it can fix the
+  expression.
+- [ ] **On the page**: each call is a line in the answer, *Calculated: sqrt(4761) = 69*, shown as
+  it happens; open it for the exact expression and result. Saved with the chat.
+- [ ] **Settings**: *Let models use the calculator*, on to start. Off sends no tools.
+- [ ] Context: the tool's description counts in the context figures; calls and results are
+  compacted like the rest of the chat.
+- [ ] Tests: the evaluator (right answers, big numbers, every refused kind of expression, the
+  limits), the loop with the fake worker writing a call, an error going back, the per-answer
+  limit, the switch. `tests/check_tools.py` on the Mac asks each downloaded chat model a few
+  sums and checks it called the tool and gave the right answer.
+- [ ] README, `__version__ = "4.8.0"`, tag `v4.8.0`.
+
+### Later: full Python (no version yet)
+
+The model writes a whole script (statistics, dates, a table of data) and the helper runs it. This
+needs a real sandbox on the Mac: no network, no files outside a scratch folder, and limits on
+time and memory. Planned once the calculator works and it is clear which models call tools well.
 
 ## Voice
 
