@@ -33,6 +33,7 @@ WAIT_SECONDS = 600       # a long prompt is read before the first piece comes
 STOP_SECONDS = 20
 DEFAULT_CONTEXT = 8192
 SCAN_SECONDS = 5
+DOWNLOAD_QUIET = 600
 # Settings a config leaves out because they are the library's defaults.
 DEFAULTS = {"gemma3_text": {"head_dim": 256, "max_position_embeddings": 131072, "sliding_window_pattern": 6}}
 # R1 distills write <think> themselves, so their templates do not show it.
@@ -164,6 +165,35 @@ def snapshot(repo: Path) -> Path | None:
         return found[-1] if found else None
 
 
+def downloading(repo: Path) -> bool:
+    """Whether a download into this cache folder is running. Hugging Face writes each file to
+    blobs/*.incomplete as it comes; one left by a download that was stopped is never written
+    again, and stops counting after DOWNLOAD_QUIET."""
+    now = time.time()
+    for path in repo.glob("blobs/*.incomplete"):
+        try:
+            if now - path.stat().st_mtime < DOWNLOAD_QUIET:
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def missing_files(folder: Path) -> list[str]:
+    """The weight files a model's indexes name that are not in its folder (a download that
+    stopped part of the way), and links to files that are gone."""
+    missing = []
+    for index in folder.rglob("*.safetensors.index.json"):
+        try:
+            shards = set((json.loads(index.read_text(encoding="utf-8")).get("weight_map") or {}).values())
+        except (OSError, ValueError, AttributeError):
+            continue
+        missing += [str((index.parent / shard).relative_to(folder)) for shard in sorted(shards)
+                    if not (index.parent / shard).is_file()]
+    missing += [str(path.relative_to(folder)) for path in folder.rglob("*.safetensors") if not path.exists()]
+    return sorted(set(missing))
+
+
 _scan: tuple[float, dict[str, Path]] = (0.0, {})
 _scan_lock = threading.Lock()
 
@@ -177,12 +207,12 @@ def found() -> dict[str, Path]:
         out: dict[str, Path] = {}
         cache = hub()
         for repo in sorted(cache.glob("models--*")) if cache.is_dir() else []:
-            if any(repo.glob("blobs/*.incomplete")):
+            if downloading(repo):
                 continue
             folder = snapshot(repo)
             name = repo.name[len("models--"):].replace("--", "/", 1)
             trusted = name.startswith("mlx-community/") or "mlx" in re.split(r"[-_.]", name.split("/")[-1].lower())
-            if folder and _is_mlx(folder, trusted):
+            if folder and _is_mlx(folder, trusted) and not missing_files(folder):
                 out[name] = folder
         own = store.home() / "models"
         for folder in sorted(own.iterdir()) if own.is_dir() else []:

@@ -104,6 +104,11 @@ def identify(name: str, folder: Path) -> tuple[dict | None, str]:
     missing = [part for part in PARTS if not any((folder / part).glob("*.safetensors"))]
     if missing or not (folder / "tokenizer").is_dir():
         return None, f"A {short} download is left out: it is not a whole model (no {', '.join(missing) or 'tokenizer'} folder)."
+    from helper import engine
+
+    if engine.missing_files(folder):
+        return None, (f"A {short} download is left out: some of its files are missing, so it stopped part of the "
+                      f"way. Run the same hf download again to finish it.")
     double, single, distilled = VARIANTS[key]
     try:
         names, _ = _weight_names(folder / "transformer")
@@ -149,7 +154,7 @@ def scan() -> tuple[dict[str, dict], list[str]]:
         hub = engine.hub()
         places = []
         for repo in sorted(hub.glob("models--*")) if hub.is_dir() else []:
-            if any(repo.glob("blobs/*.incomplete")):
+            if engine.downloading(repo):
                 continue
             snapshot = engine.snapshot(repo)
             if snapshot:

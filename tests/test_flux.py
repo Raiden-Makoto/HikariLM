@@ -172,6 +172,21 @@ class FindTest(FluxCase):
         (folder.parent.parent / "blobs" / "x.incomplete").write_bytes(b"")
         flux.forget_scan()
         self.assertEqual(flux.scan(), ({}, []))
+        old = time.time() - engine.DOWNLOAD_QUIET - 60
+        os.utime(folder.parent.parent / "blobs" / "x.incomplete", (old, old))
+        flux.forget_scan()
+        self.assertEqual(list(flux.scan()[0]), [KLEIN])
+
+    def test_a_download_that_stopped_part_of_the_way_says_so(self):
+        folder = self.download(KLEIN)
+        index = folder / "transformer" / "model.safetensors.index.json"
+        data = json.loads(index.read_text())
+        data["weight_map"]["extra"] = "1.safetensors"
+        index.write_text(json.dumps(data))
+        flux.forget_scan()
+        found, notes = flux.scan()
+        self.assertEqual(found, {})
+        self.assertIn("Run the same hf download again", notes[0])
 
     def test_own_folder_counts(self):
         make_model(self.home / "models" / "flux2-klein-9b-kv", double=8, single=24, bits=None)

@@ -305,7 +305,7 @@ def local_file(item: dict) -> Path | None:
     from helper import engine
 
     folder = engine.hub() / ("models--" + item["repo"].replace("/", "--"))
-    if any(folder.glob("blobs/*.incomplete")):
+    if engine.downloading(folder):
         return None
     snapshot = engine.snapshot(folder)
     path = snapshot / item["file"] if snapshot else None

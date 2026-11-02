@@ -97,8 +97,8 @@ def base_4b_report(found_models: dict) -> str:
         if (flux.variant_of(name) or ("",))[0] != lora.VARIANT:
             continue
         snapshot = engine.snapshot(repo)
-        if any(repo.glob("blobs/*.incomplete")):
-            why = "a download is unfinished (an .incomplete file in blobs)"
+        if engine.downloading(repo):
+            why = "a download is running (an .incomplete file in blobs written in the last 10 minutes)"
         elif not snapshot:
             why = "it has no snapshot (refs/main)"
         else:

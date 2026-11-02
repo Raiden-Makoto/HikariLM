@@ -66,6 +66,21 @@ class EngineTest(unittest.TestCase):
         finally:
             reply.close()
 
+    def test_a_stopped_download_leaves_nothing_in_the_way(self):
+        # Left by a download that stopped long ago: the files it did finish are all there.
+        snapshot = add_model(self.hub, "mlx-community/stopped-once-4bit", real_config(CODER), incomplete=True)
+        stale = snapshot.parent.parent / "blobs" / "0123.incomplete"
+        old = time.time() - engine.DOWNLOAD_QUIET - 60
+        os.utime(stale, (old, old))
+        engine.forget_scan()
+        self.assertIn("mlx-community/stopped-once-4bit", engine.names())
+        # One that stopped part of the way: its index names a file that never came.
+        (snapshot / "model.safetensors.index.json").write_text(
+            json.dumps({"weight_map": {"a": "model.safetensors", "b": "model-2.safetensors"}}))
+        engine.forget_scan()
+        self.assertNotIn("mlx-community/stopped-once-4bit", engine.names())
+        self.assertEqual(engine.missing_files(snapshot), ["model-2.safetensors"])
+
     def test_finds_finished_mlx_downloads_only(self):
         add_model(self.hub, "mlx-community/still-coming-4bit", real_config(CODER), incomplete=True)
         add_model(self.hub, "Qwen/Qwen2.5-Coder-7B-Instruct", {k: v for k, v in real_config(CODER).items() if k != "quantization"})
