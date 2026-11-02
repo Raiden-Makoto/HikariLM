@@ -16,7 +16,7 @@
   <main class="setup">
     <a class="setup-back" href="/chat">← Back to HikariLM</a>
     <h1>Make a LoRA</h1>
-    <p class="setup-lead">A LoRA is a small add-on file that teaches FLUX.2 klein one thing it does not know: a style, a character, an object. You make it from your own pictures, with <a href="https://github.com/filipstrand/mflux">mflux</a>'s trainer, on this Mac. HikariLM does not train; this page walks you through doing it in Terminal. HikariLM draws with LoRAs from version 4.5, on FLUX.2 klein base 4B.</p>
+    <p class="setup-lead">A LoRA is a small add-on file that teaches FLUX.2 klein one thing it does not know: a style, a character, an object. You make it from your own pictures, with <a href="https://github.com/filipstrand/mflux">mflux</a>'s trainer, on this Mac. HikariLM does not train; this page walks you through doing it in Terminal. HikariLM draws with LoRAs on FLUX.2 klein base 4B.</p>
 
     <section class="setup-standing">
       <p><strong>Before you start.</strong> Set up making pictures first (<a href="/setup/pictures">the picture setup page</a>), so mflux is installed in <code>~/.hikarilm/pictures-venv</code>. Training takes hours and uses the whole Mac, so stop HikariLM while it runs (<code>hikarilm stop</code>) and start it again after (<code>hikarilm start</code>).</p>
@@ -191,7 +191,7 @@
 
     <section class="setup-step">
       <h2><span class="setup-number">8</span> Draw with it in HikariLM</h2>
-      <p>From HikariLM 4.5.1, add the <code>.safetensors</code> file in Settings, with its trigger word, and pick it when drawing with FLUX.2 klein base 4B. HikariLM puts the trigger word in front of your prompt, so <code>riding a bicycle along a seaside road</code> is enough. From 4.5.0, a LoRA you upload to Hugging Face can be added by its repo name. Until then, keep the file; nothing else is needed from the training folder. Keep <code>dataset/</code> too, in case you want to train it again.</p>
+      <p>Upload the <code>.safetensors</code> file to a Hugging Face repo of your own, then add it in Settings, under LoRAs, by its repo name, and pick it under Options when drawing with FLUX.2 klein base 4B. HikariLM puts the trigger word in front of your prompt, so <code>riding a bicycle along a seaside road</code> is enough. Adding the file straight from this Mac comes in HikariLM 6.0. Nothing else is needed from the training folder; keep <code>dataset/</code> in case you want to train it again.</p>
     </section>
   </main>
 </body>
