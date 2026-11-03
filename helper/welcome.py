@@ -16,7 +16,7 @@ RECOMMENDED = [
     {"group": "Chat", "name": "Qwen3 8B", "repo": "mlx-community/Qwen3-8B-4bit", "download": "4.6 GB",
      "for": "Everyday chat, thinking or not",
      "note": "The one to start with. Follows Let models think in Settings: off, it answers straight away; "
-             "on, it works things out first. Runs Python for math and plots."},
+             "on, it works things out first. Uses the calculator for math."},
     {"group": "Chat", "name": "DeepSeek R1 8B", "repo": "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit",
      "download": "4.6 GB", "for": "Dense reasoning, math and step-by-step analysis",
      "note": "Always thinks, at length, which is what it is for: hard math, proofs, logic and working a "
@@ -26,7 +26,7 @@ RECOMMENDED = [
      "note": "For the code editor and code questions. Answers straight away, without thinking."},
     {"group": "Chat", "name": "Gemma 3 12B", "repo": "mlx-community/gemma-3-12b-it-4bit", "download": "8.1 GB",
      "for": "Reading pictures",
-     "note": "Reads attached pictures, and chats too. Runs Python for math and plots."},
+     "note": "Reads attached pictures, and chats too. Uses the calculator for math."},
     {"group": "Pictures", "name": "FLUX.2 klein 4B", "repo": imagegen.SUGGESTED, "download": "4.6 GB",
      "for": "Drawing pictures",
      "note": "For Macs with less than 18 GB of RAM, and the quicker one."},

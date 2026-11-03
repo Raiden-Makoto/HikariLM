@@ -291,10 +291,10 @@
       </div>
       <div class="setting">
         <label class="switch-row">
-          <span class="setting-label">Let models run Python</span>
-          <input class="switch" id="python-toggle" type="checkbox" role="switch">
+          <span class="setting-label">Let models use the calculator</span>
+          <input class="switch" id="calc-toggle" type="checkbox" role="switch">
         </label>
-        <p class="note">Chat models can write Python and run it instead of working out math by hand, the way ChatGPT runs code. It has numpy, sympy, pandas, scipy and matplotlib, and plots show as pictures. Each run shows in the answer as “Ran Python”, which opens to the code and what it printed. It runs in macOS’s sandbox: no internet, no other programs, and none of your files; it stops after 30 seconds or 1.25 GB of memory. Not every model calls it; one that does not just answers as before. Coding models never get it, so they stick to writing code, and neither do DeepSeek R1 and Falcon3, which did not use the tool well.</p>
+        <p class="note">A scientific calculator the chat models can call instead of working out sums by hand, the way ChatGPT runs code. Each use shows in the answer. It only does math, so it never touches your files. Not every model calls it; one that does not just answers as before. Coding models never get it, so they stick to writing code, and neither do DeepSeek R1 and Falcon3, which did not use it well.</p>
       </div>
       <div class="setting">
         <label class="switch-row">

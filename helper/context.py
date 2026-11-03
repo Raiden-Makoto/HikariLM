@@ -52,7 +52,7 @@ DEFAULTS = {
     "context": {"all": None, "models": {}},
     "compaction": {"enabled": True, "threshold": None, "retention": 40, "max_tokens": 1000, "prompt": ""},
     "kv_cache": {"bits": 8},
-    "tools": {"python": True},
+    "tools": {"calculator": True},
 }
 KV_BITS = (0, 8, 4)    # off, or the bits each number of the MLX cache is kept in
 
@@ -100,8 +100,7 @@ def clean_settings(raw) -> dict:
     tools = raw.get("tools") if isinstance(raw.get("tools"), dict) else {}
     return {
         "kv_cache": {"bits": bits if bits in KV_BITS and not isinstance(bits, bool) else 8},
-        # "calculator" is what the switch was called before 4.9.
-        "tools": {"python": tools.get("python", tools.get("calculator", True)) is not False},
+        "tools": {"calculator": tools.get("calculator", True) is not False},
         "thinking": thinking.clean(raw.get("thinking")),
         "context": {"all": _positive(context.get("all"), 512, MAX_CONTEXT), "models": models},
         "compaction": {

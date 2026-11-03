@@ -46,10 +46,10 @@ def embed_loop():
 
 
 def calc_pieces(command, asked):
-    """"calc: CODE" calls the Python tool with CODE (and writes a made-up result after the call,
+    """"calc: EXPR" calls the calculator with EXPR (and writes a made-up result after the call,
     which must never be seen), then answers with the result it is given and what it was sent.
-    "calc-think:" calls it from inside its thinking. "calc-many: X" prints X + 0, X + 1, … while
-    it may, and "calc-repeat:" runs CODE over and over; "calc-stubborn:" calls even with no tool.
+    "calc-think:" calls it from inside its thinking. "calc-many:" calls EXPR+0, EXPR+1, … while
+    it may, and "calc-repeat:" EXPR over and over; "calc-stubborn:" calls even with no tool.
     With no tool it says so, and what came with the question."""
     kind, expression = asked.split(":", 1)
     messages = command["messages"]
@@ -63,9 +63,9 @@ def calc_pieces(command, asked):
                 "written": [m["content"] for m in messages if m.get("tool_calls")]}
         return iter(["The answer is ", results[-1], ". ", json.dumps(sent)])
     if kind == "calc-many":
-        expression = f"print({expression.strip()} + {len(results)})"
-    call = '<tool_call>\n{"name": "python", "arguments": {"code": ' + json.dumps(expression.strip()) + "}}\n</tool_call>"
-    lead = "<think>I should run some Python. " if kind == "calc-think" else "Let me work it out. "
+        expression = f"{expression.strip()}+{len(results)}"
+    call = '<tool_call>\n{"name": "calculate", "arguments": {"expression": ' + json.dumps(expression.strip()) + "}}\n</tool_call>"
+    lead = "<think>I should use the calculator. " if kind == "calc-think" else "Let me work it out. "
     text = lead + call + " The result is 42, I made it up."
     return iter(text[i:i + 3] for i in range(0, len(text), 3))
 

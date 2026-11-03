@@ -437,7 +437,7 @@ class VisionModel:
     def chat(self, request: dict, stop: threading.Event):
         messages = request["messages"]
         pictures = [image for m in messages for image in m.get("images") or []]
-        # The tool goes in as text: Gemma 3's template has no tools of its own.
+        # mlx-vlm's templates are not given tools, so the calculator goes in as text.
         chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), False)
         prompt = with_system(lambda turns: self.template(self.processor, self.model.config, turns,
                                                          num_images=len(pictures)), chat)
@@ -481,7 +481,7 @@ def native_tools(template: str) -> bool:
     return "tools" in template and bool(STANDARD_CALLS.search(template))
 
 
-RESULT_NOTE = ("That is what your Python code printed, not a message from me. "
+RESULT_NOTE = ("That is the calculator's result for {expression}, not a message from me. "
                "Now answer my question with it.")
 
 
@@ -490,6 +490,7 @@ def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dic
     are; for one without, the tool is described in the system message and the calls and
     results are written out as text, the way the description asks for them."""
     chat = []
+    asked = ""
     for m in messages:
         entry = {"role": m["role"], "content": _text(m.get("content"))}
         if native:
@@ -498,12 +499,14 @@ def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dic
                     entry[key] = m[key]
         elif m["role"] == "tool":
             # As a user's turn, a bare result reads as the user answering: Gemma 3 took it for a
-            # quiz and asked a new question. So it says what the output is and what to do with it.
+            # quiz and asked a new question. So it says what the number is and what to do with it.
             entry = {"role": "user", "content": "<tool_response>\n" + entry["content"] + "\n</tool_response>\n"
-                     + RESULT_NOTE}
+                     + RESULT_NOTE.format(expression=asked or "your expression")}
         elif m.get("tool_calls"):
             for call in m["tool_calls"]:
                 function = call.get("function") or {}
+                arguments = function.get("arguments")
+                asked = str(arguments.get("expression", "")) if isinstance(arguments, dict) else str(arguments or "")
                 entry["content"] += "\n<tool_call>\n" + json.dumps(
                     {"name": function.get("name"), "arguments": function.get("arguments")}) + "\n</tool_call>"
         chat.append(entry)

@@ -78,50 +78,18 @@ export function addTurn(role, text, thought, files, message, question) {
 const SHORT = 40;
 const short = (text) => (text.length > SHORT ? text.slice(0, SHORT) + "…" : text);
 
-const part = (label, text) => {
-  const head = document.createElement("div");
-  head.className = "tool-part";
-  head.textContent = label;
-  const body = document.createElement("pre");
-  body.textContent = text;
-  return [head, body];
-};
-
-// One use of the tool: "Ran Python", opening to the code, what it printed and its plots. While
-// it runs (call.running) the line says so. Answers from 4.8 have the calculator's
-// "Calculated: sqrt(4761) = 69". Returns the line, for the running one to be swapped out.
-export function showToolCall(container, call, replacing) {
+// One use of the calculator: "Calculated: sqrt(4761) = 69", opening to the whole expression and result.
+export function showToolCall(container, call) {
   const box = document.createElement("details");
-  box.className = "tool-call" + (call.error ? " failed" : "") + (call.running ? " running" : "");
+  box.className = "tool-call" + (call.error ? " failed" : "");
   const line = document.createElement("summary");
-  if (call.code === undefined) {
-    line.textContent = call.error
-      ? "Calculator: " + short(call.expression) + " could not be worked out"
-      : "Calculated: " + short(call.expression) + " = " + short(call.result);
-    const full = document.createElement("pre");
-    full.textContent = call.expression + "\n= " + (call.error ? "Error: " + call.error : call.result);
-    box.append(line, full);
-  } else {
-    const plots = (call.pictures || []).length;
-    line.textContent = call.running ? "Running Python…"
-      : "Ran Python" + (plots ? " · " + plots + (plots === 1 ? " plot" : " plots") : "") + (call.error ? " · " + short(call.error) : "");
-    box.append(line, ...part("Code", call.code));
-    if (!call.running) {
-      const output = call.output || "";
-      if (output.trim() || !call.error) box.append(...part("Output", output.trim() ? output : "(nothing printed)"));
-      if (call.error && !output.includes(call.error)) box.append(...part("Error", call.error));
-      for (const src of call.pictures || []) {
-        const img = document.createElement("img");
-        img.className = "tool-plot";
-        img.src = src;
-        img.alt = "A plot the Python code made";
-        box.append(img);
-      }
-    }
-  }
-  if (replacing) replacing.replaceWith(box);
-  else container.append(box);
-  return box;
+  line.textContent = call.error
+    ? "Calculator: " + short(call.expression) + " could not be worked out"
+    : "Calculated: " + short(call.expression) + " = " + short(call.result);
+  const full = document.createElement("pre");
+  full.textContent = call.expression + "\n= " + (call.error ? "Error: " + call.error : call.result);
+  box.append(line, full);
+  container.append(box);
 }
 
 // In the code editor, a finished reply's code blocks get Apply, as in Cursor. Which

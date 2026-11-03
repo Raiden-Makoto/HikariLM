@@ -137,38 +137,20 @@ def clean_messages(messages) -> list[dict]:
     return cleaned
 
 
-PLOT = re.compile(r"^data:image/png;base64,[A-Za-z0-9+/]+=*$")
-PLOT_CHARS = 2_800_000  # a 2 MB PNG as a data URL
-PLOTS_KEPT = 8          # plots kept with one answer
-
-
 def clean_tool_calls(calls) -> list[dict]:
-    """The tool's uses in an answer, as the page shows them: the Python it ran, what it printed
-    and its plots. Answers from 4.8 have the calculator's {"expression", "result" or "error"}."""
+    """The calculator's uses in an answer, as the page shows them."""
     if not isinstance(calls, list):
         return []
-    out, plots = [], 0
+    out = []
     for call in calls[:50]:
-        if not isinstance(call, dict):
+        if not isinstance(call, dict) or not isinstance(call.get("expression"), str):
             continue
-        if isinstance(call.get("code"), str):
-            entry = {"code": call["code"][:20_000],
-                     "output": call["output"][:30_000] if isinstance(call.get("output"), str) else ""}
-            if isinstance(call.get("error"), str):
-                entry["error"] = call["error"][:500]
-            pictures = [p for p in call.get("pictures") or [] if isinstance(p, str) and len(p) <= PLOT_CHARS
-                        and PLOT.match(p)][:max(0, PLOTS_KEPT - plots)]
-            if pictures:
-                entry["pictures"] = pictures
-                plots += len(pictures)
+        entry = {"expression": call["expression"][:1000]}
+        for key, limit in (("result", 5000), ("error", 500)):
+            if isinstance(call.get(key), str):
+                entry[key] = call[key][:limit]
+        if len(entry) == 2:
             out.append(entry)
-        elif isinstance(call.get("expression"), str):
-            entry = {"expression": call["expression"][:1000]}
-            for key, limit in (("result", 5000), ("error", 500)):
-                if isinstance(call.get(key), str):
-                    entry[key] = call[key][:limit]
-            if len(entry) == 2:
-                out.append(entry)
     return out
 
 

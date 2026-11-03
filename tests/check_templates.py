@@ -2,7 +2,7 @@
 
 Fetches only each repo's template (tokenizer_config.json, chat_template.jinja or .json), not the
 model, and renders it with jinja2 the way transformers does, for three prompts: a question with
-the Python tool offered (and your rules in the system message), the chat after a call and its
+the calculator offered (and your rules in the system message), the chat after a call and its
 result, and the last answer once the tool is withdrawn. It says, for each model, whether the
 template takes tools, whether HikariLM gives them to it as they are or as text, whether any
 prompt fails to render, and whether the result reaches the model. Runs anywhere with internet
@@ -79,10 +79,10 @@ def render(template: str, specials: dict, chat: list[dict], offered) -> str:
 def main() -> int:
     verbose = "-v" in sys.argv
     repos = [arg for arg in sys.argv[1:] if arg != "-v"] or MODELS
-    answer = {"name": "python", "code": "import math\nprint(math.isqrt(4489))", "output": "67\n", "pictures": []}
+    answer = tools.run({"name": "calculate", "expression": "sqrt(4489)"})
     first = [{"role": "system", "content": "The user's rules. Follow them in every answer:\n\nBe brief."},
              {"role": "user", "content": "What is the square root of 4489?"}]
-    prompts = {"asked, Python offered": (first, True),
+    prompts = {"asked, calculator offered": (first, True),
                "after the call and its result": (first + tools.as_messages("", {}, answer, 1), True),
                "last answer, tool withdrawn": (tools.answer_from(first, [answer]), False)}
     failed = 0
@@ -94,7 +94,7 @@ def main() -> int:
             failed += 1
             continue
         native = mlx_worker.native_tools(template) and not any(word in repo.lower() for word in VISION)
-        print(f"  template takes tools: {'tools' in template}; the tool goes in "
+        print(f"  template takes tools: {'tools' in template}; the calculator goes in "
               f"{'as its own tools' if native else 'as text in the system message'}")
         for label, (messages, offer) in prompts.items():
             chat = mlx_worker.tool_chat(messages, tools.TOOLS if offer else None, tools.AS_TEXT, native)
