@@ -78,10 +78,11 @@ characters of output, plots as pictures. Built and unit-tested off the Mac; not 
 - [x] **Welcome page**, `/welcome`, a page of its own like the setup pages: what HikariLM is,
   what it does, and the models above with their download commands and Copy, each marked
   *Downloaded* once it is on this Mac (it looks again every 10 seconds). The list is
-  `helper/welcome.py`; keep it the same as the table above. The browser opens on it when no
-  chat model is downloaded; the empty chat and Settings link to it. Nothing is saved for it.
-- [ ] On the Mac: with no chat model, `hikarilm restart` opens `/welcome`; download Qwen3 8B
-  and the page marks it *Downloaded* and shows *Start chatting*.
+  `helper/welcome.py`; keep it the same as the table above. It is the default page: `/`, which
+  the browser opens on at start, shows it, and *Open HikariLM* there goes to the section used
+  last (`/index.html`). The empty chat and Settings link to it. Nothing is saved for it.
+- [ ] On the Mac: `hikarilm restart` opens the welcome page; with no chat model, download
+  Qwen3 8B and the page marks it *Downloaded* and shows *Start chatting*.
 - [ ] README, `__version__ = "4.9.0"`, tag `v4.9.0`, once the checks pass.
 
 ## Voice

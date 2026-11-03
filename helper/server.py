@@ -29,8 +29,9 @@ MAX_TRANSCRIPT = 20_000_000
 CHATS = "/api/chats"
 DRAFTS = "/api/drafts"
 WORKSPACE = "/api/workspace"
-# One page, three addresses: the page shows the section the address names.
-PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
+# One page, three addresses: the page shows the section the address names. "/" is the
+# welcome page; /index.html opens the section used last.
+PAGES = ("/index.html", "/chat", "/chat/", "/editor", "/editor/")
 SETUP_PICTURES = "/setup/pictures"
 SETUP_LORA = "/setup/lora"
 WELCOME = "/welcome"
@@ -160,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path.rstrip("/") == SETUP_PICTURES:
             self._send_file(WEB_ROOT / "setup-pictures.html", "text/html; charset=utf-8")
             return
-        if urlparse(self.path).path.rstrip("/") == WELCOME:
+        if urlparse(self.path).path.rstrip("/") in (WELCOME, ""):
             self._send_file(WEB_ROOT / "welcome.html", "text/html; charset=utf-8")
             return
         if urlparse(self.path).path.rstrip("/") == SETUP_LORA:

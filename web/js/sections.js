@@ -18,7 +18,7 @@ const SECTION_PATHS = { chat: "/chat", files: "/editor" };
 const SECTION_KEY = "hikarilm-section";
 export const FILE_KEY = "hikarilm-file";
 const sectionFromPath = () => (/^\/editor\/?$/.test(location.pathname) ? "files" : "chat");
-// A plain "/" has no section in it, so it opens the one used last.
+// /index.html has no section in it, so it opens the one used last.
 export const sectionToOpen = () =>
   (/^\/(chat|editor)\/?$/.test(location.pathname) ? sectionFromPath()
     : localStorage.getItem(SECTION_KEY) === "files" ? "files" : "chat");

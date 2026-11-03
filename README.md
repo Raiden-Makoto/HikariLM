@@ -27,7 +27,7 @@ hikarilm log          # the end of its log
 hikarilm update       # git pull, and restart it if that brought anything
 ```
 
-The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. You see that in the terminal. Then HikariLM keeps running in the background and opens http://127.0.0.1:8787, and the terminal can be closed. `hikarilm start` while it runs just opens the page; if the files were updated since it started, it restarts it first.
+The first start makes `~/.hikarilm/venv` and installs `mlx-lm` and `mlx-vlm` into it (about 1 GB, once), and downloads Nomic's `nomic-embed-text-v1.5` (about 0.55 GB, once) for finding earlier chats. You see that in the terminal. Then HikariLM keeps running in the background and opens http://127.0.0.1:8787, its welcome page (what HikariLM is, and the models to get), and the terminal can be closed. *Open HikariLM* there goes to the chat or the code editor, whichever you used last; http://127.0.0.1:8787/chat and /editor go straight to them. `hikarilm start` while it runs just opens the page; if the files were updated since it started, it restarts it first.
 
 What it prints goes to `~/.hikarilm/hikarilm.log`, which keeps only its last 2,000 lines. Only failed requests are logged, not every one.
 
@@ -39,7 +39,7 @@ Options: `--foreground` to run in the terminal until Ctrl+C, as before 4.3.0; `-
 
 Any MLX model works: whatever you download from Hugging Face is listed in the page, quantized or full precision. mlx-lm runs text models and mlx-vlm the ones that read pictures. Pick what fits your Mac's memory.
 
-If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time). The welcome page, http://127.0.0.1:8787/welcome, lists them with their download commands and says which you have; the browser opens on it when no chat model is downloaded yet.
+If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time). The welcome page, http://127.0.0.1:8787, lists them with their download commands and says which you have.
 
 | For | Suggested model | Size |
 |---|---|---|

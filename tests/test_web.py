@@ -183,9 +183,14 @@ class PageFilesTest(unittest.TestCase):
         threading.Thread(target=http.serve_forever, daemon=True).start()
         self.addCleanup(http.server_close)
         self.addCleanup(http.shutdown)
-        for address in ("/welcome", "/welcome/"):
+        # It is the default page; the app is at /index.html (the section used last), /chat and /editor.
+        for address in ("/", "/welcome", "/welcome/"):
             with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
                 self.assertIn("Welcome to HikariLM", response.read().decode())
+        for address in ("/index.html", "/chat", "/editor"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
+                self.assertNotIn("Welcome to HikariLM", response.read().decode())
+        self.assertIn('href="/index.html"', page)
 
     def test_the_welcome_list_is_the_plan_s(self):
         plan = (WEB.parent / "PLAN.md").read_text().split("## Recommended models", 1)[1].split("\n- ", 1)[0]
