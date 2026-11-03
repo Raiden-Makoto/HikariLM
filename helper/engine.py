@@ -166,19 +166,6 @@ def is_chat(config: dict | None) -> bool:
     return bool(model_type) and model_type not in NOT_CHAT
 
 
-# Models with a config.json and weights that do not chat. Whisper (speech to text) says
-# "model_type": "whisper"; Kokoro (text to speech) has no model_type at all, which every
-# language model's config has. Encoder-only and audio models are listed for the same reason.
-NOT_CHAT = {"whisper", "wav2vec2", "hubert", "parakeet", "kokoro", "bert", "nomic_bert", "roberta",
-            "xlm-roberta", "modernbert", "clip", "siglip", "t5", "encodec", "mimi", "dac"}
-
-
-def is_chat(config: dict | None) -> bool:
-    """Whether a model's config is a chat (language) model's, not speech, audio or an encoder."""
-    model_type = str((config or {}).get("model_type") or "").lower()
-    return bool(model_type) and model_type not in NOT_CHAT
-
-
 def is_bitnet(config: dict | None) -> bool:
     quantization = (config or {}).get("quantization_config")
     return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet"
@@ -286,9 +273,6 @@ def why_missing(model: str) -> str:
         config = _config(folder)
         if config is None:
             reasons.append(f"{folder.name[:8]}: no readable config.json")
-        elif not is_chat(config):
-            kind = config.get("model_type") or "no model_type"
-            reasons.append(f"{folder.name[:8]}: not a chat model ({kind}; speech, audio or an encoder)")
         elif not is_chat(config):
             kind = config.get("model_type") or "no model_type"
             reasons.append(f"{folder.name[:8]}: not a chat model ({kind}; speech, audio or an encoder)")

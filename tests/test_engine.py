@@ -127,21 +127,6 @@ class EngineTest(unittest.TestCase):
         self.assertIn("not a chat model (whisper", engine.why_missing("mlx-community/whisper-large-v3-turbo"))
         self.assertIn("not a chat model (no model_type", engine.why_missing("mlx-community/Kokoro-82M-4bit"))
 
-    def test_speech_models_are_not_chat_models(self):
-        # Their real configs: Whisper names its type, Kokoro has none.
-        add_model(self.hub, "mlx-community/whisper-large-v3-turbo",
-                  {"n_mels": 128, "n_audio_ctx": 1500, "n_vocab": 51866, "model_type": "whisper"})
-        add_model(self.hub, "mlx-community/Kokoro-82M-4bit",
-                  {"istftnet": {}, "dim_in": 64, "n_mels": 80, "plbert": {}, "quantization": {"bits": 4}})
-        own = Path(os.environ["HIKARILM_HOME"]) / "models" / "my-whisper"
-        own.mkdir(parents=True)
-        (own / "config.json").write_text(json.dumps({"model_type": "whisper"}))
-        (own / "weights.safetensors").write_bytes(b"x")
-        engine.forget_scan()
-        self.assertEqual(sorted(engine.names()), sorted([CODER, R1, GEMMA]))
-        self.assertIn("not a chat model (whisper", engine.why_missing("mlx-community/whisper-large-v3-turbo"))
-        self.assertIn("not a chat model (no model_type", engine.why_missing("mlx-community/Kokoro-82M-4bit"))
-
     def test_why_a_model_in_the_cache_is_not_found(self):
         self.assertIn("there is no", engine.why_missing("mlx-community/nothing-4bit"))
         snapshot = add_model(self.hub, "mlx-community/half-4bit", real_config(CODER))
