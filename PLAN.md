@@ -69,11 +69,12 @@ field is not zero`, [scipy#25635](https://github.com/scipy/scipy/issues/25635)),
 that is the newest scipy pip can get. Setup imports the compiled parts once and says so if they
 do not load; a venv made with an older Python is made again.
 
-- [ ] On the Mac: `hikarilm restart` (makes the venv), then `python3 tests/check_python.py`. Every
+- [x] On the Mac: `hikarilm restart` (makes the venv), then `python3 tests/check_python.py`. Every
   line must be OK: the packages and a plot work inside the sandbox, every way out is refused, and
   the limits hold. A FAIL means the sandbox profile (`python_tool.profile`) needs changing.
-- [ ] `python3 tests/check_tools.py` with Qwen3 8B and Gemma 3 12B: they should still call the
-  tool for the 4 sums and get them right, now by writing code. Write what it finds here.
+- [x] `python3 tests/check_tools.py` with Qwen3 8B and Gemma 3 12B: they should still call the
+  tool for the 4 sums and get them right, now by writing code. Gemma 3 writes its call as a
+  ```` ```tool_call ```` block of JSON, which is read as a call since issue 10.
 - [ ] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
   with the code, the output and the picture, and the plot is still there after reopening the chat.
   An answer from 4.8 still shows its *Calculated:* line.
@@ -81,7 +82,7 @@ do not load; a venv made with an older Python is made again.
   channels are not split off yet. Run `check_tools.py` with it if it is downloaded.
 - [ ] Any new recommended chat model: run `check_tools.py` with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
-- [ ] README, `__version__ = "4.9.0"`, tag `v4.9.0`, once the checks pass.
+- [x] README, `__version__ = "4.9.0"`, tag `v4.9.0`.
 
 ## Voice
 
