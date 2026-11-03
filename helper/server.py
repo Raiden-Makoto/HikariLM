@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, lora,
-                    names, notes, rewrite, rules, store, thinking, tools, update, workspace)
+                    names, notes, rewrite, rules, store, thinking, tools, update, welcome, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -33,6 +33,7 @@ WORKSPACE = "/api/workspace"
 PAGES = ("/", "/index.html", "/chat", "/chat/", "/editor", "/editor/")
 SETUP_PICTURES = "/setup/pictures"
 SETUP_LORA = "/setup/lora"
+WELCOME = "/welcome"
 LORAS = "/api/loras"
 RULES = "/api/rules"
 VENDOR = ("/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/vendor/codemirror.js", "/vendor/marked.esm.js",
@@ -83,6 +84,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(update.status())
             except update.UpdateError as error:
                 self._send_json({"git": True, "error": str(error)})
+            return
+        if self.path == "/api/welcome":
+            models = welcome.listing()
+            self._send_json({"models": models, "groups": list(welcome.GROUPS), "version": __version__,
+                             "chat": len(engine.names())})
             return
         if self.path == "/api/pictures":
             pictures, notes_ = imagegen.picture_models()
@@ -153,6 +159,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if urlparse(self.path).path.rstrip("/") == SETUP_PICTURES:
             self._send_file(WEB_ROOT / "setup-pictures.html", "text/html; charset=utf-8")
+            return
+        if urlparse(self.path).path.rstrip("/") == WELCOME:
+            self._send_file(WEB_ROOT / "welcome.html", "text/html; charset=utf-8")
             return
         if urlparse(self.path).path.rstrip("/") == SETUP_LORA:
             self._send_file(WEB_ROOT / "setup-lora.html", "text/html; charset=utf-8")

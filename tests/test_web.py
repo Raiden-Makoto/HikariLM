@@ -14,7 +14,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from helper import flux, names, server
+from helper import flux, names, server, welcome
 
 WEB = server.WEB_ROOT
 JS = WEB / "js"
@@ -167,6 +167,33 @@ class PageFilesTest(unittest.TestCase):
         for address in ("/setup/lora", "/setup/lora/"):
             with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
                 self.assertIn("Make a LoRA", response.read().decode())
+
+    def test_the_welcome_page_is_a_page_of_its_own(self):
+        page = (WEB / "welcome.html").read_text()
+        wanted = re.findall(r'(?:src|href)="(/(?:js|css)/[^"]+)"', page)
+        self.assertIn("/js/welcome.js", wanted)
+        for address in wanted:
+            self.assertTrue((WEB / address.lstrip("/")).is_file(), address)
+        ids = set(re.findall(r'id="([^"]+)"', page))
+        used = set(re.findall(r'querySelector\("#([\w-]+)"\)', (JS / "welcome.js").read_text()))
+        self.assertEqual(used - ids, set())
+        self.assertIn('href="/welcome"', (WEB / "index.html").read_text())
+        self.assertIn('"/welcome"', (JS / "core.js").read_text())
+        http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=http.serve_forever, daemon=True).start()
+        self.addCleanup(http.server_close)
+        self.addCleanup(http.shutdown)
+        for address in ("/welcome", "/welcome/"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{http.server_address[1]}{address}") as response:
+                self.assertIn("Welcome to HikariLM", response.read().decode())
+
+    def test_the_welcome_list_is_the_plan_s(self):
+        plan = (WEB.parent / "PLAN.md").read_text().split("## Recommended models", 1)[1].split("\n- ", 1)[0]
+        rows = re.findall(r"^\| ([^|]+) \| ([^|]+) \| `([^`]+)` \| ([^|]+) \|$", plan, re.M)
+        voice = ("whisper", "kokoro")
+        listed = [(row[1].strip(), row[2], row[3].strip()) for row in rows if not any(v in row[2].lower() for v in voice)]
+        self.assertEqual(listed, [(m["name"], m["repo"], m["download"]) for m in welcome.RECOMMENDED])
+        self.assertEqual({m["group"] for m in welcome.RECOMMENDED}, set(welcome.GROUPS))
 
     def test_the_lora_page_trains_on_the_base_4b(self):
         page = (WEB / "setup-lora.html").read_text()

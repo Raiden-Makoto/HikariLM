@@ -39,15 +39,18 @@ Options: `--foreground` to run in the terminal until Ctrl+C, as before 4.3.0; `-
 
 Any MLX model works: whatever you download from Hugging Face is listed in the page, quantized or full precision. mlx-lm runs text models and mlx-vlm the ones that read pictures. Pick what fits your Mac's memory.
 
-If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time):
+If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time). The welcome page, http://127.0.0.1:8787/welcome, lists them with their download commands and says which you have; the browser opens on it when no chat model is downloaded yet.
 
 | For | Suggested model | Size |
 |---|---|---|
+| Everyday chat, thinking or not | `mlx-community/Qwen3-8B-4bit` | 4.6 GB |
+| Dense reasoning, math, step-by-step analysis | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Questions about code | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
-| General chat, with thinking | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
-| Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8 GB |
-| General chat, the smallest | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+| Pictures you attach | `mlx-community/gemma-3-12b-it-4bit` | 8.1 GB |
 | Making pictures | `mlx-community/FLUX.2-Klein-4B-4bit` | 4.6 GB |
+| Optional: BitNet, the smallest | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4 GB |
+
+DeepSeek R1 always thinks, at length: that is what makes it the one for hard math, proofs and problems worked through step by step, and also what makes it slow on simple questions, where Qwen3 with thinking off answers straight away.
 
 Falcon3 1.58-bit is TII's own release, with every weight −1, 0 or 1. HikariLM runs TII's files as they are and computes each layer the way TII's code does.
 

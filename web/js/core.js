@@ -41,7 +41,11 @@ export function showEmpty() {
   const keys = document.createElement("span");
   keys.className = "keys";
   keys.textContent = "Enter sends. Shift+Enter starts a new line.";
-  empty.append(title, hint, keys);
+  const about = document.createElement("a");
+  about.className = "keys";
+  about.href = "/welcome";
+  about.textContent = "New here? What HikariLM is, and which models to get";
+  empty.append(title, hint, keys, about);
   log.replaceChildren(empty);
 }
 

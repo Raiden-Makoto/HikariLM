@@ -264,11 +264,15 @@ def main() -> None:
         stop_running(args.host, args.port)
 
     prepare(url)
+    from helper import engine
+
+    # With nothing to chat with yet, the browser opens on what HikariLM is and which models to get.
+    page = url if engine.names() else url + "/welcome"
     if args.foreground:
         say("Press Ctrl+C to stop.")
         say()
         if not args.no_browser:
-            threading.Timer(0.8, webbrowser.open, args=(url,)).start()
+            threading.Timer(0.8, webbrowser.open, args=(page,)).start()
         serve_here(background=False)
         return
 
@@ -289,7 +293,7 @@ def main() -> None:
     say(f"  hikarilm log        shows its log ({daemon.log_path()}, at most {daemon.MAX_LINES} lines)")
     say("  hikarilm update     gets the newest HikariLM and restarts it")
     if not args.no_browser:
-        webbrowser.open(url)
+        webbrowser.open(page)
 
 
 if __name__ == "__main__":

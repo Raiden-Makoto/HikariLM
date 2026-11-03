@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome · HikariLM</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("hikarilm-theme") || "light"; } catch (error) { document.documentElement.dataset.theme = "light"; }
+  </script>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/setup.css">
+  <script type="module" src="/js/welcome.js"></script>
+</head>
+<body class="setup-page">
+  <main class="setup">
+    <a class="setup-back" href="/chat">← Back to HikariLM</a>
+    <h1>Welcome to HikariLM</h1>
+    <p class="setup-lead">HikariLM is a chat app for AI models that run on this Mac. It works like ChatGPT, but the models run here in Apple's MLX, on Apple Silicon, so nothing you write, attach or draw leaves the Mac, and it works without internet once the models are downloaded. Your chats, notes and settings are kept in <code>~/.hikarilm</code>.</p>
+
+    <section class="setup-standing" id="standing" aria-live="polite">
+      <p id="standing-text">Looking for models on this Mac…</p>
+      <a class="setup-go" id="start-chatting" href="/chat" hidden>Start chatting</a>
+    </section>
+
+    <section class="setup-step">
+      <h2>What it does</h2>
+      <ul>
+        <li><strong>Chat</strong> with any MLX model you download. Answers are drawn as Markdown, with tables, code and math. A thinking model's reasoning folds into one line.</li>
+        <li><strong>Attach files</strong>: text and code, PDFs, Word and Excel files, and pictures for a model that can read them. Long documents are read in parts.</li>
+        <li><strong>Run Python</strong>: models can write and run Python (numpy, sympy, pandas, scipy, matplotlib) for math, data and plots, in macOS's sandbox, instead of working it out by hand.</li>
+        <li><strong>Remember earlier chats</strong>: a few notes from earlier chats that match your question go along with it.</li>
+        <li><strong>A code editor</strong>: open a folder, ask about a file, and apply the code a model writes.</li>
+        <li><strong>Make pictures</strong> with FLUX.2 klein, with reference pictures and LoRAs.</li>
+        <li><strong>Your rules</strong>: standing instructions, set in Settings, sent before every chat.</li>
+      </ul>
+    </section>
+
+    <section class="setup-step">
+      <h2>Models to start with</h2>
+      <p>Any MLX model works; these are the ones HikariLM is tried with. Run a command in Terminal to download one into the Hugging Face cache, where HikariLM finds it. Sizes are the download. One large model is in memory at a time, so you can download several and switch between them in the model list.</p>
+      <div id="models"></div>
+      <p class="setup-again" id="checked"></p>
+    </section>
+
+    <section class="setup-step">
+      <h2>More</h2>
+      <ul>
+        <li><a href="/setup/pictures">Set up making pictures</a>: the picture models also need mflux, which <code>hikarilm restart</code> installs.</li>
+        <li><a href="/setup/lora">Make a LoRA</a> from your own pictures.</li>
+        <li>In Terminal: <code>hikarilm stop</code>, <code>hikarilm status</code>, <code>hikarilm log</code> and <code>hikarilm update</code>.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

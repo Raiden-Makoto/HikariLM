@@ -14,7 +14,7 @@ Any MLX model works; these are the ones to start with. Get one with
 | For | Model | Repo | Download |
 |---|---|---|---|
 | Everyday chat, thinking or not | Qwen3 8B | `mlx-community/Qwen3-8B-4bit` | 4.6 GB |
-| Harder problems, always thinks | DeepSeek R1 8B | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
+| Dense reasoning, math, step-by-step analysis | DeepSeek R1 8B | `mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit` | 4.6 GB |
 | Code | Qwen2.5 Coder 7B | `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4.3 GB |
 | Reading pictures | Gemma 3 12B | `mlx-community/gemma-3-12b-it-4bit` | 8.1 GB |
 | Drawing pictures | FLUX.2 klein 4B | `mlx-community/FLUX.2-Klein-4B-4bit` | 4.6 GB |
@@ -27,9 +27,12 @@ Any MLX model works; these are the ones to start with. Get one with
 
 - **Qwen3 8B** follows *Let models think* in Settings: off, it answers straight away (quick
   questions, "what is the square root of 4761"); on, it works things out first. One download for both.
-- **DeepSeek R1** always thinks, which is what it is for: math, logic and puzzles. On trivial
-  questions it thinks far longer than it needs to; use Qwen3 with thinking off for those. It is
-  not given the Python tool: given the calculator, it thought about it and never called it.
+- **DeepSeek R1** is the one for dense reasoning: hard math, proofs, logic, and analysis that
+  has to be worked through step by step. It always thinks, at length, and that long chain of
+  thought is what makes it better than Qwen3 there. On simple questions it thinks far longer
+  than it needs to; use Qwen3 with thinking off for those. It is not given the Python tool:
+  given the calculator, it thought about it and never called it, so it works the math out in
+  its reasoning.
 - **Qwen2.5 Coder** for the code editor and code questions. It does not think, and is not
   given the Python tool.
 - **Gemma 3 12B** reads attached pictures and reference pictures, and chats too. It and Qwen3
@@ -71,6 +74,13 @@ characters of output, plots as pictures. Built and unit-tested off the Mac; not 
   channels are not split off yet. Run `check_tools.py` with it if it is downloaded.
 - [ ] Any new recommended chat model: run `check_tools.py` with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
+- [x] **Welcome page**, `/welcome`, a page of its own like the setup pages: what HikariLM is,
+  what it does, and the models above with their download commands and Copy, each marked
+  *Downloaded* once it is on this Mac (it looks again every 10 seconds). The list is
+  `helper/welcome.py`; keep it the same as the table above. The browser opens on it when no
+  chat model is downloaded; the empty chat and Settings link to it. Nothing is saved for it.
+- [ ] On the Mac: with no chat model, `hikarilm restart` opens `/welcome`; download Qwen3 8B
+  and the page marks it *Downloaded* and shows *Start chatting*.
 - [ ] README, `__version__ = "4.9.0"`, tag `v4.9.0`, once the checks pass.
 
 ## Voice

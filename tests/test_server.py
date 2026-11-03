@@ -85,6 +85,15 @@ class ChatThroughServerTest(unittest.TestCase):
         self.assertTrue(lines[-1].get("done"))
         self.assertTrue("".join((line.get("message") or {}).get("content", "") for line in lines))
 
+    def test_the_welcome_list_says_what_is_downloaded(self):
+        with urllib.request.urlopen(self.base + "/api/welcome", timeout=30) as response:
+            body = json.loads(response.read())
+        have = {model["repo"] for model in body["models"] if model["have"]}
+        self.assertEqual(have, {CODER, GEMMA})
+        self.assertEqual(body["chat"], 2)
+        qwen = next(model for model in body["models"] if model["name"] == "Qwen3 8B")
+        self.assertEqual(qwen["command"], "~/.hikarilm/venv/bin/hf download mlx-community/Qwen3-8B-4bit")
+
     def test_a_picture_is_described(self):
         lines = self.post("/api/describe", {"model": GEMMA, "image": PNG_B64, "name": "dot.png"})
         self.assertEqual([line for line in lines if line.get("error")], [])
