@@ -45,6 +45,16 @@ AS_TEXT = (
     "The result comes back in the next message, then you go on.")
 
 
+# Coding models are there to write code; given the calculator, Qwen2.5 Coder wrote made-up calls
+# instead of answers. The same names the page takes for coders (codeRank in models.js).
+CODERS = re.compile(r"code|devstral", re.I)
+
+
+def offered(settings: dict, model: str) -> bool:
+    """Whether this model gets the calculator: it is on in Settings and the model is no coder."""
+    return bool(settings["tools"]["calculator"]) and not CODERS.search(model or "")
+
+
 def text_tokens() -> int:
     """About how much of the context the tool's description takes."""
     return len(json.dumps(TOOLS)) // 4

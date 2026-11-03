@@ -7,7 +7,7 @@ from pathlib import Path
 
 from helper import context, mlx_worker, store, tools
 from helper.calculator import MAX_CHARS, CalcError, calculate
-from tests.test_engine import CODER
+from tests.test_engine import CODER, GEMMA
 from tests.test_server import ChatThroughServerTest
 
 
@@ -288,8 +288,8 @@ class LoopTest(unittest.TestCase):
     setUp = ChatThroughServerTest.setUp
     post = ChatThroughServerTest.post
 
-    def chat(self, question: str) -> tuple[str, list[dict], list[dict]]:
-        lines = self.post("/api/chat", {"model": CODER, "messages": [{"role": "user", "content": question}]})
+    def chat(self, question: str, model: str = GEMMA) -> tuple[str, list[dict], list[dict]]:
+        lines = self.post("/api/chat", {"model": model, "messages": [{"role": "user", "content": question}]})
         self.assertEqual([line for line in lines if line.get("error")], [])
         self.assertTrue(lines[-1].get("done"))
         shown = "".join((line.get("message") or {}).get("content", "") for line in lines)
@@ -330,6 +330,14 @@ class LoopTest(unittest.TestCase):
         shown, calls, _ = self.chat("calc-many: 1")
         self.assertEqual([call["result"] for call in calls], [str(1 + n) for n in range(tools.MAX_CALLS)])
         self.assertIn("[Calculator results: 1+0 = 1; 1+1 = 2;", shown)
+
+    def test_coders_never_get_the_calculator(self):
+        # Qwen2.5 Coder is there to write code; with the calculator it wrote made-up calls.
+        shown, calls, _ = self.chat("calc: 2+2", CODER)
+        self.assertEqual((shown, calls), ("no tools", []))
+        self.assertTrue(tools.offered({"tools": {"calculator": True}}, "mlx-community/Qwen3-8B-4bit"))
+        for name in (CODER, "mlx-community/Devstral-Small-2505-4bit", "mlx-community/codegemma-7b-it-4bit"):
+            self.assertFalse(tools.offered({"tools": {"calculator": True}}, name), name)
 
     def test_three_failed_calls_get_the_results_as_text(self):
         # Falcon3 kept calling a tool by the wrong name until the ten calls ran out.

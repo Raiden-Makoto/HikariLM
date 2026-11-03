@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from helper import context, engine, server  # noqa: E402
+from helper import context, engine, server, tools  # noqa: E402
 
 SUMS = [
     ("What is the square root of 4761?", "69"),
@@ -43,7 +43,7 @@ def chat_models(wanted: list[str]) -> list[str]:
         for name in missing:
             print(f"{name} is not downloaded; skipped.")
         return [name for name in wanted if name in found]
-    return [name for name in found if not any(word in name.lower() for word in SKIP)]
+    return [name for name in found if not any(word in name.lower() for word in SKIP) and not tools.CODERS.search(name)]
 
 
 def ask(base: str, model: str, question: str) -> dict:

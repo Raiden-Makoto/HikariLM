@@ -84,7 +84,7 @@ The second run (issue 9; mlx-lm 0.31.3, mlx-vlm 0.7.11, transformers 5.20.2):
 |---|---|---|---|
 | Qwen3 8B | 4 of 4 | 4 | works |
 | DeepSeek R1 8B | 0 of 4 | 2 | wrote two calls as bare JSON after its reasoning, not read then; read since |
-| Qwen2.5 Coder | 0 of 4 | 0 | made up a wrapper each time (`<tools>`, ```` ```xml ```` with `<function-call>` or `<function name=… arguments=…/>`); read since |
+| Qwen2.5 Coder | 0 of 4 | 0 | made up a wrapper each time (`<tools>`, ```` ```xml ```` with `<function-call>` or `<function name=… arguments=…/>`); read since, but coders no longer get the calculator at all: they are there to write code |
 
 - [ ] Run `python3 tests/check_tools.py` once more, and with Falcon3 and Gemma 3. Write down
   what it finds here.
