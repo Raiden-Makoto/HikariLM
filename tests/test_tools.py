@@ -125,6 +125,14 @@ class SandboxProfileTest(unittest.TestCase):
         self.assertEqual(lines[allowed], '(allow file-read* (subpath "/s") (subpath "/v") (subpath "/base"))')
         self.assertLess(lines.index("(deny process-exec)"), lines.index('(allow process-exec (literal "/v/bin/python"))'))
 
+    def test_folders_above_what_it_reads_can_be_looked_up(self):
+        text = python_tool.profile("/private/var/folders/ab/T/run", ["/Users/me/.hikarilm/python-venv"], [])
+        line = next(line for line in text.splitlines() if line.startswith("(allow file-read-metadata"))
+        for folder in ("/", "/Users", "/Users/me", "/Users/me/.hikarilm", "/private/var/folders/ab/T"):
+            self.assertIn(f'(literal "{folder}")', line)
+        self.assertNotIn("subpath", line)
+        self.assertLess(text.index("(deny file-read*"), text.index("(allow file-read-metadata"))
+
 
 class PrepareTest(unittest.TestCase):
     """The venv is made with Python 3.11 or newer, where pip gets a scipy macOS 27 can load."""

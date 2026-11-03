@@ -159,6 +159,19 @@ def _quote(path: str) -> str:
     return json.dumps(path)
 
 
+def _above(*paths: str) -> list[str]:
+    """The folders above these, up to /: looked up, not listed or read."""
+    found = set()
+    for path in paths:
+        parent = os.path.dirname(path)
+        while parent and parent not in found:
+            found.add(parent)
+            if parent == os.path.dirname(parent):
+                break
+            parent = os.path.dirname(parent)
+    return sorted(found)
+
+
 def profile(scratch: str, reads: list[str], programs: list[str]) -> str:
     """The sandbox for one run. Later rules win, so each refusal is followed by what it lets in."""
     home = os.path.realpath(Path.home())
@@ -176,6 +189,8 @@ def profile(scratch: str, reads: list[str], programs: list[str]) -> str:
         ' (literal "/dev/dtracehelper") (regex #"^/dev/fd/") (regex #"^/dev/tty"))',
         "(deny file-read* " + " ".join(f"(subpath {_quote(p)})" for p in (*PRIVATE, home)) + ")",
         "(allow file-read* " + " ".join(f"(subpath {_quote(p)})" for p in (scratch, *reads)) + ")",
+        # Resolving a path (realpath, Python finding its prefix) looks up every folder above it.
+        "(allow file-read-metadata " + " ".join(f"(literal {_quote(p)})" for p in _above(scratch, *reads)) + ")",
         "(deny mach-lookup)",
         "(allow mach-lookup " + " ".join(f'(global-name "{name}")' for name in MACH) + ")",
         "(deny appleevent-send)",
