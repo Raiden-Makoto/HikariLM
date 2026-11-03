@@ -38,12 +38,17 @@ SKIP = ("flux", "embed", "whisper", "kokoro")
 def chat_models(wanted: list[str]) -> list[str]:
     engine.forget_scan()
     found = sorted(engine.found())
+    def given(name: str) -> bool:
+        return tools.offered({"tools": {"calculator": True}}, name, engine.bitnet_model(name))
+
     if wanted:
-        missing = [name for name in wanted if name not in found]
-        for name in missing:
-            print(f"{name} is not downloaded; skipped.")
-        return [name for name in wanted if name in found]
-    return [name for name in found if not any(word in name.lower() for word in SKIP) and not tools.CODERS.search(name)]
+        for name in wanted:
+            if name not in found:
+                print(f"{name} is not downloaded; skipped.")
+            elif not given(name):
+                print(f"{name} is left without the calculator (a coder, BitNet or poor caller); skipped.")
+        return [name for name in wanted if name in found and given(name)]
+    return [name for name in found if not any(word in name.lower() for word in SKIP) and given(name)]
 
 
 def ask(base: str, model: str, question: str) -> dict:

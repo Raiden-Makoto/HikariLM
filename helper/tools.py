@@ -48,11 +48,18 @@ AS_TEXT = (
 # Coding models are there to write code; given the calculator, Qwen2.5 Coder wrote made-up calls
 # instead of answers. The same names the page takes for coders (codeRank in models.js).
 CODERS = re.compile(r"code|devstral", re.I)
+# Models that were given it and did not use it well (issue 9): DeepSeek R1 8B thought about the
+# calculator and never called it, from the system message or the question. BitNet models
+# (Falcon3 1.58-bit) are left out too: Falcon3 called it by the wrong name over and over.
+POOR_CALLERS = re.compile(r"deepseek-r1", re.I)
 
 
-def offered(settings: dict, model: str) -> bool:
-    """Whether this model gets the calculator: it is on in Settings and the model is no coder."""
-    return bool(settings["tools"]["calculator"]) and not CODERS.search(model or "")
+def offered(settings: dict, model: str, bitnet: bool = False) -> bool:
+    """Whether this model gets the calculator: it is on in Settings, and the model is no coder,
+    no BitNet model and none of POOR_CALLERS."""
+    name = model or ""
+    return (bool(settings["tools"]["calculator"]) and not bitnet
+            and not CODERS.search(name) and not POOR_CALLERS.search(name))
 
 
 def text_tokens() -> int:
@@ -205,6 +212,33 @@ def _looks_like_call(value) -> bool:
             and any(key in value for key in ("arguments", "parameters")))
 
 
+_MODULES = re.compile(r"\b(?:math|numpy|np)\.")
+
+
+def _code_sum(code: str) -> str:
+    """The sum in a ```tool_code block Gemma wrote as plain Python: print(math.sqrt(4761)),
+    [calculate(expression=2**40)], or the sum alone. What cannot be read goes to the calculator
+    as it is, which says what is wrong with it."""
+    code = code.strip()
+    try:
+        node = ast.parse(code, mode="eval").body
+    except SyntaxError:
+        return code
+    while True:
+        if isinstance(node, (ast.List, ast.Tuple)) and len(node.elts) == 1:
+            node = node.elts[0]
+            continue
+        wrapper = isinstance(node, ast.Call) and len(node.args) + len(node.keywords) == 1 and (
+            (isinstance(node.func, ast.Name) and node.func.id in ("print", "calculate"))
+            or (isinstance(node.func, ast.Attribute) and node.func.attr == "calculate"))
+        if not wrapper:
+            break
+        node = node.args[0] if node.args else node.keywords[0].value
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+    return _MODULES.sub("", ast.unparse(node))
+
+
 def _parse_wrapped(start: str, rest: str):
     ends = [at for at in (rest.find(end) for end in WRAPPED[start]) if at >= 0]
     if not ends:
@@ -239,10 +273,12 @@ def _parse(start: str, rest: str) -> dict | None:
         return _parse_wrapped(start, rest)
     if start == "```tool_code":
         match = _CALL_IN_CODE.search(rest)
-        if not match:
+        if match:
+            name, expression = match.group(1), ast.literal_eval(match.group(2))
+            return _call_from({"name": name, "arguments": {"expression": expression}})
+        if "```" not in rest:
             return None
-        name, expression = match.group(1), ast.literal_eval(match.group(2))
-        return _call_from({"name": name, "arguments": {"expression": expression}})
+        return {"name": "calculate", "expression": _code_sum(rest.split("```", 1)[0])}
     if start.startswith("<｜tool"):
         head = rest.split("{", 1)[0]
         value = _json_after(rest, "{")

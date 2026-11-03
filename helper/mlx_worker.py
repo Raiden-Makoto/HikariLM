@@ -337,8 +337,7 @@ class TextModel:
         """Token ids to send, and text the model is taken to have written already."""
         request = request or {}
         native = native_tools(str(getattr(self.tokenizer, "chat_template", "") or ""))
-        chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), native,
-                         bool(request.get("tools_in_user")))
+        chat = tool_chat(messages, request.get("tools"), request.get("tools_text"), native)
         extra = {"enable_thinking": bool(think)} if self.template_switch and think is not None else {}
         if native and request.get("tools"):
             extra["tools"] = request["tools"]
@@ -482,13 +481,10 @@ def native_tools(template: str) -> bool:
     return "tools" in template and bool(STANDARD_CALLS.search(template))
 
 
-def tool_chat(messages: list[dict], tools, tools_text, native: bool, in_user: bool = False) -> list[dict]:
+def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dict]:
     """The chat for a template. One with tools of its own gets the calls and results as they
     are; for one without, the tool is described in the system message and the calls and
-    results are written out as text, the way the description asks for them. With in_user
-    (DeepSeek R1, whose makers say to give every instruction in the user's message) the
-    description goes at the start of the question instead."""
-    asked = max((at for at, m in enumerate(messages) if m["role"] == "user"), default=-1)
+    results are written out as text, the way the description asks for them."""
     chat = []
     for m in messages:
         entry = {"role": m["role"], "content": _text(m.get("content"))}
@@ -505,9 +501,7 @@ def tool_chat(messages: list[dict], tools, tools_text, native: bool, in_user: bo
                     {"name": function.get("name"), "arguments": function.get("arguments")}) + "\n</tool_call>"
         chat.append(entry)
     if tools and not native and tools_text:
-        if in_user and asked >= 0:
-            chat[asked] = {**chat[asked], "content": tools_text + "\n\n" + chat[asked]["content"]}
-        elif chat and chat[0]["role"] == "system":
+        if chat and chat[0]["role"] == "system":
             chat[0] = {**chat[0], "content": chat[0]["content"] + "\n\n" + tools_text}
         else:
             chat.insert(0, {"role": "system", "content": tools_text})

@@ -157,6 +157,12 @@ def is_bitnet(config: dict | None) -> bool:
     return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet"
 
 
+def bitnet_model(model: str) -> bool:
+    """Whether a downloaded model is a BitNet one (Falcon3 1.58-bit)."""
+    folder = found().get(model)
+    return folder is not None and is_bitnet(_config(folder))
+
+
 def snapshot(repo: Path) -> Path | None:
     try:
         return repo / "snapshots" / (repo / "refs" / "main").read_text(encoding="utf-8").strip()

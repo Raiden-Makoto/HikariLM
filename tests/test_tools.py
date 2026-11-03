@@ -1,13 +1,15 @@
 import json
+import os
 import shutil
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from helper import context, engine, mlx_worker, store, tools
 from helper.calculator import MAX_CHARS, CalcError, calculate
-from tests.test_engine import CODER, GEMMA
+from tests.test_engine import CODER, GEMMA, add_model, real_config
 from tests.test_server import ChatThroughServerTest
 
 
@@ -132,6 +134,19 @@ class CallWatchTest(unittest.TestCase):
                 self.assertEqual(shown, text.split("```")[0] if text.startswith("Sure") else "")
                 self.assertEqual(call, {"name": "calculate", "expression": expression})
 
+    def test_gemma_tool_code_as_plain_python(self):
+        written = {"print(math.sqrt(4761))": "sqrt(4761)", "sqrt(4761)": "sqrt(4761)",
+                   "[calculate(expression=2**40)]": "2 ** 40", "print(calculate(expression='2^10'))": "2^10",
+                   "tools.calculate(expression=\"1234567 * 7654321\")": "1234567 * 7654321",
+                   "print(np.sin(np.radians(30)) * 12.5)": "sin(radians(30)) * 12.5"}
+        for code, expression in written.items():
+            with self.subTest(code):
+                shown, call, _ = watch(chunks("Let me see.\n```tool_code\n" + code + "\n```\nmade up", 3))
+                self.assertEqual(shown, "Let me see.\n")
+                self.assertEqual(call, {"name": "calculate", "expression": expression})
+        self.assertEqual(tools.run(watch(["```tool_code\nprint(math.sqrt(4761))\n```"])[1])["result"], "69")
+        self.assertIn("error", tools.run(watch(["```tool_code\nx = 1\ny = 2\n```"])[1]))
+
     def test_bare_json_after_the_reasoning(self):
         # Issue 9: DeepSeek R1 thought first, then wrote the call as bare JSON.
         text = '<think>\nI should use the calculator.\n</think>\n\n{"name":"calculate","arguments":{"expression":"sqrt(4761)"}}'
@@ -219,21 +234,29 @@ class WorkerChatTest(unittest.TestCase):
         self.assertEqual(mlx_worker.tool_chat(self.CHAT[:2], None, tools.AS_TEXT, False)[0]["content"], "Rules.")
 
 
-class InUserTest(unittest.TestCase):
-    def test_deepseek_r1_gets_the_description_with_the_question(self):
-        # Issue 9: R1 never called it from the system message; DeepSeek says not to use one.
-        chat = [{"role": "system", "content": "Rules."}, {"role": "user", "content": "Hi"},
-                {"role": "assistant", "content": "Hello"}, {"role": "user", "content": "sqrt 4761?"},
-                {"role": "assistant", "content": "", "tool_calls": [
-                    {"function": {"name": "calculate", "arguments": {"expression": "sqrt(4761)"}}}]},
-                {"role": "tool", "content": "69"}]
-        out = mlx_worker.tool_chat(chat, tools.TOOLS, tools.AS_TEXT, False, in_user=True)
-        self.assertEqual(out[0], {"role": "system", "content": "Rules."})
-        self.assertEqual(out[1]["content"], "Hi")
-        self.assertEqual(out[3]["content"], tools.AS_TEXT + "\n\nsqrt 4761?")
-        self.assertEqual(out[5]["content"], "<tool_response>\n69\n</tool_response>")
-        self.assertNotIn("calculator tool", "".join(m["content"] for m in out[:3] + out[4:]))
-        self.assertTrue(engine.THINKERS.search("mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit"))
+class OfferedTest(unittest.TestCase):
+    ON = {"tools": {"calculator": True}}
+
+    def test_who_gets_the_calculator(self):
+        self.assertTrue(tools.offered(self.ON, "mlx-community/Qwen3-8B-4bit"))
+        self.assertTrue(tools.offered(self.ON, GEMMA))
+        self.assertFalse(tools.offered({"tools": {"calculator": False}}, "mlx-community/Qwen3-8B-4bit"))
+        # Issue 9: R1 never called it; Falcon3 (BitNet) called it wrong over and over.
+        self.assertFalse(tools.offered(self.ON, "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit"))
+        self.assertFalse(tools.offered(self.ON, "tiiuae/Falcon3-10B-Instruct-1.58bit", bitnet=True))
+
+    def test_bitnet_models_are_told_apart_by_their_config(self):
+        hub = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, hub, True)
+        add_model(hub, "tiiuae/Falcon3-10B-Instruct-1.58bit",
+                  {"model_type": "llama", "quantization_config": {"quant_method": "bitnet"}})
+        add_model(hub, GEMMA, real_config(GEMMA))
+        with mock.patch.dict(os.environ, {"HF_HUB_CACHE": str(hub)}):
+            engine.forget_scan()
+            self.addCleanup(engine.forget_scan)
+            self.assertTrue(engine.bitnet_model("tiiuae/Falcon3-10B-Instruct-1.58bit"))
+            self.assertFalse(engine.bitnet_model(GEMMA))
+            self.assertFalse(engine.bitnet_model("not/downloaded"))
 
 
 class TemplateKindTest(unittest.TestCase):

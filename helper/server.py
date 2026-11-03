@@ -367,7 +367,8 @@ class Handler(BaseHTTPRequestHandler):
         summary = decision["summary"]
         self._stream_start()
         started = True
-        offered = tools.text_tokens() if tools.offered(settings, model) else 0
+        calculator = tools.offered(settings, model, engine.bitnet_model(model))
+        offered = tools.text_tokens() if calculator else 0
         self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"] + offered,
                            "threshold": decision["threshold"]})
         if ruled_by:
@@ -415,9 +416,7 @@ class Handler(BaseHTTPRequestHandler):
             # Thinking takes context too: never more than is left after the prompt and the reply.
             left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
             budget_tokens = max(256, min(budget_tokens or left, left))
-        calculator = tools.offered(settings, model)
-        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT,
-                 "tools_in_user": bool(engine.THINKERS.search(model))} if calculator else None
+        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if calculator else None
         asked, answers, seen = sent, [], set()
         while True:
             try:

@@ -88,19 +88,24 @@ The second run (issue 9; mlx-lm 0.31.3, mlx-vlm 0.7.11, transformers 5.20.2):
 
 The third run (coders left out): Qwen3 8B called it 4 of 4 and got all 4 right. DeepSeek R1
 8B called it 0 of 4 and got 3 right, the product wrong (9474948028303), though its answers
-named calculator functions (`sind(30) * 12.5`), so it read the description. DeepSeek says R1
-should get no system message, every instruction in the user's; since then it gets the
-description at the start of the question instead.
+named calculator functions (`sind(30) * 12.5`), so it read the description. With the
+description moved into the question it still never called (its thinking mentioned the
+calculator three times).
 
-- [ ] Run `python3 tests/check_tools.py` once more, and with Falcon3 and Gemma 3. Write down
-  what it finds here. It now says when a model's thinking mentions the calculator but it
-  never called it.
-- [ ] DeepSeek R1 8B: if it still never calls with the description in the question, leave it
-  without the calculator.
+Left without the calculator (`tools.offered`), so they never see the description:
+
+- coders (names with "code" or "devstral"): they are there to write code;
+- DeepSeek R1 (`tools.POOR_CALLERS`): thinks about it, never calls it;
+- BitNet models (Falcon3 1.58-bit): called it by the wrong name over and over.
+
+Gemma 3's calls were not caught: it writes Python in a ```` ```tool_code ```` block, which was
+only read as `calculate("…")`. Since then the block is read as Python (`print(math.sqrt(4761))`,
+`[calculate(expression=2**40)]`, the sum alone).
+
+- [ ] Run `python3 tests/check_tools.py mlx-community/gemma-3-12b-it-4bit` and write down what
+  it finds here. If its calls are still missed, paste what it wrote.
 - [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
   Harmony is the likely one), read it too.
-- [ ] A model that does not call it reliably, or gets worse answers with it, is left without
-  it: a list in the helper, so it never sees the description.
 - [ ] Recommended models: note which ones use the calculator.
 
 ### Later: full Python (no version yet)
