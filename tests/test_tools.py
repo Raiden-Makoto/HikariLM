@@ -201,6 +201,23 @@ class PrepareTest(unittest.TestCase):
             python_tool.prepare(self.said.append, "/x/python3.13")
         self.assertTrue(folder.exists())
 
+    def test_a_framework_pythons_real_interpreter_may_start(self):
+        version = Path(self.home) / "Python.framework" / "Versions" / "3.13"
+        app = version / "Resources" / "Python.app" / "Contents" / "MacOS" / "Python"
+        app.parent.mkdir(parents=True)
+        app.write_text("")
+        (version / "bin").mkdir()
+        (version / "bin" / "python3.13").write_text("")
+        folder = python_tool.venv()
+        (folder / "bin").mkdir(parents=True)
+        (folder / "bin" / "python").symlink_to(version / "bin" / "python3.13")
+        (folder / python_tool.PATHS).write_text(json.dumps([str(folder), str(version), str(folder / "bin" / "python"),
+                                                            str(version / "bin" / "python3.13")]))
+        programs = python_tool._programs()
+        self.assertIn(os.path.realpath(app), programs)
+        self.assertIn(os.path.realpath(version / "bin" / "python3.13"), programs)
+        self.assertIn(str(folder / "bin" / "python"), programs)
+
     def test_packages_that_do_not_load_are_reported_and_set_up_again(self):
         folder = python_tool.venv()
         (folder / "bin").mkdir(parents=True)

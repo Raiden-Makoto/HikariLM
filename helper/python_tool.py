@@ -155,6 +155,18 @@ def _paths() -> list[str]:
     return sorted(paths | {os.path.realpath(venv()), binary, os.path.dirname(os.path.dirname(binary))})
 
 
+def _programs() -> list[str]:
+    """What the sandbox lets start: the venv's Python and, for a framework build (Homebrew,
+    python.org), the interpreter its bin/python3.x launcher starts with posix_spawn."""
+    paths = _paths()
+    found = {str(python()), os.path.realpath(python())} | {p for p in paths if os.path.basename(p).startswith("python")}
+    for prefix in paths:
+        app = os.path.join(prefix, "Resources", "Python.app", "Contents", "MacOS", "Python")
+        if os.path.isfile(app):
+            found |= {app, os.path.realpath(app)}
+    return sorted(found)
+
+
 def _quote(path: str) -> str:
     return json.dumps(path)
 
@@ -358,9 +370,7 @@ def run(code: str) -> dict:
                "HIKARILM_FILE_BYTES": str(FILE_BYTES), "HIKARILM_CPU_SECONDS": str(SECONDS * 2)}
         args = [str(python()), "-I", "-B", "-X", "utf8", str(scratch / "run.py")]
         if not unsandboxed:
-            programs = sorted({str(python()), os.path.realpath(python())} | {
-                p for p in _paths() if os.path.basename(p).startswith("python")})
-            args = [SANDBOX_EXEC, "-p", profile(str(scratch), _paths(), programs), *args]
+            args = [SANDBOX_EXEC, "-p", profile(str(scratch), _paths(), _programs()), *args]
         try:
             process = subprocess.Popen(args, cwd=scratch / "work", env=env, stdin=subprocess.DEVNULL,
                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
