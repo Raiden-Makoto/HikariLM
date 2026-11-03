@@ -29,6 +29,7 @@ import re
 import sys
 import tempfile
 import threading
+from pathlib import Path
 import time
 
 THINK_OPEN = "<think>"
@@ -61,6 +62,42 @@ class TurnEnd:
     def flush(self) -> str:
         out, self.buffer = self.buffer, ""
         return out
+
+
+NO_TEMPLATE = ("This model has no chat template, so it cannot chat. It may be a base or embedding model; "
+               "pick a chat (instruct) model instead.")
+
+
+def template_in(path: str) -> str:
+    """The chat template saved in a model's folder: tokenizer_config.json, chat_template.jinja,
+    or chat_template.json, the first that has one."""
+    folder = Path(path)
+    for name, key in (("tokenizer_config.json", "chat_template"), ("chat_template.jinja", None),
+                      ("chat_template.json", "chat_template")):
+        try:
+            text = (folder / name).read_text(encoding="utf-8")
+            template = json.loads(text).get(key) if key else text
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(template, list):
+            named = {t.get("name"): t.get("template") for t in template if isinstance(t, dict)}
+            template = named.get("default") or next(iter(named.values()), None)
+        if isinstance(template, str) and template.strip():
+            return template
+    return ""
+
+
+def fill_template(tokenizer, path: str, required: bool = True) -> None:
+    """Give a tokenizer the folder's chat template when it loaded without one. Transformers
+    before 4.50 or so read only tokenizer_config.json, and newer repos (Qwen3 2507, for one)
+    keep it in chat_template.jinja alone; then every chat fails with "chat_template is not set"."""
+    if getattr(tokenizer, "chat_template", None):
+        return
+    template = template_in(path)
+    if template:
+        tokenizer.chat_template = template
+    elif required:
+        raise RuntimeError(NO_TEMPLATE)
 
 
 def _stop_at_turn_ends(tokenizer) -> None:
@@ -286,6 +323,7 @@ class TextModel:
         self.mx, self.stream_generate, self.caches = mx, stream_generate, cache_module
         settings = bitnet_config(path)
         self.model, self.tokenizer = load_bitnet(path, settings) if settings else load(path)
+        fill_template(getattr(self.tokenizer, "_tokenizer", self.tokenizer), path)
         _stop_at_turn_ends(self.tokenizer)
         sampling = _sampling(path)
         self.sampler = make_sampler(temp=sampling["temperature"], top_p=sampling["top_p"], top_k=sampling["top_k"])
@@ -388,7 +426,12 @@ class VisionModel:
 
         self.mx, self.stream_generate, self.template = mx, stream_generate, apply_chat_template
         self.model, self.processor = load(path)
-        _stop_at_turn_ends(getattr(self.processor, "tokenizer", self.processor))
+        tokenizer = getattr(self.processor, "tokenizer", self.processor)
+        # mlx-vlm has prompt formats of its own for some models, so no template is not an error here.
+        fill_template(self.processor, path, required=False)
+        if tokenizer is not self.processor:
+            fill_template(tokenizer, path, required=False)
+        _stop_at_turn_ends(tokenizer)
         self.sampling = _sampling(path)
 
     def chat(self, request: dict, stop: threading.Event):

@@ -1,6 +1,9 @@
 import json
+import shutil
+import tempfile
 import time
 import unittest
+from pathlib import Path
 
 from helper import context, mlx_worker, store, tools
 from helper.calculator import MAX_CHARS, CalcError, calculate
@@ -174,6 +177,47 @@ class TemplateKindTest(unittest.TestCase):
         self.assertEqual([turn["role"] for turn in rendered], ["user"])
         self.assertTrue(rendered[0]["content"].startswith("You have a calculator tool."))
         self.assertTrue(rendered[0]["content"].endswith("\n\nsqrt 4489?"))
+
+
+class TemplateFillTest(unittest.TestCase):
+    """Issue 7: Qwen3 2507 keeps its template in chat_template.jinja alone, which older
+    transformers do not read, so the tokenizer came without one."""
+
+    class Tokenizer:
+        chat_template = None
+
+    def setUp(self):
+        self.folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.folder, True)
+        (self.folder / "tokenizer_config.json").write_text(json.dumps({"eos_token": "<|im_end|>"}))
+
+    def test_a_template_in_chat_template_jinja_alone_is_used(self):
+        (self.folder / "chat_template.jinja").write_text("{{ messages }}")
+        tokenizer = self.Tokenizer()
+        mlx_worker.fill_template(tokenizer, str(self.folder))
+        self.assertEqual(tokenizer.chat_template, "{{ messages }}")
+
+    def test_the_other_places_a_template_is_kept(self):
+        (self.folder / "chat_template.json").write_text(json.dumps({"chat_template": "json"}))
+        self.assertEqual(mlx_worker.template_in(str(self.folder)), "json")
+        (self.folder / "tokenizer_config.json").write_text(json.dumps(
+            {"chat_template": [{"name": "tool_use", "template": "tools"}, {"name": "default", "template": "plain"}]}))
+        self.assertEqual(mlx_worker.template_in(str(self.folder)), "plain")
+
+    def test_a_template_the_tokenizer_has_is_kept(self):
+        (self.folder / "chat_template.jinja").write_text("from the file")
+        tokenizer = self.Tokenizer()
+        tokenizer.chat_template = "its own"
+        mlx_worker.fill_template(tokenizer, str(self.folder))
+        self.assertEqual(tokenizer.chat_template, "its own")
+
+    def test_no_template_anywhere_says_so_for_chat_but_not_for_pictures(self):
+        with self.assertRaises(RuntimeError) as caught:
+            mlx_worker.fill_template(self.Tokenizer(), str(self.folder))
+        self.assertIn("no chat template", str(caught.exception))
+        tokenizer = self.Tokenizer()
+        mlx_worker.fill_template(tokenizer, str(self.folder), required=False)
+        self.assertIsNone(tokenizer.chat_template)
 
 
 class LoopTest(unittest.TestCase):
