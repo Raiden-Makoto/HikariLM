@@ -9,6 +9,7 @@ the helper answers it (server._chat).
 from __future__ import annotations
 
 import ast
+import html
 import json
 import re
 
@@ -99,11 +100,20 @@ def as_messages(written: str, call: dict, answer: dict, number: int) -> list[dic
 # [TOOL_CALLS][{json}]. DeepSeek: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>
 # calculate ```json {args} ```. Gemma: ```tool_code calculate("…") ```. gpt-oss (Harmony):
 # to=functions.calculate<|channel|>commentary json<|message|>{args}<|call|>.
-# Qwen2.5 Coder often writes its call as a ```json block instead, and Falcon3 as bare JSON at the
-# start of its reply; those count only when the JSON has a name and arguments (LOOSE_STARTS).
+# Qwen2.5 Coder often writes its call as a ```json block instead, and Falcon3 and DeepSeek R1 as
+# bare JSON at the start of the answer; those count only when the JSON has a name and arguments
+# (LOOSE_STARTS). Qwen2.5 Coder also makes up wrappers: <tools>{json}</tools>, ```xml blocks,
+# <function-call><name>…</name><arguments><expression>…</expression></arguments></function-call>,
+# and <function name="calculate" arguments='{json}'/>. Those count only when they name the
+# calculator and give a sum (WRAPPED, with where each ends).
+WRAPPED = {"```xml": ("```",), "<tools>": ("</tools>",), "<function-call>": ("</function-call>",),
+           "<function_call>": ("</function_call>",), "<function ": ("/>", "</function>")}
 STARTS = ("<tool_call>", "[TOOL_CALLS]", "<｜tool▁calls▁begin｜>", "<｜tool▁call▁begin｜>", "```tool_code",
-          "to=functions.", "```json")
+          "to=functions.", "```json", *WRAPPED)
 LOOSE_STARTS = ("```json", "")
+_XML_NAME = re.compile(r"""<name>\s*([\w.]+)\s*</name>|\bname\s*=\s*["']([\w.]+)["']""")
+_XML_ARGUMENTS = re.compile(r"""\barguments\s*=\s*(?:'([^']*)'|"((?:[^"\\]|\\.)*)")""")
+_XML_EXPRESSION = re.compile(r"<expression>(.*?)</expression>", re.S)
 _CALL_IN_CODE = re.compile(r"""(\w+)\(\s*(?:expression\s*=\s*)?("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)""")
 
 
@@ -173,6 +183,7 @@ def _call_from(value) -> dict | None:
 
 
 NOT_A_CALL = object()
+THINK_END = "</think>"
 
 
 def _looks_like_call(value) -> bool:
@@ -184,8 +195,38 @@ def _looks_like_call(value) -> bool:
             and any(key in value for key in ("arguments", "parameters")))
 
 
+def _parse_wrapped(start: str, rest: str):
+    ends = [at for at in (rest.find(end) for end in WRAPPED[start]) if at >= 0]
+    if not ends:
+        return None
+    body = rest[:min(ends)]
+    value = _json_after(body)
+    if _looks_like_call(value):
+        call = _call_from(value)
+    else:
+        name = _XML_NAME.search(start + body)
+        if not name:
+            return NOT_A_CALL
+        arguments = None
+        attribute = _XML_ARGUMENTS.search(body)
+        expression = _XML_EXPRESSION.search(body)
+        if attribute:
+            try:
+                arguments = json.loads(attribute.group(1) if attribute.group(1) is not None
+                                       else attribute.group(2).replace('\\"', '"'))
+            except ValueError:
+                arguments = None
+        elif expression:
+            arguments = {"expression": html.unescape(expression.group(1).strip())}
+        call = _call_from({"name": name.group(1) or name.group(2), "arguments": arguments})
+    # Made-up wrappers are taken only for the calculator; anything else is the model's text.
+    return NOT_A_CALL if call is None or "error" in call else call
+
+
 def _parse(start: str, rest: str) -> dict | None:
     """The call written after `start`, or None while it is not complete."""
+    if start in WRAPPED:
+        return _parse_wrapped(start, rest)
     if start == "```tool_code":
         match = _CALL_IN_CODE.search(rest)
         if not match:
@@ -227,7 +268,8 @@ class CallWatch:
         self.start = -1    # where a call starts in raw
         self.marker = ""
         self.call: dict | None = None
-        self.opened = False  # whether the reply has anything but spaces yet
+        self.opened = False  # whether the answer has anything but spaces yet
+        self.answer_at = 0   # where the answer starts: after </think>, if it thought
         self.searched = 0    # where to look for a start from, past JSON that was no call
 
     def feed(self, text: str) -> str:
@@ -235,11 +277,18 @@ class CallWatch:
         if self.call:
             return ""
         while True:
+            if self.start < 0 and self.opened:
+                ended = self.raw.find(THINK_END, self.answer_at)
+                if ended >= 0:
+                    # The answer starts after the reasoning, so bare JSON may come again.
+                    self.opened, self.answer_at = False, ended + len(THINK_END)
             if self.start < 0 and not self.opened:
-                # Bare JSON counts only as the first thing in the reply.
-                lead = len(self.raw) - len(self.raw.lstrip())
+                # Bare JSON counts only as the first thing in the answer.
+                answer = self.raw[self.answer_at:]
+                lead = self.answer_at + len(answer) - len(answer.lstrip())
                 if lead == len(self.raw):
-                    return ""
+                    out, self.shown = self.raw[self.shown:self.answer_at], max(self.shown, self.answer_at)
+                    return out
                 self.opened = True
                 if self.raw[lead] == "{":
                     self.start, self.marker = lead, ""

@@ -78,8 +78,16 @@ The first `check_tools.py` run on the Mac (issue 8), before the fixes below:
 | Qwen3 8B | — | — | every chat failed, "chat_template is not set"; the worker now reads the template from the model's folder when the tokenizer comes without one (issue 7) |
 | Falcon3 | yes | 1 of 2 (stopped) | named the tool after the function (`sqrt`, `function`) or left the expression out, ten calls a sum; such calls are now read, and three failed calls end the tool use |
 
-- [ ] Run `python3 tests/check_tools.py` again with the fixes (it now prints the venv's mlx-lm,
-  mlx-vlm and transformers versions first). Write down what it finds here.
+The second run (issue 9; mlx-lm 0.31.3, mlx-vlm 0.7.11, transformers 5.20.2):
+
+| Model | Called it | Right | What happened |
+|---|---|---|---|
+| Qwen3 8B | 4 of 4 | 4 | works |
+| DeepSeek R1 8B | 0 of 4 | 2 | wrote two calls as bare JSON after its reasoning, not read then; read since |
+| Qwen2.5 Coder | 0 of 4 | 0 | made up a wrapper each time (`<tools>`, ```` ```xml ```` with `<function-call>` or `<function name=… arguments=…/>`); read since |
+
+- [ ] Run `python3 tests/check_tools.py` once more, and with Falcon3 and Gemma 3. Write down
+  what it finds here.
 - [ ] DeepSeek R1 8B: if it still never calls, try the description in the user's message
   instead of the system message, else leave it without the calculator.
 - [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's

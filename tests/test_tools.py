@@ -132,6 +132,38 @@ class CallWatchTest(unittest.TestCase):
                 self.assertEqual(shown, text.split("```")[0] if text.startswith("Sure") else "")
                 self.assertEqual(call, {"name": "calculate", "expression": expression})
 
+    def test_bare_json_after_the_reasoning(self):
+        # Issue 9: DeepSeek R1 thought first, then wrote the call as bare JSON.
+        text = '<think>\nI should use the calculator.\n</think>\n\n{"name":"calculate","arguments":{"expression":"sqrt(4761)"}}'
+        shown, call, seen = watch(chunks(text, 3))
+        self.assertEqual(shown.rstrip(), "<think>\nI should use the calculator.\n</think>")
+        self.assertEqual(call, {"name": "calculate", "expression": "sqrt(4761)"})
+        self.assertEqual(watch(chunks("<think>hm</think>\nIt is {1, 2}.", 2))[:2], ("<think>hm</think>\nIt is {1, 2}.", None))
+
+    def test_wrappers_qwen_coder_made_up(self):
+        # Issue 9: each of these was Qwen2.5 Coder's whole answer.
+        made_up = {
+            "```xml\n<function-call>\n  <name>calculate</name>\n  <arguments>\n    <expression>sqrt(4761)</expression>\n"
+            "  </arguments>\n</function-call>\n```": "sqrt(4761)",
+            '```xml\n<tools>\n    {\n        "name": "calculate",\n        "arguments": {\n            "expression": "2**40"\n'
+            "        }\n    }\n</tools>\n```": "2**40",
+            "```xml\n<function name=\"calculate\" arguments='{\"expression\": \"1234567 * 7654321\"}'/>\n```": "1234567 * 7654321",
+            '<tools>\n  {\n    "name": "calculate",\n    "arguments": {\n      "expression": "sin(30 * pi / 180) * 12.5"\n'
+            "    }\n  }\n</tools>": "sin(30 * pi / 180) * 12.5",
+            "<function-call><name>calculate</name><arguments><expression>2 &lt; 3</expression></arguments></function-call>": "2 < 3",
+        }
+        for text, expression in made_up.items():
+            with self.subTest(text[:30]):
+                shown, call, _ = watch(chunks(text, 3))
+                self.assertEqual(shown, "")
+                self.assertEqual(call, {"name": "calculate", "expression": expression})
+
+    def test_xml_that_is_no_call_is_shown(self):
+        for text in ('```xml\n<note name="x"><to>Tove</to></note>\n```', "<tools>a list of tools</tools> here",
+                     '<function name="python" arguments=\'{"code": "1"}\'/>', "```xml\n<a/>\n```"):
+            with self.subTest(text[:20]):
+                self.assertEqual(watch(chunks(text, 3))[:2], (text, None))
+
     def test_json_that_is_no_call_is_shown(self):
         for text in ('Here:\n```json\n{"a": 1}\n```\nDone.', '{"a": [1, 2]} is JSON.', "```json\nnot json\n```",
                      'It is {"name": "calculate", "arguments": {"expression": "1"}} in the middle.', "  \n[1] a note"):
