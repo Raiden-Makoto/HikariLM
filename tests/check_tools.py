@@ -1,15 +1,15 @@
-"""Which chat models call the calculator, on a Mac. Not part of the test suite.
+"""Which chat models call the Python tool, on a Mac. Not part of the test suite.
 
 Asks each downloaded chat model a few sums through the real helper (the same /api/chat the page
-uses, in this process) and reports, for each, whether it called the calculator, what it sent, and
+uses, in this process) and reports, for each, whether it called the tool, the code it ran, and
 whether its answer has the right number. Nothing is downloaded; models that are not on this Mac
 are skipped. Picture and embedding models are left out.
 
     python3 tests/check_tools.py                  every downloaded chat model
     python3 tests/check_tools.py mlx-community/Qwen3-8B-4bit
 
-Your settings are used as they are (the calculator must be on), including thinking and its limit.
-Write what it finds in PLAN.md under v4.8.0.
+Your settings are used as they are (Let models run Python must be on), including thinking and its
+limit. Write what it finds in PLAN.md. tests/check_python.py tries to get out of the sandbox.
 """
 
 import json
@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from helper import context, engine, server, tools  # noqa: E402
+from helper import context, engine, python_tool, server, tools  # noqa: E402
 
 SUMS = [
     ("What is the square root of 4761?", "69"),
@@ -39,14 +39,14 @@ def chat_models(wanted: list[str]) -> list[str]:
     engine.forget_scan()
     found = sorted(engine.found())
     def given(name: str) -> bool:
-        return tools.offered({"tools": {"calculator": True}}, name, engine.bitnet_model(name))
+        return tools.offered({"tools": {"python": True}}, name, engine.bitnet_model(name))
 
     if wanted:
         for name in wanted:
             if name not in found:
                 print(f"{name} is not counted as downloaded ({engine.why_missing(name)}); skipped.")
             elif not given(name):
-                print(f"{name} is left without the calculator (a coder, BitNet or poor caller); skipped.")
+                print(f"{name} is left without the tool (a coder, BitNet or poor caller); skipped.")
         return [name for name in wanted if name in found and given(name)]
     return [name for name in found if not any(word in name.lower() for word in SKIP) and given(name)]
 
@@ -86,8 +86,11 @@ def versions() -> str:
 
 
 def main() -> int:
-    if not context.load_settings()["tools"]["calculator"]:
-        print("Turn on Settings, Let models use the calculator, first.")
+    if not context.load_settings()["tools"]["python"]:
+        print("Turn on Settings, Let models run Python, first.")
+        return 1
+    if not python_tool.available():
+        print("Python for the models is not set up: run  hikarilm restart  first.")
         return 1
     print("Venv:", versions())
     models = chat_models(sys.argv[1:])
@@ -114,10 +117,14 @@ def main() -> int:
                 right += ok
                 print(f"  {question}  ({result['seconds']} s)")
                 for call in result["calls"]:
-                    print(f"    called: {call['expression']} -> {call.get('result') or 'Error: ' + call.get('tool_error', '')}")
+                    code = call["code"].strip().replace("\n", "\n            ")
+                    print(f"    ran: {code}")
+                    print(f"      -> {(call['output'].strip() or '(nothing printed)')[:300]!r}"
+                          + (f"  error: {call['tool_error']}" if call.get("tool_error") else "")
+                          + (f"  plots: {len(call['pictures'])}" if call.get("pictures") else ""))
                 if not result["calls"]:
-                    mentioned = "calculat" in result["thought"].lower()
-                    print("    no call" + (" (its thinking mentions the calculator)" if mentioned else ""))
+                    mentioned = "python" in result["thought"].lower()
+                    print("    no call" + (" (its thinking mentions Python)" if mentioned else ""))
                 if result["error"]:
                     print(f"    error: {result['error']}")
                 print(f"    answer {'right' if ok else 'WRONG'}: {result['answer'].strip()[:160]!r}")
@@ -126,7 +133,7 @@ def main() -> int:
     finally:
         http.shutdown()
         engine.unload()
-    print("\nModel: questions where it called the calculator, right answers, of", len(SUMS))
+    print("\nModel: questions where it ran Python, right answers, of", len(SUMS))
     for model, called, right in summary:
         print(f"  {model}: called {called}, right {right}")
     return 0
