@@ -2,7 +2,6 @@
 
 What is coming, in order. What is already in is in the README and the release notes.
 
-- **After 4.8**: find out on the Mac which models call the calculator.
 - **v5**: voice, on the Mac: speech to text with Whisper (5.0), then answers read aloud with
   Kokoro (5.5).
 - **v6**: LoRA files from this Mac, and LoRAs on the distilled 4B if a check shows they work.
@@ -29,10 +28,12 @@ Any MLX model works; these are the ones to start with. Get one with
 - **Qwen3 8B** follows *Let models think* in Settings: off, it answers straight away (quick
   questions, "what is the square root of 4761"); on, it works things out first. One download for both.
 - **DeepSeek R1** always thinks, which is what it is for: math, logic and puzzles. On trivial
-  questions it thinks far longer than it needs to; use Qwen3 with thinking off for those, or the
-  calculator (4.8) if it calls it.
-- **Qwen2.5 Coder** for the code editor and code questions. It does not think.
-- **Gemma 3 12B** reads attached pictures and reference pictures, and chats too.
+  questions it thinks far longer than it needs to; use Qwen3 with thinking off for those. It is
+  not given the calculator: it thought about it and never called it.
+- **Qwen2.5 Coder** for the code editor and code questions. It does not think, and is not
+  given the calculator.
+- **Gemma 3 12B** reads attached pictures and reference pictures, and chats too. It and Qwen3
+  8B use the calculator.
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
   base 4B is slower (50 steps) and is the one LoRAs draw on.
 - **Whisper** and **Kokoro** are listed for when voice comes in; HikariLM does not use them yet.
@@ -50,80 +51,18 @@ settings keep working across each upgrade. Real-model checks run on the Mac in `
 a check downloads what it needs and deletes it after, unless it was there before. Unit tests
 download nothing.
 
-## After 4.8.0: which models call the calculator
+## The calculator: what is left
 
-4.8.0 gives the chat models a scientific calculator. Models whose chat template takes `tools`
-get it there; the rest get it described in the system message, in the `<tool_call>` format. The
-helper reads calls in Qwen's, Mistral's, DeepSeek's and Gemma's formats. Whether each model
-actually calls it is not known yet.
+4.8.0 has it. Qwen3 8B and Gemma 3 12B call it (4 of 4 sums, all right, in
+`tests/check_tools.py`); coders, DeepSeek R1 and BitNet models are left without it
+(`tools.offered`).
 
-What `tests/check_templates.py` found, from the templates alone (no model):
+- [ ] gpt-oss 20B: its calls (Harmony, `to=functions.calculate`) are read, but its thinking
+  channels are not split off yet. Run `check_tools.py` with it if it is downloaded.
+- [ ] Any new recommended chat model: run `check_tools.py` with it first; one that does not call
+  it well goes in `tools.POOR_CALLERS`.
 
-| Model | The calculator goes in | Notes |
-|---|---|---|
-| Qwen3 8B, Qwen2.5 Coder | as the template's own tools | Hermes `<tool_call>` format |
-| gpt-oss 20B | as the template's own tools | Harmony calls (`to=functions.calculate`), read since 4.8.0; its thinking channels are not split off yet |
-| DeepSeek R1 8B (mlx-community), Gemma 3, Mistral 7B v0.3 | as text in the system message | their templates take no tools; Gemma 3 runs in mlx-vlm |
-| Falcon3 | as text in the system message | its template takes tools but put the model's call in the user's turn, so it called again and again |
-
-Mistral 7B v0.3's template refuses a system message ("roles must alternate"), so the rules and
-the calculator go at the start of the first message.
-
-The first `check_tools.py` run on the Mac (issue 8), before the fixes below:
-
-| Model | Called it | Right | What happened |
-|---|---|---|---|
-| DeepSeek R1 8B | 0 of 4 | 2 | never called; worked the sums by hand and got 2^40 and the product wrong |
-| Qwen2.5 Coder | 0 of 4 | 0 | wrote each call as a ```` ```json ```` block, which was not read then; read since |
-| Qwen3 8B | — | — | every chat failed, "chat_template is not set"; the worker now reads the template from the model's folder when the tokenizer comes without one (issue 7) |
-| Falcon3 | yes | 1 of 2 (stopped) | named the tool after the function (`sqrt`, `function`) or left the expression out, ten calls a sum; such calls are now read, and three failed calls end the tool use |
-
-The second run (issue 9; mlx-lm 0.31.3, mlx-vlm 0.7.11, transformers 5.20.2):
-
-| Model | Called it | Right | What happened |
-|---|---|---|---|
-| Qwen3 8B | 4 of 4 | 4 | works |
-| DeepSeek R1 8B | 0 of 4 | 2 | wrote two calls as bare JSON after its reasoning, not read then; read since |
-| Qwen2.5 Coder | 0 of 4 | 0 | made up a wrapper each time (`<tools>`, ```` ```xml ```` with `<function-call>` or `<function name=… arguments=…/>`); read since, but coders no longer get the calculator at all: they are there to write code |
-
-The third run (coders left out): Qwen3 8B called it 4 of 4 and got all 4 right. DeepSeek R1
-8B called it 0 of 4 and got 3 right, the product wrong (9474948028303), though its answers
-named calculator functions (`sind(30) * 12.5`), so it read the description. With the
-description moved into the question it still never called (its thinking mentioned the
-calculator three times).
-
-Left without the calculator (`tools.offered`), so they never see the description:
-
-- coders (names with "code" or "devstral"): they are there to write code;
-- DeepSeek R1 (`tools.POOR_CALLERS`): thinks about it, never calls it;
-- BitNet models (Falcon3 1.58-bit): called it by the wrong name over and over.
-
-Gemma 3's calls were not caught: it writes Python in a ```` ```tool_code ```` block, which was
-only read as `calculate("…")`. Since then the block is read as Python (`print(math.sqrt(4761))`,
-`[calculate(expression=2**40)]`, the sum alone).
-
-Gemma 3 12B, once it was found (its weight index names five files, the repo has two): called
-it 4 of 4 with the right sums, right 0, since after each result it asked a new question
-("What is 7! / (3! * 4!)?"). Its template has no tool turn, so the result came back as a bare
-user's turn, which it read as the user answering a quiz. The result turn now says it is the
-calculator's result for the expression and asks for the answer.
-
-With that, Gemma 3 12B called it 4 of 4 and got all 4 right.
-
-Where it stands for 4.8.0:
-
-| Model | Calculator | Last run |
-|---|---|---|
-| Qwen3 8B | yes, the template's own tools | called 4 of 4, right 4 |
-| Gemma 3 12B | yes, as text (mlx-vlm) | called 4 of 4, right 4 |
-| Coders, DeepSeek R1, BitNet (Falcon3) | left without it | — |
-
-- [x] `tests/check_tools.py` with the suggested chat models.
-- [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
-  Harmony is the likely one), read it too.
-- [ ] Recommended models: note which ones use the calculator.
-
-### Later: full Python (no version yet)
+## Later: full Python (no version yet)
 
 The model writes a whole script (statistics, dates, a table of data) and the helper runs it. This
 needs a real sandbox on the Mac: no network, no files outside a scratch folder, and limits on
