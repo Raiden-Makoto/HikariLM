@@ -63,6 +63,12 @@ same models Python instead (`helper/python_tool.py`), with numpy, sympy, pandas,
 matplotlib in `~/.hikarilm/python-venv`, in macOS's sandbox, 30 seconds, 1.25 GB, 25,000
 characters of output, plots as pictures. Built and unit-tested off the Mac; not released.
 
+The venv is made with Python 3.11 or newer and asks for `scipy>=1.16.3`. macOS 27's loader
+refuses scipy 1.15 and older (`__DATA/__thread_bss has a zero-fill section type, but offset
+field is not zero`, [scipy#25635](https://github.com/scipy/scipy/issues/25635)), and on Python 3.10
+that is the newest scipy pip can get. Setup imports the compiled parts once and says so if they
+do not load; a venv made with an older Python is made again.
+
 - [ ] On the Mac: `hikarilm restart` (makes the venv), then `python3 tests/check_python.py`. Every
   line must be OK: the packages and a plot work inside the sandbox, every way out is refused, and
   the limits hold. A FAIL means the sandbox profile (`python_tool.profile`) needs changing.

@@ -126,6 +126,89 @@ class SandboxProfileTest(unittest.TestCase):
         self.assertLess(lines.index("(deny process-exec)"), lines.index('(allow process-exec (literal "/v/bin/python"))'))
 
 
+class PrepareTest(unittest.TestCase):
+    """The venv is made with Python 3.11 or newer, where pip gets a scipy macOS 27 can load."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, True)
+        env = {key: value for key, value in os.environ.items() if key != "HIKARILM_TOOL_PYTHON"}
+        patcher = mock.patch.dict(os.environ, {**env, "HIKARILM_HOME": self.home}, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.said = []
+
+    def test_scipy_is_one_macos_can_load(self):
+        self.assertIn("scipy>=1.16.3", python_tool.PACKAGES)
+
+    def test_minor_version_from_pyvenv_cfg(self):
+        cfg = Path(self.home) / "pyvenv.cfg"
+        cfg.write_text("home = /usr/bin\ninclude-system-site-packages = false\nversion = 3.10.12\n")
+        self.assertEqual(python_tool._minor(cfg), 10)
+        cfg.write_text("version_info = 3.13.1.final.0\n")
+        self.assertEqual(python_tool._minor(cfg), 13)
+        self.assertIsNone(python_tool._minor(Path(self.home) / "none.cfg"))
+
+    def test_base_is_this_python_when_new_enough(self):
+        with mock.patch.object(sys, "version_info", (3, 12, 0)):
+            self.assertEqual(python_tool.base(), sys.executable)
+
+    def test_base_looks_for_a_newer_python(self):
+        with mock.patch.object(sys, "version_info", (3, 10, 4)), \
+                mock.patch.object(shutil, "which", lambda name: "/x/python3.12" if name == "python3.12" else None), \
+                mock.patch.object(os, "access", lambda path, mode: path == "/x/python3.12"):
+            self.assertEqual(python_tool.base(), "/x/python3.12")
+        with mock.patch.object(sys, "version_info", (3, 9, 6)), mock.patch.object(shutil, "which", lambda name: None), \
+                mock.patch.object(os, "access", lambda path, mode: False):
+            self.assertIsNone(python_tool.base())
+
+    def test_no_new_enough_python_says_what_to_install(self):
+        with mock.patch.object(python_tool, "base", lambda: None), \
+                mock.patch.object(engine, "_prepare_venv") as made:
+            self.assertFalse(python_tool.prepare(self.said.append))
+        made.assert_not_called()
+        self.assertIn("brew install python@3.13", self.said[0])
+
+    def test_a_venv_made_with_an_old_python_is_made_again(self):
+        folder = python_tool.venv()
+        folder.mkdir(parents=True)
+        (folder / "pyvenv.cfg").write_text("version = 3.10.12\n")
+        (folder / engine.READY_MARK).write_text("numpy sympy pandas scipy matplotlib\n")
+        seen = {}
+
+        def made(where, interpreter, packages, what, say, base_python):
+            seen.update(exists=where.exists(), base=base_python, packages=packages)
+            return False
+
+        with mock.patch.object(engine, "_prepare_venv", made):
+            self.assertFalse(python_tool.prepare(self.said.append, "/x/python3.13"))
+        self.assertEqual(seen, {"exists": False, "base": "/x/python3.13", "packages": python_tool.PACKAGES})
+        self.assertIn("Python 3.10", self.said[0])
+
+    def test_a_venv_on_a_new_python_is_kept(self):
+        folder = python_tool.venv()
+        folder.mkdir(parents=True)
+        (folder / "pyvenv.cfg").write_text("version = 3.12.7\n")
+        with mock.patch.object(engine, "_prepare_venv", lambda *a: False):
+            python_tool.prepare(self.said.append, "/x/python3.13")
+        self.assertTrue(folder.exists())
+
+    def test_packages_that_do_not_load_are_reported_and_set_up_again(self):
+        folder = python_tool.venv()
+        (folder / "bin").mkdir(parents=True)
+        (folder / engine.READY_MARK).write_text(" ".join(python_tool.PACKAGES) + "\n")
+        fake = folder / "bin" / "python"
+        fake.write_text("#!/bin/sh\ncase \"$2\" in *scipy.sparse*) echo \"ImportError: dlopen(_spropack.so): "
+                        "section '__DATA/__thread_bss' has a zero-fill section type\" >&2; exit 1;; esac\n"
+                        "echo '[]'\n")
+        fake.chmod(0o755)
+        self.assertFalse(python_tool.prepare(self.said.append, sys.executable))
+        self.assertIn("do not load", self.said[-1])
+        self.assertIn("__thread_bss", self.said[-1])
+        self.assertFalse((folder / engine.READY_MARK).exists())
+        self.assertFalse((folder / python_tool.PATHS).exists())
+
+
 def watch(pieces) -> tuple[str, dict | None, tools.CallWatch]:
     seen = tools.CallWatch()
     shown = "".join(seen.feed(piece) for piece in pieces)

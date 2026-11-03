@@ -35,7 +35,12 @@ FILE_BYTES = 50 * 1024 * 1024   # largest file it may write in its scratch folde
 CODE_CHARS = 20_000
 PLOTS = 4
 PLOT_BYTES = 2_000_000
-PACKAGES = ("numpy", "sympy", "pandas", "scipy", "matplotlib")
+# macOS 27's loader refuses the compiled parts of scipy 1.15 and older ("__DATA/__thread_bss has
+# a zero-fill section type, but offset field is not zero"); 1.16.3 and newer load, and need
+# Python 3.11 or newer, so on an older Python pip would quietly pick a scipy that cannot load.
+PACKAGES = ("numpy", "sympy", "pandas", "scipy>=1.16.3", "matplotlib")
+NEWEST = 14
+OLDEST = 11
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 PATHS = ".hikarilm-paths.json"  # where the venv's Python lives, written when it is set up
 SETUP = "Python for the models is not set up yet. Run  hikarilm restart  in Terminal; it installs it once."
@@ -64,11 +69,48 @@ def ready() -> bool:
         return False
 
 
-def prepare(say, base_python: str = sys.executable) -> bool:
+def _minor(cfg: Path) -> int | None:
+    """The 3.x a venv was made with, from its pyvenv.cfg."""
+    try:
+        for line in cfg.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() in ("version", "version_info"):
+                parts = value.strip().split(".")
+                return int(parts[1]) if parts[0] == "3" and len(parts) > 1 else None
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def base() -> str | None:
+    """A Python 3.11 or newer to make the venv with: the one running HikariLM, or another one
+    from Homebrew, python.org or the PATH."""
+    if sys.version_info >= (3, OLDEST):
+        return sys.executable
+    for minor in range(NEWEST, OLDEST - 1, -1):
+        name = f"python3.{minor}"
+        for found in (shutil.which(name), f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}",
+                      f"/Library/Frameworks/Python.framework/Versions/3.{minor}/bin/{name}"):
+            if found and os.access(found, os.X_OK):
+                return found
+    return None
+
+
+def prepare(say, base_python: str | None = None) -> bool:
     """Make ~/.hikarilm/python-venv with the packages, once, and note where its Python lives
     (the sandbox lets the script read only that). True when it is ready."""
     if os.environ.get("HIKARILM_TOOL_PYTHON"):
         return True
+    base_python = base_python or base()
+    if not base_python:
+        say(f"  Python for the models needs Python 3.{OLDEST} or newer (this is {sys.version.split()[0]}), "
+            "because older ones get a scipy macOS cannot load. Install one with  brew install python@3.13  "
+            "or from python.org, then run  hikarilm restart.")
+        return False
+    made = _minor(venv() / "pyvenv.cfg")
+    if made is not None and made < OLDEST:
+        say(f"Python for the models was made with Python 3.{made}; making it again with a newer one…")
+        shutil.rmtree(venv(), ignore_errors=True)
     if not engine._prepare_venv(venv(), python(), PACKAGES, "Python for the models (" + ", ".join(PACKAGES) + ")",
                                 say, base_python):
         return False
@@ -82,11 +124,24 @@ def prepare(say, base_python: str = sys.executable) -> bool:
             subprocess.run([str(python()), "-c", "import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot"],
                            env={**os.environ, "MPLCONFIGDIR": str(venv() / "mplconfig")}, capture_output=True,
                            timeout=300)
+            loads = subprocess.run([str(python()), "-c", LOADS], capture_output=True, text=True, timeout=300,
+                                   env={**os.environ, "MPLBACKEND": "Agg", "MPLCONFIGDIR": str(venv() / "mplconfig")})
+            if loads.returncode:
+                lines = (loads.stderr or loads.stdout).strip().splitlines()
+                say(f"  Python for the models is installed but its packages do not load: "
+                    f"{lines[-1] if lines else loads.returncode}")
+                (venv() / engine.READY_MARK).unlink(missing_ok=True)
+                return False
             (venv() / PATHS).write_text(done.stdout, encoding="utf-8")
         except (OSError, subprocess.SubprocessError) as error:
             say(f"  Python for the models could not be checked ({error}). Run  hikarilm restart  to retry.")
             return False
     return True
+
+
+# The parts with compiled code that macOS has refused before.
+LOADS = ("import numpy, pandas, sympy, matplotlib.pyplot, scipy.sparse.linalg, scipy.integrate, "
+         "scipy.optimize, scipy.special, scipy.stats")
 
 
 def _paths() -> list[str]:

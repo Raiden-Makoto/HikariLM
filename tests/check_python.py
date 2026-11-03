@@ -31,7 +31,7 @@ TMP = os.path.join(os.path.realpath(tempfile.gettempdir()), "hikarilm-sandbox-ch
 
 WORKS = [
     ("numpy, sympy, pandas, scipy",
-     "import numpy as np, sympy, pandas as pd, scipy.stats as st\n"
+     "import numpy as np, sympy, pandas as pd, scipy.stats as st, scipy.sparse.linalg, scipy.integrate\n"
      "print(np.linalg.solve([[2, 1], [1, 3]], [3, 5]).round(6).tolist())\n"
      "print(sympy.integrate(sympy.sin(sympy.Symbol('x')) ** 2))\n"
      "print(pd.DataFrame({'a': [1, 2, 3]})['a'].mean())\n"
