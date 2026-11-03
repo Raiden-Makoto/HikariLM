@@ -108,8 +108,17 @@ it 4 of 4 with the right sums, right 0, since after each result it asked a new q
 user's turn, which it read as the user answering a quiz. The result turn now says it is the
 calculator's result for the expression and asks for the answer.
 
-- [ ] Run `python3 tests/check_tools.py mlx-community/gemma-3-12b-it-4bit` again and write
-  down what it finds here.
+With that, Gemma 3 12B called it 4 of 4 and got all 4 right.
+
+Where it stands for 4.8.0:
+
+| Model | Calculator | Last run |
+|---|---|---|
+| Qwen3 8B | yes, the template's own tools | called 4 of 4, right 4 |
+| Gemma 3 12B | yes, as text (mlx-vlm) | called 4 of 4, right 4 |
+| Coders, DeepSeek R1, BitNet (Falcon3) | left without it | — |
+
+- [x] `tests/check_tools.py` with the suggested chat models.
 - [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
   Harmony is the likely one), read it too.
 - [ ] Recommended models: note which ones use the calculator.
