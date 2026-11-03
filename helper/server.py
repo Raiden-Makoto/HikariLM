@@ -377,8 +377,8 @@ class Handler(BaseHTTPRequestHandler):
         summary = decision["summary"]
         self._stream_start()
         started = True
-        calculator = tools.offered(settings, model, engine.bitnet_model(model))
-        offered = tools.text_tokens() if calculator else 0
+        given_tool = tools.offered(settings, model, engine.bitnet_model(model))
+        offered = tools.text_tokens() if given_tool else 0
         self._stream_line({"hikarilm": "context", **room, "tokens": decision["tokens"] + offered,
                            "threshold": decision["threshold"]})
         if ruled_by:
@@ -426,7 +426,7 @@ class Handler(BaseHTTPRequestHandler):
             # Thinking takes context too: never more than is left after the prompt and the reply.
             left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
             budget_tokens = max(256, min(budget_tokens or left, left))
-        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if calculator else None
+        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if given_tool else None
         asked, answers, seen = sent, [], set()
         while True:
             try:
@@ -437,7 +437,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._stream_line({"error": str(error)})
                 return
             router.commit(model)
-            watch = tools.CallWatch() if calculator else None
+            watch = tools.CallWatch() if given_tool else None
             thought = self._stream_reply(response, budget_tokens, watch)
             if getattr(self, "_gone", False) or not (watch and watch.call):
                 break
@@ -448,13 +448,17 @@ class Handler(BaseHTTPRequestHandler):
             key = tools.same_call(watch.call)
             failed = sum("error" in answer for answer in answers)
             if key in seen or len(answers) >= tools.MAX_CALLS or failed >= tools.MAX_ERRORS:
-                # Small models can ask for the same sum over and over, or keep getting the call
-                # wrong. They get what was worked out as text with the question, and no tool,
-                # so they answer from it.
+                # Small models can run the same code over and over, or keep getting it wrong.
+                # They get what it printed as text with the question, and no tool, so they
+                # answer from it.
                 sent, offer = tools.answer_from(asked, answers), None
                 continue
             seen.add(key)
-            # The model asked the calculator: answer it, and it goes on from the result.
+            # The model wrote code: run it, and it goes on from the output. The page shows
+            # the code while it runs, which can take up to python_tool.SECONDS.
+            code = watch.call.get("code") or ""
+            if not self._stream_line({"hikarilm": "tool_start", "name": "python", "code": code}):
+                return
             answer = tools.run(watch.call)
             answers.append(answer)
             # Not "error": that ends the reply on the page.

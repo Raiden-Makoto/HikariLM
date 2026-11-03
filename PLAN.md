@@ -30,12 +30,13 @@ Any MLX model works; these are the ones to start with. Get one with
 - **DeepSeek R1** is the one for dense reasoning: hard math, proofs, logic, and analysis that
   has to be worked through step by step. It always thinks, at length, and that long chain of
   thought is what makes it better than Qwen3 there. On simple questions it thinks far longer
-  than it needs to; use Qwen3 with thinking off for those. It is not given the calculator: it
-  thought about it and never called it, so it works the math out in its reasoning.
+  than it needs to; use Qwen3 with thinking off for those. It is not given the Python tool:
+  given the calculator, it thought about it and never called it, so it works the math out in
+  its reasoning.
 - **Qwen2.5 Coder** for the code editor and code questions. It does not think, and is not
-  given the calculator.
+  given the Python tool.
 - **Gemma 3 12B** reads attached pictures and reference pictures, and chats too. It and Qwen3
-  8B use the calculator.
+  8B call the Python tool.
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
   base 4B is slower (50 steps) and is the one LoRAs draw on.
 - **Whisper** and **Kokoro** are listed for when voice comes in; HikariLM does not use them yet.
@@ -54,32 +55,27 @@ settings keep working across each upgrade. Real-model checks run on the Mac in `
 a check downloads what it needs and deletes it after, unless it was there before. Unit tests
 download nothing.
 
-## The calculator: what is left
+## v4.9.0: Python in place of the calculator
 
-4.8.0 has it. Qwen3 8B and Gemma 3 12B call it (4 of 4 sums, all right, in
-`tests/check_tools.py`); coders, DeepSeek R1 and BitNet models are left without it
-(`tools.offered`).
+4.8.0's calculator showed who calls tools: Qwen3 8B and Gemma 3 12B (4 of 4 sums, all right);
+coders, DeepSeek R1 and BitNet models are left without it (`tools.offered`). 4.9.0 gives the
+same models Python instead (`helper/python_tool.py`), with numpy, sympy, pandas, scipy and
+matplotlib in `~/.hikarilm/python-venv`, in macOS's sandbox, 30 seconds, 1.25 GB, 25,000
+characters of output, plots as pictures. Built and unit-tested off the Mac; not released.
 
-- [ ] gpt-oss 20B: its calls (Harmony, `to=functions.calculate`) are read, but its thinking
+- [ ] On the Mac: `hikarilm restart` (makes the venv), then `python3 tests/check_python.py`. Every
+  line must be OK: the packages and a plot work inside the sandbox, every way out is refused, and
+  the limits hold. A FAIL means the sandbox profile (`python_tool.profile`) needs changing.
+- [ ] `python3 tests/check_tools.py` with Qwen3 8B and Gemma 3 12B: they should still call the
+  tool for the 4 sums and get them right, now by writing code. Write what it finds here.
+- [ ] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
+  with the code, the output and the picture, and the plot is still there after reopening the chat.
+  An answer from 4.8 still shows its *Calculated:* line.
+- [ ] gpt-oss 20B: its calls (Harmony, `to=functions.python`) are read, but its thinking
   channels are not split off yet. Run `check_tools.py` with it if it is downloaded.
 - [ ] Any new recommended chat model: run `check_tools.py` with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
-
-## v4.9.0: Python in place of the calculator
-
-Built on the `python-tool` branch, not on main yet (main is what `hikarilm update` pulls). The
-models that call the calculator get Python instead (`helper/python_tool.py`), with numpy, sympy,
-pandas, scipy and matplotlib in `~/.hikarilm/python-venv`, in macOS's sandbox: 30 seconds,
-1.25 GB, 25,000 characters of output, plots as pictures. Unit-tested off the Mac.
-
-- [ ] On the Mac, on the branch: `hikarilm restart` (makes the venv), then
-  `python3 tests/check_python.py`. Every line must be OK: the packages and a plot work inside
-  the sandbox, every way out is refused, and the limits hold.
-- [ ] `python3 tests/check_tools.py` with Qwen3 8B and Gemma 3 12B: still 4 of 4, now by
-  writing code.
-- [ ] In the page: a plot question shows *Ran Python* with the code, output and picture, still
-  there after reopening the chat; an answer from 4.8 still shows its *Calculated:* line.
-- [ ] Then merge into main, README, `__version__ = "4.9.0"`, tag `v4.9.0`.
+- [ ] README, `__version__ = "4.9.0"`, tag `v4.9.0`, once the checks pass.
 
 ## Voice
 

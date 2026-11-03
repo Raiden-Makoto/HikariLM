@@ -123,6 +123,7 @@ async function send() {
   let answerStart = 0;
   let thinkingCut = false;
   const calls = [];
+  let running = null;
   const thinkSeconds = () => (thinkStart ? ((thinkEnd || Date.now()) - thinkStart) / 1000 : null);
   const drawThought = () => showThought(reply.thought, thought,
     { seconds: thinkSeconds(), live: Boolean(thinkStart && !thinkEnd), cut: thinkingCut });
@@ -266,11 +267,19 @@ async function send() {
           drawThought();
           continue;
         }
+        if (event.hikarilm === "tool_start") {
+          running = showToolCall(reply.calls, { code: event.code || "", running: true });
+          status.textContent = "Running Python…";
+          scrollLog();
+          continue;
+        }
         if (event.hikarilm === "tool") {
-          const call = { expression: event.expression, ...(event.tool_error ? { error: event.tool_error } : { result: event.result }) };
+          const call = { code: event.code || "", output: event.output || "", ...(event.tool_error ? { error: event.tool_error } : {}),
+            ...(event.pictures?.length ? { pictures: event.pictures } : {}) };
           calls.push(call);
-          showToolCall(reply.calls, call);
-          status.textContent = "Calculated " + event.expression.slice(0, 40) + ". Streaming from " + modelLabel(model) + "…";
+          showToolCall(reply.calls, call, running);
+          running = null;
+          status.textContent = "Ran Python. Streaming from " + modelLabel(model) + "…";
           scrollLog();
           continue;
         }

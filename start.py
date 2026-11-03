@@ -85,7 +85,7 @@ def report_pictures() -> None:
 def prepare(url: str) -> None:
     """The first-start steps: the venvs, the notes model, what models there are. Shown in the
     terminal, since the first time installs packages."""
-    from helper import engine, names, store
+    from helper import engine, names, python_tool, store
 
     say("HikariLM " + __version__)
     moved = store.move_old_home()
@@ -95,6 +95,7 @@ def prepare(url: str) -> None:
     say(f"  saved:  {store.home()}")
     if engine.prepare(say):
         engine.prepare_embed(say)
+    python_tool.prepare(say)
     mlx = engine.names()
     say("MLX models: " + ", ".join(names.label(name) for name in mlx) if mlx else
         "No MLX models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download "
