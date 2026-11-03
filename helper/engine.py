@@ -153,6 +153,32 @@ def _is_mlx(folder: Path, trusted: bool = False) -> bool:
             and any(folder.glob("*.safetensors")))
 
 
+# Models with a config.json and weights that do not chat. Whisper (speech to text) says
+# "model_type": "whisper"; Kokoro (text to speech) has no model_type at all, which every
+# language model's config has. Encoder-only and audio models are listed for the same reason.
+NOT_CHAT = {"whisper", "wav2vec2", "hubert", "parakeet", "kokoro", "bert", "nomic_bert", "roberta",
+            "xlm-roberta", "modernbert", "clip", "siglip", "t5", "encodec", "mimi", "dac"}
+
+
+def is_chat(config: dict | None) -> bool:
+    """Whether a model's config is a chat (language) model's, not speech, audio or an encoder."""
+    model_type = str((config or {}).get("model_type") or "").lower()
+    return bool(model_type) and model_type not in NOT_CHAT
+
+
+# Models with a config.json and weights that do not chat. Whisper (speech to text) says
+# "model_type": "whisper"; Kokoro (text to speech) has no model_type at all, which every
+# language model's config has. Encoder-only and audio models are listed for the same reason.
+NOT_CHAT = {"whisper", "wav2vec2", "hubert", "parakeet", "kokoro", "bert", "nomic_bert", "roberta",
+            "xlm-roberta", "modernbert", "clip", "siglip", "t5", "encodec", "mimi", "dac"}
+
+
+def is_chat(config: dict | None) -> bool:
+    """Whether a model's config is a chat (language) model's, not speech, audio or an encoder."""
+    model_type = str((config or {}).get("model_type") or "").lower()
+    return bool(model_type) and model_type not in NOT_CHAT
+
+
 def is_bitnet(config: dict | None) -> bool:
     quantization = (config or {}).get("quantization_config")
     return isinstance(quantization, dict) and quantization.get("quant_method") == "bitnet"
@@ -240,7 +266,7 @@ def _snapshots(repo: Path) -> list[Path]:
 
 def _complete_snapshot(repo: Path, trusted: bool) -> Path | None:
     for folder in _snapshots(repo):
-        if _is_mlx(folder, trusted) and not missing_files(folder):
+        if _is_mlx(folder, trusted) and is_chat(_config(folder)) and not missing_files(folder):
             return folder
     return None
 
@@ -260,6 +286,12 @@ def why_missing(model: str) -> str:
         config = _config(folder)
         if config is None:
             reasons.append(f"{folder.name[:8]}: no readable config.json")
+        elif not is_chat(config):
+            kind = config.get("model_type") or "no model_type"
+            reasons.append(f"{folder.name[:8]}: not a chat model ({kind}; speech, audio or an encoder)")
+        elif not is_chat(config):
+            kind = config.get("model_type") or "no model_type"
+            reasons.append(f"{folder.name[:8]}: not a chat model ({kind}; speech, audio or an encoder)")
         elif not any(folder.glob("*.safetensors")):
             reasons.append(f"{folder.name[:8]}: no .safetensors files")
         elif not ("quantization" in config or _trusted(model) or is_bitnet(config)):
@@ -292,7 +324,7 @@ def found() -> dict[str, Path]:
                 out[name] = folder
         own = store.home() / "models"
         for folder in sorted(own.iterdir()) if own.is_dir() else []:
-            if folder.is_dir() and _is_mlx(folder, trusted=True):
+            if folder.is_dir() and _is_mlx(folder, trusted=True) and is_chat(_config(folder)):
                 out[folder.name] = folder
         _scan = (time.monotonic(), out)
         return out
