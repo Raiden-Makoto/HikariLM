@@ -23,7 +23,7 @@ Any MLX model works; these are the ones to start with. Get one with
 | Speech to text (from 5.0) | Whisper large-v3 turbo | `mlx-community/whisper-large-v3-turbo` | 1.6 GB |
 | Speech to text, smaller (from 5.0) | Whisper small | `mlx-community/whisper-small-mlx` | 0.5 GB |
 | Reading aloud (from 5.5) | Kokoro 82M | `mlx-community/Kokoro-82M-bf16` | 0.4 GB |
-| Optional: BitNet | Falcon3 10B 1.58-bit | `tiiuae/Falcon3-10B-Instruct-1.58bit` | 4.0 GB |
+| Optional: BitNet | Any BitNet model | `<bitnet model>` | varies |
 
 - **Qwen3 8B** follows *Let models think* in Settings: off, it answers straight away (quick
   questions, "what is the square root of 4761"); on, it works things out first. One download for both.
@@ -40,8 +40,9 @@ Any MLX model works; these are the ones to start with. Get one with
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
   base 4B is slower (50 steps) and is the one LoRAs draw on.
 - **Whisper** and **Kokoro** are listed for when voice comes in; HikariLM does not use them yet.
-- **BitNet** models are optional: 1.58-bit weights, small for their size class. The rest of the
-  Falcon3 and Falcon-E 1.58-bit family and Microsoft's `microsoft/bitnet-b1.58-2B-4T` work too.
+- **BitNet** models are optional: 1.58-bit weights, small for their size class. None is
+  recommended over the others; any one HikariLM runs will do (the Falcon3 and Falcon-E
+  1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T`). They get no tools.
 - Nomic's `nomic-embed-text-v1.5` (about 0.55 GB) is downloaded by HikariLM itself, for finding
   earlier chats; nothing to do.
 

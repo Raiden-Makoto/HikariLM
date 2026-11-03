@@ -9,6 +9,9 @@ from helper import engine, imagegen
 
 GROUPS = ("Chat", "Pictures", "Optional")
 
+# No BitNet model is recommended over the others, so its entry names none.
+BITNET = "<bitnet model>"
+
 RECOMMENDED = [
     {"group": "Chat", "name": "Qwen3 8B", "repo": "mlx-community/Qwen3-8B-4bit", "download": "4.6 GB",
      "for": "Everyday chat, thinking or not",
@@ -32,15 +35,19 @@ RECOMMENDED = [
     {"group": "Pictures", "name": "FLUX.2 klein base 4B", "repo": "mflux-community/flux-2-klein-base-4b-mflux-q4",
      "download": "4.6 GB", "for": "Drawing with LoRAs",
      "note": "Slower (50 steps); the one LoRAs draw on."},
-    {"group": "Optional", "name": "Falcon3 10B 1.58-bit", "repo": "tiiuae/Falcon3-10B-Instruct-1.58bit",
-     "download": "4.0 GB", "for": "BitNet",
-     "note": "1.58-bit weights: small for its size class. Chat only, no tools."},
+    {"group": "Optional", "name": "Any BitNet model", "repo": BITNET, "download": "varies", "for": "BitNet",
+     "note": "1.58-bit weights: small for their size class. Any one HikariLM runs will do (the Falcon3 and "
+             "Falcon-E 1.58-bit family, Microsoft's bitnet-b1.58-2B-4T); put its repo in the command. "
+             "Chat only, no tools."},
 ]
 
 
 def listing() -> list[dict]:
     """Each recommended model with its download command, and whether it is on this Mac."""
     engine.forget_scan()
-    have = set(engine.found()) | {item["id"] for item in imagegen.picture_models()[0]}
+    chat = set(engine.found())
+    have = chat | {item["id"] for item in imagegen.picture_models()[0]}
+    if any(engine.bitnet_model(name) for name in chat):
+        have.add(BITNET)
     return [{**model, "command": imagegen.DOWNLOAD + model["repo"], "have": model["repo"] in have}
             for model in RECOMMENDED]

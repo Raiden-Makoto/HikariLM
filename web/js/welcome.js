@@ -10,7 +10,7 @@ function modelBox(model) {
   const name = document.createElement("strong");
   name.textContent = model.name + " · " + model.for;
   const size = document.createElement("span");
-  size.textContent = model.have ? "Downloaded" : model.download + " download";
+  size.textContent = model.have ? "Downloaded" : /^\d/.test(model.download) ? model.download + " download" : "Size " + model.download;
   head.append(name, size);
   const note = document.createElement("p");
   note.textContent = model.note;

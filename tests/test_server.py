@@ -93,6 +93,12 @@ class ChatThroughServerTest(unittest.TestCase):
         self.assertEqual(body["chat"], 2)
         qwen = next(model for model in body["models"] if model["name"] == "Qwen3 8B")
         self.assertEqual(qwen["command"], "~/.hikarilm/venv/bin/hf download mlx-community/Qwen3-8B-4bit")
+        # No BitNet model is recommended: any one downloaded marks the entry.
+        add_model(Path(os.environ["HF_HUB_CACHE"]), "tiiuae/Falcon-E-3B-Instruct",
+                  {"model_type": "llama", "quantization_config": {"quant_method": "bitnet"}})
+        with urllib.request.urlopen(self.base + "/api/welcome", timeout=30) as response:
+            body = json.loads(response.read())
+        self.assertIn("<bitnet model>", {model["repo"] for model in body["models"] if model["have"]})
 
     def test_a_picture_is_described(self):
         lines = self.post("/api/describe", {"model": GEMMA, "image": PNG_B64, "name": "dot.png"})
