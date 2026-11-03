@@ -86,10 +86,17 @@ The second run (issue 9; mlx-lm 0.31.3, mlx-vlm 0.7.11, transformers 5.20.2):
 | DeepSeek R1 8B | 0 of 4 | 2 | wrote two calls as bare JSON after its reasoning, not read then; read since |
 | Qwen2.5 Coder | 0 of 4 | 0 | made up a wrapper each time (`<tools>`, ```` ```xml ```` with `<function-call>` or `<function name=… arguments=…/>`); read since, but coders no longer get the calculator at all: they are there to write code |
 
+The third run (coders left out): Qwen3 8B called it 4 of 4 and got all 4 right. DeepSeek R1
+8B called it 0 of 4 and got 3 right, the product wrong (9474948028303), though its answers
+named calculator functions (`sind(30) * 12.5`), so it read the description. DeepSeek says R1
+should get no system message, every instruction in the user's; since then it gets the
+description at the start of the question instead.
+
 - [ ] Run `python3 tests/check_tools.py` once more, and with Falcon3 and Gemma 3. Write down
-  what it finds here.
-- [ ] DeepSeek R1 8B: if it still never calls, try the description in the user's message
-  instead of the system message, else leave it without the calculator.
+  what it finds here. It now says when a model's thinking mentions the calculator but it
+  never called it.
+- [ ] DeepSeek R1 8B: if it still never calls with the description in the question, leave it
+  without the calculator.
 - [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
   Harmony is the likely one), read it too.
 - [ ] A model that does not call it reliably, or gets worse answers with it, is left without

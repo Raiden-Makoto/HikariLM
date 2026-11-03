@@ -416,7 +416,8 @@ class Handler(BaseHTTPRequestHandler):
             left = num_ctx - context.estimate_messages(sent) - documents.reply_room(num_ctx)
             budget_tokens = max(256, min(budget_tokens or left, left))
         calculator = tools.offered(settings, model)
-        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT} if calculator else None
+        offer = {"tools": tools.TOOLS, "tools_text": tools.AS_TEXT,
+                 "tools_in_user": bool(engine.THINKERS.search(model))} if calculator else None
         asked, answers, seen = sent, [], set()
         while True:
             try:

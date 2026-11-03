@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from helper import context, mlx_worker, store, tools
+from helper import context, engine, mlx_worker, store, tools
 from helper.calculator import MAX_CHARS, CalcError, calculate
 from tests.test_engine import CODER, GEMMA
 from tests.test_server import ChatThroughServerTest
@@ -217,6 +217,23 @@ class WorkerChatTest(unittest.TestCase):
         self.assertEqual(chat[3], {"role": "user", "content": "<tool_response>\n69\n</tool_response>"})
         # With the tool off (or used up), its description is left out.
         self.assertEqual(mlx_worker.tool_chat(self.CHAT[:2], None, tools.AS_TEXT, False)[0]["content"], "Rules.")
+
+
+class InUserTest(unittest.TestCase):
+    def test_deepseek_r1_gets_the_description_with_the_question(self):
+        # Issue 9: R1 never called it from the system message; DeepSeek says not to use one.
+        chat = [{"role": "system", "content": "Rules."}, {"role": "user", "content": "Hi"},
+                {"role": "assistant", "content": "Hello"}, {"role": "user", "content": "sqrt 4761?"},
+                {"role": "assistant", "content": "", "tool_calls": [
+                    {"function": {"name": "calculate", "arguments": {"expression": "sqrt(4761)"}}}]},
+                {"role": "tool", "content": "69"}]
+        out = mlx_worker.tool_chat(chat, tools.TOOLS, tools.AS_TEXT, False, in_user=True)
+        self.assertEqual(out[0], {"role": "system", "content": "Rules."})
+        self.assertEqual(out[1]["content"], "Hi")
+        self.assertEqual(out[3]["content"], tools.AS_TEXT + "\n\nsqrt 4761?")
+        self.assertEqual(out[5]["content"], "<tool_response>\n69\n</tool_response>")
+        self.assertNotIn("calculator tool", "".join(m["content"] for m in out[:3] + out[4:]))
+        self.assertTrue(engine.THINKERS.search("mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit"))
 
 
 class TemplateKindTest(unittest.TestCase):

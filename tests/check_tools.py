@@ -111,7 +111,8 @@ def main() -> int:
                 for call in result["calls"]:
                     print(f"    called: {call['expression']} -> {call.get('result') or 'Error: ' + call.get('tool_error', '')}")
                 if not result["calls"]:
-                    print("    no call")
+                    mentioned = "calculat" in result["thought"].lower()
+                    print("    no call" + (" (its thinking mentions the calculator)" if mentioned else ""))
                 if result["error"]:
                     print(f"    error: {result['error']}")
                 print(f"    answer {'right' if ok else 'WRONG'}: {result['answer'].strip()[:160]!r}")
