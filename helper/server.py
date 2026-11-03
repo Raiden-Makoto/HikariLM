@@ -436,9 +436,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"message": {"role": "assistant", "content": ""}, "done": True})
                 return
             key = tools.same_call(watch.call)
-            if key in seen or len(answers) >= tools.MAX_CALLS:
-                # Small models can ask for the same sum over and over. They get what was worked
-                # out as text with the question, and no tool, so they answer from it.
+            failed = sum("error" in answer for answer in answers)
+            if key in seen or len(answers) >= tools.MAX_CALLS or failed >= tools.MAX_ERRORS:
+                # Small models can ask for the same sum over and over, or keep getting the call
+                # wrong. They get what was worked out as text with the question, and no tool,
+                # so they answer from it.
                 sent, offer = tools.answer_from(asked, answers), None
                 continue
             seen.add(key)

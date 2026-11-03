@@ -69,10 +69,19 @@ What `tests/check_templates.py` found, from the templates alone (no model):
 Mistral 7B v0.3's template refuses a system message ("roles must alternate"), so the rules and
 the calculator go at the start of the first message.
 
-- [ ] Run `python3 tests/check_tools.py` on the Mac with the suggested chat models (Qwen3 8B,
-  DeepSeek R1 8B, Qwen2.5 Coder, Gemma 3 12B, Falcon3, and gpt-oss if it is there). It asks
-  each one four sums and says whether it called the calculator and got them right. Write down
-  what it found here.
+The first `check_tools.py` run on the Mac (issue 8), before the fixes below:
+
+| Model | Called it | Right | What happened |
+|---|---|---|---|
+| DeepSeek R1 8B | 0 of 4 | 2 | never called; worked the sums by hand and got 2^40 and the product wrong |
+| Qwen2.5 Coder | 0 of 4 | 0 | wrote each call as a ```` ```json ```` block, which was not read then; read since |
+| Qwen3 8B | — | — | every chat failed, "chat_template is not set"; the worker now reads the template from the model's folder when the tokenizer comes without one (issue 7) |
+| Falcon3 | yes | 1 of 2 (stopped) | named the tool after the function (`sqrt`, `function`) or left the expression out, ten calls a sum; such calls are now read, and three failed calls end the tool use |
+
+- [ ] Run `python3 tests/check_tools.py` again with the fixes (it now prints the venv's mlx-lm,
+  mlx-vlm and transformers versions first). Write down what it finds here.
+- [ ] DeepSeek R1 8B: if it still never calls, try the description in the user's message
+  instead of the system message, else leave it without the calculator.
 - [ ] For a model that writes calls in a format the helper does not read yet (gpt-oss's
   Harmony is the likely one), read it too.
 - [ ] A model that does not call it reliably, or gets worse answers with it, is left without

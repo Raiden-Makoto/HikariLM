@@ -13,6 +13,7 @@ Write what it finds in PLAN.md under v4.8.0.
 """
 
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -66,10 +67,24 @@ def ask(base: str, model: str, question: str) -> dict:
             "seconds": round(time.monotonic() - started, 1)}
 
 
+def versions() -> str:
+    """mlx-lm, mlx-vlm and transformers in the helper's venv, which decide how templates load."""
+    script = ("import importlib.metadata as m\n"
+              "for p in ('mlx-lm', 'mlx-vlm', 'transformers'):\n"
+              "    try: print(p, m.version(p))\n"
+              "    except m.PackageNotFoundError: print(p, 'missing')")
+    try:
+        done = subprocess.run([str(engine.python()), "-c", script], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:
+        return f"(could not ask the venv: {error})"
+    return ", ".join(done.stdout.split("\n")[:3]).strip(", ") or done.stderr.strip()[-300:]
+
+
 def main() -> int:
     if not context.load_settings()["tools"]["calculator"]:
         print("Turn on Settings, Let models use the calculator, first.")
         return 1
+    print("Venv:", versions())
     models = chat_models(sys.argv[1:])
     if not models:
         print("No chat models are downloaded.")

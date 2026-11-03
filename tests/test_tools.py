@@ -122,6 +122,38 @@ class CallWatchTest(unittest.TestCase):
         _, call, _ = watch(['<tool_call>{"name": "python", "arguments": {"code": "1"}}</tool_call>'])
         self.assertIn("no tool named python", tools.run(call)["error"])
 
+    def test_json_calls_with_no_marker(self):
+        # Issue 8: Qwen2.5 Coder wrote its calls as ```json blocks, Falcon3 as bare JSON.
+        coder = '```json\n{\n  "name": "calculate",\n  "arguments": {\n    "expression": "sqrt(4761)"\n  }\n}\n```'
+        falcon = '{\n  "name": "function",\n  "arguments": {\n    "expression": "2 ** 40"\n  }\n}'
+        for text, expression in ((coder, "sqrt(4761)"), ("Sure.\n" + coder, "sqrt(4761)"), (falcon, "2 ** 40")):
+            with self.subTest(text[:12]):
+                shown, call, _ = watch(chunks(text, 3))
+                self.assertEqual(shown, text.split("```")[0] if text.startswith("Sure") else "")
+                self.assertEqual(call, {"name": "calculate", "expression": expression})
+
+    def test_json_that_is_no_call_is_shown(self):
+        for text in ('Here:\n```json\n{"a": 1}\n```\nDone.', '{"a": [1, 2]} is JSON.', "```json\nnot json\n```",
+                     'It is {"name": "calculate", "arguments": {"expression": "1"}} in the middle.', "  \n[1] a note"):
+            with self.subTest(text[:12]):
+                self.assertEqual(watch(chunks(text, 3))[:2], (text, None))
+
+    def test_a_call_named_after_the_function_it_wants(self):
+        calls = {'{"name": "sqrt", "arguments": {"x": 4761}}': "sqrt(4761)",
+                 '{"name": "sqrt", "arguments": {"expression": "sqrt(4761)"}}': "sqrt(4761)",
+                 '{"name": "sqrt", "arguments": {"expression": "4761"}}': "sqrt(4761)",
+                 '{"name": "hypot", "arguments": {"a": 3, "b": 4}}': "hypot(3, 4)",
+                 '{"name": "calculate", "arguments": {"expr": "2^10"}}': "2^10",
+                 '{"name": "functions.calculate", "arguments": {"expression": "2^10"}}': "2^10"}
+        for body, expression in calls.items():
+            with self.subTest(body):
+                _, call, _ = watch(["<tool_call>" + body + "</tool_call>"])
+                self.assertEqual(call, {"name": "calculate", "expression": expression})
+        self.assertEqual(tools.run(watch(['<tool_call>{"name": "hypot", "arguments": {"a": 3, "b": 4}}</tool_call>'])[1])
+                         ["result"], "5")
+        _, call, _ = watch(['<tool_call>{"name": "calculate", "arguments": {}}</tool_call>'])
+        self.assertEqual(call["error"], 'calculate takes {"expression": "..."}')
+
     def test_text_that_only_looks_like_a_start_is_shown(self):
         self.assertEqual(watch(chunks("a < b and [TOOL is fine", 2))[:2], ("a < b and [TOOL is fine", None))
         self.assertEqual(watch(["<tool_call> never finished"])[:2], ("<tool_call> never finished", None))
@@ -266,6 +298,12 @@ class LoopTest(unittest.TestCase):
         shown, calls, _ = self.chat("calc-many: 1")
         self.assertEqual([call["result"] for call in calls], [str(1 + n) for n in range(tools.MAX_CALLS)])
         self.assertIn("[Calculator results: 1+0 = 1; 1+1 = 2;", shown)
+
+    def test_three_failed_calls_get_the_results_as_text(self):
+        # Falcon3 kept calling a tool by the wrong name until the ten calls ran out.
+        shown, calls, _ = self.chat("calc-many: 1/0")
+        self.assertEqual([call["tool_error"] for call in calls], ["division by zero"] * tools.MAX_ERRORS)
+        self.assertIn("no tools | [Calculator results: 1/0+0 = error: division by zero;", shown)
 
     def test_a_call_after_that_ends_the_answer(self):
         shown, calls, lines = self.chat("calc-stubborn: 2+2")

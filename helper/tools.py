@@ -15,6 +15,7 @@ import re
 from helper import calculator
 
 MAX_CALLS = 10   # different calls an answer; then it answers from the results it has
+MAX_ERRORS = 3   # calls that could not be worked out; then the same
 
 DESCRIPTION = (
     "A scientific calculator. Use it for any arithmetic or math instead of working it out by hand, "
@@ -63,7 +64,7 @@ def run(call: dict) -> dict:
 def same_call(call: dict) -> str:
     """Calls that ask for the same thing give the same key."""
     expression = call.get("expression") if isinstance(call.get("expression"), str) else ""
-    return f"{call.get('name')}:{''.join(expression.split())}:{call.get('error', '')}"
+    return f"{str(call.get('name')).strip().lower()}:{''.join(expression.split())}:{call.get('error', '')}"
 
 
 def answer_from(messages: list[dict], answers: list[dict]) -> list[dict]:
@@ -98,8 +99,11 @@ def as_messages(written: str, call: dict, answer: dict, number: int) -> list[dic
 # [TOOL_CALLS][{json}]. DeepSeek: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>
 # calculate ```json {args} ```. Gemma: ```tool_code calculate("…") ```. gpt-oss (Harmony):
 # to=functions.calculate<|channel|>commentary json<|message|>{args}<|call|>.
+# Qwen2.5 Coder often writes its call as a ```json block instead, and Falcon3 as bare JSON at the
+# start of its reply; those count only when the JSON has a name and arguments (LOOSE_STARTS).
 STARTS = ("<tool_call>", "[TOOL_CALLS]", "<｜tool▁calls▁begin｜>", "<｜tool▁call▁begin｜>", "```tool_code",
-          "to=functions.")
+          "to=functions.", "```json")
+LOOSE_STARTS = ("```json", "")
 _CALL_IN_CODE = re.compile(r"""(\w+)\(\s*(?:expression\s*=\s*)?("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)""")
 
 
@@ -112,6 +116,33 @@ def _json_after(text: str, opener: str = "{["):
         return json.JSONDecoder().raw_decode(text[at:])[0]
     except ValueError:
         return None
+
+
+def _expression(name: str, arguments) -> str | None:
+    """The sum a call asks for. Small models (Falcon3) name the tool after the function they
+    want, {"name": "sqrt", "arguments": {"x": 4761}}, or give the expression under another key."""
+    if isinstance(arguments, dict) and isinstance(arguments.get("expression"), str):
+        expression = arguments["expression"]
+    elif name != "calculate" and name not in calculator.FUNCTIONS:
+        return None
+    elif isinstance(arguments, dict):
+        values = [value for key, value in arguments.items() if key != "name"]
+        if len(values) == 1 and isinstance(values[0], str):
+            expression = values[0]
+        elif values and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+            expression = ", ".join(str(v) for v in values)
+        else:
+            return None
+    elif isinstance(arguments, (int, float)) and not isinstance(arguments, bool):
+        expression = str(arguments)
+    else:
+        return None
+    if name in calculator.FUNCTIONS and _NUMBERS.fullmatch(expression):
+        expression = f"{name}({expression})"
+    return expression
+
+
+_NUMBERS = re.compile(r"\s*-?[\d.]+(?:[eE][-+]?\d+)?(?:\s*,\s*-?[\d.]+(?:[eE][-+]?\d+)?)*\s*")
 
 
 def _call_from(value) -> dict | None:
@@ -127,14 +158,30 @@ def _call_from(value) -> dict | None:
             arguments = json.loads(arguments)
         except ValueError:
             arguments = {"expression": arguments}
-    name = value.get("name", "calculate")
-    expression = arguments.get("expression") if isinstance(arguments, dict) else None
-    call = {"name": name, "expression": expression}
-    if name != "calculate":
-        call["error"] = f"there is no tool named {name}; the one tool is calculate"
-    elif not isinstance(expression, str):
+    name = str(value.get("name", "calculate")).strip()
+    name = name[len("functions."):] if name.startswith("functions.") else name
+    expression = _expression(name, arguments)
+    if isinstance(expression, str):
+        # There is one tool, so a call by another name with a sum in it is taken as that.
+        return {"name": "calculate", "expression": expression}
+    call = {"name": name, "expression": None}
+    if name == "calculate" or name in calculator.FUNCTIONS:
         call["error"] = 'calculate takes {"expression": "..."}'
+    else:
+        call["error"] = f"there is no tool named {name}; the one tool is calculate"
     return call
+
+
+NOT_A_CALL = object()
+
+
+def _looks_like_call(value) -> bool:
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if isinstance(value, dict) and isinstance(value.get("function"), dict):
+        value = value["function"]
+    return (isinstance(value, dict) and isinstance(value.get("name"), str)
+            and any(key in value for key in ("arguments", "parameters")))
 
 
 def _parse(start: str, rest: str) -> dict | None:
@@ -156,6 +203,16 @@ def _parse(start: str, rest: str) -> dict | None:
         name = re.match(r"\w*", rest).group(0) or "?"
         value = _json_after(rest.split("<|message|>", 1)[-1], "{")
         return None if value is None else _call_from({"name": name, "arguments": value})
+    if start in LOOSE_STARTS:
+        body = rest.lstrip()
+        if not body:
+            return None
+        if body[0] not in ("{[" if start else "{"):
+            return NOT_A_CALL
+        value = _json_after(body)
+        if value is None:
+            return None
+        return _call_from(value) if _looks_like_call(value) else NOT_A_CALL
     value = _json_after(rest)
     return None if value is None else _call_from(value)
 
@@ -170,18 +227,35 @@ class CallWatch:
         self.start = -1    # where a call starts in raw
         self.marker = ""
         self.call: dict | None = None
+        self.opened = False  # whether the reply has anything but spaces yet
+        self.searched = 0    # where to look for a start from, past JSON that was no call
 
     def feed(self, text: str) -> str:
         self.raw += text
         if self.call:
             return ""
-        if self.start < 0:
-            found = [(self.raw.find(s, self.shown), s) for s in STARTS]
-            found = [(at, s) for at, s in found if at >= 0]
-            if found:
-                self.start, self.marker = min(found)
-        if self.start >= 0:
-            self.call = _parse(self.marker, self.raw[self.start + len(self.marker):])
+        while True:
+            if self.start < 0 and not self.opened:
+                # Bare JSON counts only as the first thing in the reply.
+                lead = len(self.raw) - len(self.raw.lstrip())
+                if lead == len(self.raw):
+                    return ""
+                self.opened = True
+                if self.raw[lead] == "{":
+                    self.start, self.marker = lead, ""
+            if self.start < 0:
+                found = [(self.raw.find(s, max(self.shown, self.searched)), s) for s in STARTS]
+                found = [(at, s) for at, s in found if at >= 0]
+                if found:
+                    self.start, self.marker = min(found)
+            if self.start < 0:
+                break
+            call = _parse(self.marker, self.raw[self.start + len(self.marker):])
+            if call is NOT_A_CALL:
+                self.searched = self.start + max(1, len(self.marker))
+                self.start, self.marker = -1, ""
+                continue
+            self.call = call
             out, self.shown = self.raw[self.shown:self.start], max(self.shown, self.start)
             return out
         keep = max((n for s in STARTS for n in range(1, min(len(s), len(self.raw) - self.shown) + 1)
