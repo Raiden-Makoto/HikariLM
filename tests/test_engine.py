@@ -81,6 +81,30 @@ class EngineTest(unittest.TestCase):
         self.assertNotIn("mlx-community/stopped-once-4bit", engine.names())
         self.assertEqual(engine.missing_files(snapshot), ["model-2.safetensors"])
 
+    def test_a_model_is_found_when_refs_main_names_a_copy_with_one_file(self):
+        # Fetching one file later moves refs/main to a new copy holding only that file; the
+        # model was shown as not downloaded though it was all in the copy before.
+        repo = self.hub / ("models--" + GEMMA.replace("/", "--"))
+        newer = repo / "snapshots" / "def456"
+        newer.mkdir()
+        (newer / "README.md").write_text("hi")
+        (repo / "refs" / "main").write_text("def456")
+        engine.forget_scan()
+        self.assertEqual(engine.found()[GEMMA], repo / "snapshots" / "abc123")
+        # refs/main naming a copy that is not there at all.
+        (repo / "refs" / "main").write_text("gone789")
+        engine.forget_scan()
+        self.assertIn(GEMMA, engine.found())
+
+    def test_why_a_model_in_the_cache_is_not_found(self):
+        self.assertIn("there is no", engine.why_missing("mlx-community/nothing-4bit"))
+        snapshot = add_model(self.hub, "mlx-community/half-4bit", real_config(CODER))
+        (snapshot / "model.safetensors.index.json").write_text(
+            json.dumps({"weight_map": {"a": "model.safetensors", "b": "model-2.safetensors"}}))
+        self.assertIn("missing model-2.safetensors", engine.why_missing("mlx-community/half-4bit"))
+        (snapshot / "config.json").unlink()
+        self.assertIn("no readable config.json", engine.why_missing("mlx-community/half-4bit"))
+
     def test_finds_finished_mlx_downloads_only(self):
         add_model(self.hub, "mlx-community/still-coming-4bit", real_config(CODER), incomplete=True)
         add_model(self.hub, "Qwen/Qwen2.5-Coder-7B-Instruct", {k: v for k, v in real_config(CODER).items() if k != "quantization"})

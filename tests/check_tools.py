@@ -44,7 +44,7 @@ def chat_models(wanted: list[str]) -> list[str]:
     if wanted:
         for name in wanted:
             if name not in found:
-                print(f"{name} is not downloaded; skipped.")
+                print(f"{name} is not counted as downloaded ({engine.why_missing(name)}); skipped.")
             elif not given(name):
                 print(f"{name} is left without the calculator (a coder, BitNet or poor caller); skipped.")
         return [name for name in wanted if name in found and given(name)]

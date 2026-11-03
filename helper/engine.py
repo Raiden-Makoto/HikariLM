@@ -128,8 +128,9 @@ def worker() -> Path:
 
 
 def hub() -> Path:
-    if os.environ.get("HF_HUB_CACHE"):
-        return Path(os.environ["HF_HUB_CACHE"])
+    for variable in ("HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE"):
+        if os.environ.get(variable):
+            return Path(os.environ[variable]).expanduser()
     if os.environ.get("HF_HOME"):
         return Path(os.environ["HF_HOME"]) / "hub"
     return Path.home() / ".cache" / "huggingface" / "hub"
@@ -200,6 +201,60 @@ def missing_files(folder: Path) -> list[str]:
     return sorted(set(missing))
 
 
+def _repo_name(repo: Path) -> str:
+    return repo.name[len("models--"):].replace("--", "/", 1)
+
+
+def _trusted(name: str) -> bool:
+    return name.startswith("mlx-community/") or "mlx" in re.split(r"[-_.]", name.split("/")[-1].lower())
+
+
+def _snapshots(repo: Path) -> list[Path]:
+    """The cache's copies of a repo: the one refs/main names first, then the newest. A later
+    fetch of one file (a README, a template) moves refs/main to a new copy that has only that
+    file, while the whole model is still in the copy before."""
+    main = snapshot(repo)
+    try:
+        others = sorted((p for p in (repo / "snapshots").iterdir() if p.is_dir()),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        others = []
+    return ([main] if main and main.is_dir() else []) + [p for p in others if p != main]
+
+
+def _complete_snapshot(repo: Path, trusted: bool) -> Path | None:
+    for folder in _snapshots(repo):
+        if _is_mlx(folder, trusted) and not missing_files(folder):
+            return folder
+    return None
+
+
+def why_missing(model: str) -> str:
+    """Why a model in the Hugging Face cache is not in found(), for check scripts."""
+    repo = hub() / ("models--" + model.replace("/", "--"))
+    if not repo.is_dir():
+        return f"there is no {repo}"
+    if downloading(repo):
+        return "a download into it is still running (blobs/*.incomplete written in the last few minutes)"
+    copies = _snapshots(repo)
+    if not copies:
+        return f"{repo / 'snapshots'} is empty"
+    reasons = []
+    for folder in copies:
+        config = _config(folder)
+        if config is None:
+            reasons.append(f"{folder.name[:8]}: no readable config.json")
+        elif not any(folder.glob("*.safetensors")):
+            reasons.append(f"{folder.name[:8]}: no .safetensors files")
+        elif not ("quantization" in config or _trusted(model) or is_bitnet(config)):
+            reasons.append(f"{folder.name[:8]}: full-precision weights from a repo not named for MLX")
+        elif missing_files(folder):
+            reasons.append(f"{folder.name[:8]}: missing {', '.join(missing_files(folder)[:3])}")
+        else:
+            return "it is complete; run again (the model list is cached for a few seconds)"
+    return "; ".join(reasons)
+
+
 _scan: tuple[float, dict[str, Path]] = (0.0, {})
 _scan_lock = threading.Lock()
 
@@ -215,10 +270,9 @@ def found() -> dict[str, Path]:
         for repo in sorted(cache.glob("models--*")) if cache.is_dir() else []:
             if downloading(repo):
                 continue
-            folder = snapshot(repo)
-            name = repo.name[len("models--"):].replace("--", "/", 1)
-            trusted = name.startswith("mlx-community/") or "mlx" in re.split(r"[-_.]", name.split("/")[-1].lower())
-            if folder and _is_mlx(folder, trusted) and not missing_files(folder):
+            name = _repo_name(repo)
+            folder = _complete_snapshot(repo, _trusted(name))
+            if folder:
                 out[name] = folder
         own = store.home() / "models"
         for folder in sorted(own.iterdir()) if own.is_dir() else []:
