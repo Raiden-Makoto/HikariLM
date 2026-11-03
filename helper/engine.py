@@ -195,10 +195,26 @@ def missing_files(folder: Path) -> list[str]:
             shards = set((json.loads(index.read_text(encoding="utf-8")).get("weight_map") or {}).values())
         except (OSError, ValueError, AttributeError):
             continue
-        missing += [str((index.parent / shard).relative_to(folder)) for shard in sorted(shards)
-                    if not (index.parent / shard).is_file()]
-    missing += [str(path.relative_to(folder)) for path in folder.rglob("*.safetensors") if not path.exists()]
+        absent = [shard for shard in sorted(shards) if not (index.parent / shard).is_file()]
+        # Some repos keep an index from before the weights were saved again in other files
+        # (mlx-community/gemma-3-12b-it-4bit: it names five, the repo has two). MLX loads the
+        # .safetensors files that are there, so an index none of whose files exist is ignored.
+        if len(absent) < len(shards):
+            missing += [str((index.parent / shard).relative_to(folder)) for shard in absent]
+    weights = list(folder.rglob("*.safetensors"))
+    missing += [str(path.relative_to(folder)) for path in weights if not path.exists()]
+    # Shards named model-00001-of-00003.safetensors must all be there.
+    for path in weights:
+        match = SHARD.fullmatch(path.name)
+        if match:
+            total, width = int(match.group(3)), len(match.group(2))
+            missing += [str(path.parent.relative_to(folder) / f"{match.group(1)}-{n:0{width}d}-of-{match.group(3)}.safetensors")
+                        for n in range(1, total + 1)
+                        if not (path.parent / f"{match.group(1)}-{n:0{width}d}-of-{match.group(3)}.safetensors").is_file()]
     return sorted(set(missing))
+
+
+SHARD = re.compile(r"(.+)-(\d+)-of-(\d+)\.safetensors")
 
 
 def _repo_name(repo: Path) -> str:

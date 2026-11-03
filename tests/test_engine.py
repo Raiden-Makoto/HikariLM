@@ -96,6 +96,22 @@ class EngineTest(unittest.TestCase):
         engine.forget_scan()
         self.assertIn(GEMMA, engine.found())
 
+    def test_an_index_naming_files_the_repo_never_had_is_ignored(self):
+        # mlx-community/gemma-3-12b-it-4bit: its index names model-0000N-of-00005, its weights
+        # are model-00001-of-00002 and model-00002-of-00002.
+        snapshot = add_model(self.hub, "mlx-community/stale-index-4bit", real_config(GEMMA))
+        (snapshot / "model.safetensors").unlink()
+        for n in (1, 2):
+            (snapshot / f"model-0000{n}-of-00002.safetensors").write_bytes(b"x")
+        (snapshot / "model.safetensors.index.json").write_text(json.dumps(
+            {"weight_map": {f"w{n}": f"model-0000{n}-of-00005.safetensors" for n in range(1, 6)}}))
+        self.assertEqual(engine.missing_files(snapshot), [])
+        engine.forget_scan()
+        self.assertIn("mlx-community/stale-index-4bit", engine.names())
+        # Half of it downloaded is still caught, from the files' own numbering.
+        (snapshot / "model-00002-of-00002.safetensors").unlink()
+        self.assertEqual(engine.missing_files(snapshot), ["model-00002-of-00002.safetensors"])
+
     def test_why_a_model_in_the_cache_is_not_found(self):
         self.assertIn("there is no", engine.why_missing("mlx-community/nothing-4bit"))
         snapshot = add_model(self.hub, "mlx-community/half-4bit", real_config(CODER))
