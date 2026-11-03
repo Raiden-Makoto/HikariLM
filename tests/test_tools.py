@@ -229,7 +229,9 @@ class WorkerChatTest(unittest.TestCase):
         self.assertTrue(chat[0]["content"].startswith("Rules.\n\nYou have a calculator tool."))
         self.assertIn('<tool_call>\n{"name": "calculate", "arguments": {"expression": "sqrt(4761)"}}', chat[2]["content"])
         self.assertNotIn("tool_calls", chat[2])
-        self.assertEqual(chat[3], {"role": "user", "content": "<tool_response>\n69\n</tool_response>"})
+        # Issue 9: Gemma 3 took a bare result for the user's answer to a quiz and asked a new question.
+        self.assertEqual(chat[3], {"role": "user", "content": "<tool_response>\n69\n</tool_response>\nThat is the "
+                                   "calculator's result for sqrt(4761), not a message from me. Now answer my question with it."})
         # With the tool off (or used up), its description is left out.
         self.assertEqual(mlx_worker.tool_chat(self.CHAT[:2], None, tools.AS_TEXT, False)[0]["content"], "Rules.")
 

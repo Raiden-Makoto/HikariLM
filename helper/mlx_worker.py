@@ -481,11 +481,16 @@ def native_tools(template: str) -> bool:
     return "tools" in template and bool(STANDARD_CALLS.search(template))
 
 
+RESULT_NOTE = ("That is the calculator's result for {expression}, not a message from me. "
+               "Now answer my question with it.")
+
+
 def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dict]:
     """The chat for a template. One with tools of its own gets the calls and results as they
     are; for one without, the tool is described in the system message and the calls and
     results are written out as text, the way the description asks for them."""
     chat = []
+    asked = ""
     for m in messages:
         entry = {"role": m["role"], "content": _text(m.get("content"))}
         if native:
@@ -493,10 +498,15 @@ def tool_chat(messages: list[dict], tools, tools_text, native: bool) -> list[dic
                 if m.get(key):
                     entry[key] = m[key]
         elif m["role"] == "tool":
-            entry = {"role": "user", "content": "<tool_response>\n" + entry["content"] + "\n</tool_response>"}
+            # As a user's turn, a bare result reads as the user answering: Gemma 3 took it for a
+            # quiz and asked a new question. So it says what the number is and what to do with it.
+            entry = {"role": "user", "content": "<tool_response>\n" + entry["content"] + "\n</tool_response>\n"
+                     + RESULT_NOTE.format(expression=asked or "your expression")}
         elif m.get("tool_calls"):
             for call in m["tool_calls"]:
                 function = call.get("function") or {}
+                arguments = function.get("arguments")
+                asked = str(arguments.get("expression", "")) if isinstance(arguments, dict) else str(arguments or "")
                 entry["content"] += "\n<tool_call>\n" + json.dumps(
                     {"name": function.get("name"), "arguments": function.get("arguments")}) + "\n</tool_call>"
         chat.append(entry)
