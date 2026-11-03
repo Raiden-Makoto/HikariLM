@@ -124,8 +124,9 @@ def as_messages(written: str, call: dict, answer: dict, number: int) -> list[dic
 # (LOOSE_STARTS). Qwen2.5 Coder also makes up wrappers: <tools>{json}</tools>, ```xml blocks,
 # <function-call><name>…</name><arguments><code>…</code></arguments></function-call>, and
 # <function name="python" arguments='{json}'/>. Those count only when they name the tool and give
-# code (WRAPPED, with where each ends). A ```python block is the model showing code, not a call.
-WRAPPED = {"```xml": ("```",), "<tools>": ("</tools>",), "<function-call>": ("</function-call>",),
+# code (WRAPPED, with where each ends). Gemma 3, shown the <tool_call> format, writes it as a
+# ```tool_call block of JSON. A ```python block is the model showing code, not a call.
+WRAPPED = {"```tool_call": ("```",), "```xml": ("```",), "<tools>": ("</tools>",), "<function-call>": ("</function-call>",),
            "<function_call>": ("</function_call>",), "<function ": ("/>", "</function>")}
 STARTS = ("<tool_call>", "[TOOL_CALLS]", "<｜tool▁calls▁begin｜>", "<｜tool▁call▁begin｜>", "```tool_code",
           "to=functions.", "```json", *WRAPPED)

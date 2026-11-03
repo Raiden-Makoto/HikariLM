@@ -249,6 +249,23 @@ OLD_SUM = "from math import *\nsqrt(4761)"  # a 4.8 calculator call, as code
 
 
 class CallWatchTest(unittest.TestCase):
+    def test_gemma_writes_the_call_as_a_tool_call_block(self):
+        # What Gemma 3 12B wrote on the Mac (issue 10).
+        for written, code in (
+                ('```tool_call\n{"name": "python", "arguments": {"code": "import math\\nprint(math.sqrt(4761))"}}\n```',
+                 "import math\nprint(math.sqrt(4761))"),
+                ('```tool_call\n{"name": "python", "arguments": {"code": "print(2**40)"}}\n```', "print(2**40)")):
+            for size in (1, 3, len(written)):
+                shown, call, _ = watch(chunks(written, size))
+                self.assertEqual(call, {"name": "python", "code": code})
+                self.assertEqual(shown, "")
+
+    def test_a_tool_call_block_that_is_not_a_call_is_shown(self):
+        text = "Like this:\n```tool_call\nnot json\n```\nDone."
+        shown, call, _ = watch(chunks(text))
+        self.assertIsNone(call)
+        self.assertEqual(shown, text)
+
     def test_qwen_hermes_call_in_pieces(self):
         text = ('Let me check. <tool_call>\n{"name": "python", "arguments": {"code": "import math\\nprint(math.sqrt(4761))"}}'
                 "\n</tool_call> 42!")
