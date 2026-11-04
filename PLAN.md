@@ -2,8 +2,8 @@
 
 What is coming, in order. What is already in is in the README and the release notes.
 
-- **v5**: voice, on the Mac: speech to text with Whisper (5.0), then answers read aloud with
-  Kokoro (5.5).
+- **v5**: voice, on the Mac: answers read aloud with Kokoro (5.0), then speech to text with
+  Whisper (5.5).
 - **v6**: LoRA files from this Mac, and LoRAs on the distilled 4B if a check shows they work.
 
 ## Recommended models
@@ -20,9 +20,9 @@ Any MLX model works; these are the ones to start with. Get one with
 | Drawing pictures | FLUX.2 klein 4B | `mlx-community/FLUX.2-Klein-4B-4bit` | 4.6 GB |
 | Drawing, more detail | FLUX.2 klein 9B | `mlx-community/flux2-klein-9b-4bit` | 9.5 GB |
 | Drawing with LoRAs | FLUX.2 klein base 4B | `mflux-community/flux-2-klein-base-4b-mflux-q4` | 4.6 GB |
-| Speech to text (from 5.0) | Whisper large-v3 turbo | `mlx-community/whisper-large-v3-turbo` | 1.6 GB |
-| Speech to text, smaller (from 5.0) | Whisper small | `mlx-community/whisper-small-mlx` | 0.5 GB |
-| Reading aloud (from 5.5) | Kokoro 82M | `mlx-community/Kokoro-82M-bf16` | 0.4 GB |
+| Speech to text (from 5.5) | Whisper large-v3 turbo | `mlx-community/whisper-large-v3-turbo` | 1.6 GB |
+| Speech to text, smaller (from 5.5) | Whisper small | `mlx-community/whisper-small-mlx` | 0.5 GB |
+| Reading aloud (from 5.0) | Kokoro 82M | `mlx-community/Kokoro-82M-bf16` | 0.4 GB |
 | Optional: BitNet | Any BitNet model | `<bitnet model>` | varies |
 
 - **Qwen3 8B** follows *Let models think* in Settings: off, it answers straight away (quick
@@ -39,7 +39,8 @@ Any MLX model works; these are the ones to start with. Get one with
   8B call the Python tool.
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
   base 4B is slower (50 steps) and is the one LoRAs draw on.
-- **Whisper** and **Kokoro** are listed for when voice comes in; HikariLM does not use them yet.
+- **Kokoro** reads answers aloud from 5.0, beside the chat model. **Whisper** is listed for when
+  speech to text comes in (5.5); HikariLM does not use it yet.
 - **BitNet** models are optional: 1.58-bit weights, small for their size class. None is
   recommended over the others; any one HikariLM runs will do (the Falcon3 and Falcon-E
   1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T`). They get no tools.
@@ -86,34 +87,75 @@ do not load; a venv made with an older Python is made again.
 
 ## Voice
 
-Speak a prompt instead of typing it (5.0), and have answers read aloud (5.5). All of it runs on
+Have answers read aloud (5.0), and speak a prompt instead of typing it (5.5). All of it runs on
 the Mac, like the rest: the browser's own speech recognition is not used, because Chrome's sends
 the audio to Google.
 
 **Packages.** mlx-audio does both directions: speech to text (Whisper) and text to speech
-(Kokoro), so 5.0 and 5.5 share it. When last looked at (0.6.3) it pinned its own MLX
-(`mlx==0.32.4`) and wanted transformers 5.14 or later, so it gets a venv of its own,
-`~/.hikarilm/voice-venv`, made by `hikarilm restart` once a voice model is downloaded, the way
-`pictures-venv` is made for mflux. mlx-whisper is the fallback for speech to text if
+(Kokoro), so 5.0 and 5.5 share it. It pins its own MLX (`mlx==0.32.4` in 0.6.4) and wants
+transformers 5.14 or later, so it has a venv of its own, `~/.hikarilm/voice-venv`, made by
+`hikarilm restart` once a voice model is downloaded, the way `pictures-venv` is made for mflux. mlx-whisper is the fallback for speech to text if
 mlx-audio's Whisper falls short; it pulls in torch and numba.
 
 **Models.**
 
 | For | Version | Suggested | Notes |
 |---|---|---|---|
-| Speech to text | v5.0 | `mlx-community/whisper-large-v3-turbo` | Many languages. Any MLX Whisper works (`whisper-small-mlx` for less memory). |
-| Reading aloud | v5.5 | `mlx-community/Kokoro-82M-bf16` | Small, Apache 2.0, several voices. |
+| Reading aloud | v5.0 | `mlx-community/Kokoro-82M-bf16` | Small, Apache 2.0; 28 English voices. |
+| Speech to text | v5.5 | `mlx-community/whisper-large-v3-turbo` | Many languages. Any MLX Whisper works (`whisper-small-mlx` for less memory). |
 
 Only the models themselves, as with pictures: Whisper from mlx-community (OpenAI's weights
 converted), Kokoro from mlx-community or hexgrad, the way the start window already says what it
 leaves out.
 
-### v5.0.0: speech to text
+### v5.0.0: reading answers aloud
 
-- [ ] Check on the Mac before building on it: mlx-audio's newest version and what it pins, the
-  exact Whisper repos it loads, its text against mlx-whisper's on the same clip, how long the
-  turbo takes for a minute of speech, and whether it can share the chat models' venv after all.
-  Write down what was found here.
+Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js`,
+`web/js/listen.js`); not released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
+
+- mlx-audio pins `mlx==0.32.4` and wants transformers 5.14 or newer, and does not install misaki,
+  which its Kokoro needs for English. `misaki[en]` would bring torch (for a transformer parser
+  that `trf=False` does not use), so misaki's English parts are installed one by one: misaki,
+  num2words, spacy, phonemizer-fork, espeakng-loader (espeak-ng's library and data, for words
+  misaki does not know), and spaCy's `en_core_web_sm` 3.8.0, which misaki would otherwise
+  download the first time it reads. Plus `scipy>=1.16.3` for macOS 27.
+- misaki needs Python older than 3.13, and scipy that macOS 27 can load needs 3.11 or newer:
+  the voice venv is made with 3.11 or 3.12 (found in Homebrew, python.org or the PATH), or the
+  start window says to `brew install python@3.12`.
+- Kokoro's config has no model_type, so the worker loads it with `model_type="kokoro"`. It
+  makes 24 kHz sound, and its voices are in the repo's `voices/` folder; the American (a) and
+  British (b) English ones are offered (28 of them), since the others need misaki's Japanese
+  or Chinese parts or espeak-ng's rules for their language.
+
+- [ ] On the Mac: download Kokoro, `hikarilm restart` (makes the voice venv), then
+  `python3 tests/check_voice.py`. Every line must be OK; listen to the WAV files it writes.
+- [x] **Listen** button under every answer with words, and a setting to read each answer when it
+  finishes. The page sends `/api/speak` the lines to say, a voice and a speed; the helper streams
+  each line's sound as Kokoro makes it, so the first is heard while the rest are made. Stop (or
+  Esc) ends it. One answer is read at a time: Listen on another stops the first.
+- [x] **What is read** (`spoken.js`): the answer's words. Code blocks are named ("There is a
+  Python code block here, 3 lines long."), small tables are read row by row and big ones named,
+  math is said in words ("x squared plus 1 equals 0", "the integral from 0 to 4 of…") or named
+  when it is too much to say ("There is an equation here"), links by their text and bare ones by
+  their site, pictures in an answer by their alt text, plots from the Python tool as "There is a
+  plot above.", symbols in words (°, %, ≤, →), and emoji, markup and thinking never. Answers that
+  are only a picture get no Listen.
+- [x] **Memory.** Kokoro (82M parameters) stays loaded beside the chat model, like the notes model:
+  it never counts as the one large model, and it is never unloaded for one. It loads the first
+  time something is read aloud, in the voice worker, which keeps running for it.
+- [x] **Setup**: Kokoro on the welcome page under *Reading aloud*, with its command and Copy; the
+  start window says how to get it, and `hikarilm restart` sets it up once it is there.
+- [x] **Settings**: *Reading aloud*: the voice, a sample to hear it, the speed, and *Read answers
+  aloud when they finish*.
+- [ ] Check on the Mac whether misaki reads lone letters in math ("a squared plus b squared") as
+  letters or as the word "a"; if as the word, spoken.js spells them.
+- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`, once the check passes.
+
+### v5.5.0: speech to text
+
+- [ ] Check on the Mac before building on it: the exact Whisper repos mlx-audio loads, its text
+  against mlx-whisper's on the same clip, and how long the turbo takes for a minute of speech.
+  It goes in the voice venv 5.0 made. Write down what was found here.
 - [ ] **Microphone button** by Attach, in Chat, the code editor and picture mode. Click to start,
   click to stop (Esc cancels); a level meter and a timer while it listens. The words go into
   the message box, added where the cursor is, to read and fix; Send stays yours. Microphone
@@ -128,39 +170,14 @@ leaves out.
 - [ ] **Memory.** Find out on the Mac whether Whisper turbo can stay loaded beside the chat model,
   like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
   page says so each time, the way reading pictures says what was loaded and what left.
-- [ ] **Setup page**, `/setup/voice`, like the picture one: Whisper turbo first, the smaller
-  Whisper under a fold, each with its command and Copy, and where it stands. *Get a voice
-  model…* in the microphone button's place until one is there.
+- [ ] **Setup**: Whisper turbo and the smaller Whisper on the welcome page beside Kokoro, each
+  with its command and Copy. *Get a voice model…* in the microphone button's place until one is
+  there.
 - [ ] **Settings**: *Listen with* (the speech-to-text model) and the language (or detect).
-- [ ] `tests/check_voice.py` on the Mac: macOS's own `say` speaks a known sentence to a file and
-  `afconvert` makes it 16 kHz, Whisper writes it back through the real worker, and the words are
-  compared. It downloads the small Whisper if no Whisper is there, and deletes it after (unless it
+- [ ] `tests/check_voice.py` on the Mac also has Kokoro speak a known sentence (and macOS's own
+  `say`, made 16 kHz with `afconvert`), Whisper writes it back through the real worker, and the
+  words are compared. It downloads the small Whisper if no Whisper is there, and deletes it after (unless it
   was there before), like the LoRA in `check_flux.py`. Nothing to download for the unit tests.
-- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`.
-
-### v5.5.0: reading answers aloud
-
-- [ ] Check on the Mac what Kokoro needs besides its weights: mlx-audio turns text into sounds
-  with misaki, which may download a spaCy model or want espeak-ng for some languages. The setup
-  page lists whatever that turns out to be, and `hikarilm restart` installs it in the voice venv.
-- [ ] **Listen** button on every answer, beside Copy, and a setting to read each answer when it
-  finishes. `/api/speak` takes text, a voice and a speed and streams audio a sentence at a time,
-  so it starts before the whole answer is spoken; Stop ends it. One answer is read at a time:
-  Listen on another stops the first.
-- [ ] **What is read**: the answer's words. Code blocks, tables and LaTeX are skipped or said
-  briefly ("a Python code block"), links by their text, and thinking is never read. Pictures are
-  not read; their prompt is not either.
-- [ ] **Memory.** Kokoro (82M parameters) stays loaded beside the chat model, like the notes model:
-  it never counts as the one large model, and it is never unloaded for one. It loads the first
-  time something is read aloud (at start when *Read answers aloud* is on), in the voice worker,
-  which keeps running for it.
-- [ ] **Setup page**: Kokoro added to `/setup/voice` under *Reading aloud*, with its command, Copy
-  and what else it needs.
-- [ ] **Settings**: *Read aloud with*, the voice (with a short sample to hear it), the speed, and
-  *Read answers aloud when they finish*.
-- [ ] `tests/check_voice.py` on the Mac also speaks a sentence with Kokoro and writes it back with
-  Whisper, and compares. Kokoro is downloaded for the check and deleted after, unless it was
-  there before.
 - [ ] README, `__version__ = "5.5.0"`, tag `v5.5.0`.
 
 ## More LoRAs (v6)

@@ -17,6 +17,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -78,6 +79,33 @@ def _prepare_venv(folder: Path, interpreter: Path, packages: tuple[str, ...], wh
     mark.write_text(" ".join(packages) + "\n", encoding="utf-8")
     say(f"  {what} is ready.")
     return True
+
+
+def find_python(oldest: int, newest: int) -> str | None:
+    """A Python 3.oldest to 3.newest to make a venv with: the one running HikariLM, or another
+    one from Homebrew, python.org or the PATH, newest first."""
+    if (3, oldest) <= tuple(sys.version_info[:2]) <= (3, newest):
+        return sys.executable
+    for minor in range(newest, oldest - 1, -1):
+        name = f"python3.{minor}"
+        for found in (shutil.which(name), f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}",
+                      f"/Library/Frameworks/Python.framework/Versions/3.{minor}/bin/{name}"):
+            if found and os.access(found, os.X_OK):
+                return found
+    return None
+
+
+def venv_minor(folder: Path) -> int | None:
+    """The 3.x a venv was made with, from its pyvenv.cfg."""
+    try:
+        for line in (folder / "pyvenv.cfg").read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() in ("version", "version_info"):
+                parts = value.strip().split(".")
+                return int(parts[1]) if parts[0] == "3" and len(parts) > 1 else None
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 def prepare(say, base_python: str = sys.executable) -> bool:

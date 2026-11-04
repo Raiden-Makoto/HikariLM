@@ -8,6 +8,7 @@ import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
 import { applyCode, syncApplyButtons } from "./apply.js";
 import { deletePrompt, editPrompt } from "./prompt-actions.js";
+import { addListenButton } from "./listen.js";
 
 export function addTurn(role, text, thought, files, message, question) {
   if (role === "assistant" && text) ({ text, thought } = splitStrayThinking(text, thought));
@@ -69,6 +70,7 @@ export function addTurn(role, text, thought, files, message, question) {
     }
   } else if (text) {
     updateApply(answer, question);
+    if (message) addListenButton(block, message);
   }
   log.append(block);
   scrollLog();

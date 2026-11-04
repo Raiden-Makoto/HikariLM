@@ -33,7 +33,7 @@ BROWSER = {"fetch", "setTimeout", "clearTimeout", "setInterval", "clearInterval"
            "isNaN", "isFinite", "String", "Number", "Boolean", "Array", "Object", "Date", "Error", "Promise", "Map",
            "Set", "WeakMap", "RegExp", "Symbol", "JSON", "Math", "URL", "URLSearchParams", "Blob", "File", "FileReader", "FormData",
            "Option", "Image", "Event", "CustomEvent", "AbortController", "TextDecoder", "TextEncoder",
-           "ResizeObserver", "MutationObserver", "IntersectionObserver", "DOMParser", "Uint8Array", "Float64Array", "Int32Array", "BigInt", "DataView",
+           "ResizeObserver", "MutationObserver", "IntersectionObserver", "DOMParser", "Uint8Array", "Float64Array", "Float32Array", "Int32Array", "BigInt", "DataView", "AudioContext",
            "DecompressionStream", "CompressionStream", "Response", "Headers", "Notification",
            "getComputedStyle", "matchMedia", "open", "print", "scrollTo", "postMessage"}
 
@@ -195,8 +195,8 @@ class PageFilesTest(unittest.TestCase):
     def test_the_welcome_list_is_the_plan_s(self):
         plan = (WEB.parent / "PLAN.md").read_text().split("## Recommended models", 1)[1].split("\n- ", 1)[0]
         rows = re.findall(r"^\| ([^|]+) \| ([^|]+) \| `([^`]+)` \| ([^|]+) \|$", plan, re.M)
-        voice = ("whisper", "kokoro")
-        listed = [(row[1].strip(), row[2], row[3].strip()) for row in rows if not any(v in row[2].lower() for v in voice)]
+        # Whisper comes in with speech to text (5.5).
+        listed = [(row[1].strip(), row[2], row[3].strip()) for row in rows if "whisper" not in row[2].lower()]
         self.assertEqual(listed, [(m["name"], m["repo"], m["download"]) for m in welcome.RECOMMENDED])
         self.assertEqual({m["group"] for m in welcome.RECOMMENDED}, set(welcome.GROUPS))
 

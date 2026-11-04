@@ -283,7 +283,7 @@ export function start() {
     for (let step = 0; step < 4 && size + step * size / 4 <= 262144; step++) CONTEXT_CHOICES.push(size + step * size / 4);
   }
 
-  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#bg-file):not(.lora-input):not(.rules-input), #compact-prompt, #kv-bits")
+  document.querySelectorAll("#settings input:not(#dark-toggle):not(#notify-toggle):not(#notes-toggle):not(#read-toggle):not(#voice-speed):not(#bg-file):not(.lora-input):not(.rules-input), #compact-prompt, #kv-bits")
     .forEach((input) => input.addEventListener("change", () => { if (serverSettings) saveContextSetting(); }));
 
   document.querySelector("#open-settings").addEventListener("click", () => {

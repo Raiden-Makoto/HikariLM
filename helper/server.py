@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from helper import (__version__, budget, context, daemon, descriptions, documents, engine, flux, imagegen, lora,
-                    names, notes, rewrite, rules, store, thinking, tools, update, welcome, workspace)
+                    names, notes, rewrite, rules, store, thinking, tools, update, voice, welcome, workspace)
 from helper.models import (EMBED_NAME, KEEP_ALIVE, KEEPER, ModelError, complete, embed, open_chat, running, show,
                            tags, unload)
 from helper.router import ModelRouter, Work
@@ -106,6 +106,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/settings":
             self._send_json(context.load_settings())
+            return
+        if self.path == "/api/voice":
+            self._send_json(voice.status())
             return
         if self.path == RULES:
             self._send_json({**rules.load(), "folder_files": list(rules.FOLDER_FILES)})
@@ -318,6 +321,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/update":
             self._update()
+            return
+        if self.path == "/api/speak":
+            # Beside the chat model, so it never waits on a chat or makes one wait.
+            self._speak()
             return
         if self.path in (LORAS, LORAS + "/trigger", LORAS + "/remove"):
             self._loras()
@@ -850,6 +857,32 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"found": found, "loras": lora.listing()})
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
+
+    def _speak(self) -> None:
+        """Reads lines aloud: {"audio", "rate", "line"} lines as Kokoro makes them, then {"done"}."""
+        try:
+            lines, voice_name, speed = voice.check_request(self._body(MAX_BODY))
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        reading = voice.speak(lines, voice_name, speed)
+        try:
+            try:
+                event = next(reading, None)
+            except ModelError as error:
+                self._send_json({"error": str(error)}, status=503)
+                return
+            self._stream_start()
+            try:
+                while event is not None:
+                    if not self._stream_line(event):
+                        return
+                    event = next(reading, None)
+                self._stream_line({"done": True})
+            except ModelError as error:
+                self._stream_line({"error": str(error)})
+        finally:
+            reading.close()
 
     def _loaded(self) -> dict:
         """What is really in memory, asked of the MLX worker rather than remembered, since

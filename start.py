@@ -82,6 +82,16 @@ def report_pictures() -> None:
         say("  " + note)
 
 
+def report_voice() -> None:
+    """Set up reading aloud once Kokoro is there, or say how to get it."""
+    from helper import voice
+
+    if voice.folder() is None:
+        say("No voice for reading answers aloud yet. To get Kokoro:  " + voice.GET)
+    elif voice.prepare(say):
+        say("Reading aloud: Kokoro, " + str(len(voice.voices())) + " English voices")
+
+
 def prepare(url: str) -> None:
     """The first-start steps: the venvs, the notes model, what models there are. Shown in the
     terminal, since the first time installs packages."""
@@ -101,6 +111,7 @@ def prepare(url: str) -> None:
         "No MLX models downloaded yet. Get any MLX model, for example:  ~/.hikarilm/venv/bin/hf download "
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit")
     report_pictures()
+    report_voice()
 
 
 def serve_here(background: bool) -> None:

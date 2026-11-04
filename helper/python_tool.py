@@ -83,17 +83,8 @@ def _minor(cfg: Path) -> int | None:
 
 
 def base() -> str | None:
-    """A Python 3.11 or newer to make the venv with: the one running HikariLM, or another one
-    from Homebrew, python.org or the PATH."""
-    if sys.version_info >= (3, OLDEST):
-        return sys.executable
-    for minor in range(NEWEST, OLDEST - 1, -1):
-        name = f"python3.{minor}"
-        for found in (shutil.which(name), f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}",
-                      f"/Library/Frameworks/Python.framework/Versions/3.{minor}/bin/{name}"):
-            if found and os.access(found, os.X_OK):
-                return found
-    return None
+    """A Python 3.11 or newer to make the venv with."""
+    return engine.find_python(OLDEST, NEWEST)
 
 
 def prepare(say, base_python: str | None = None) -> bool:

@@ -4,6 +4,7 @@ import { messageBox, modelSelect, plainError, scrollLog, showEmpty, status } fro
 import { renderChips } from "./attachments.js";
 import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
+import { addListenButton, readWhenDone } from "./listen.js";
 import { addTurn, pictureFigure, setBusy, showToolCall, updateApply } from "./turns.js";
 import {
   changeTarget, clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed,
@@ -343,11 +344,14 @@ async function send() {
     if (thought) drawThought();
     if (answer || thought) {
       if (answer) updateApply(reply.answer, { text: content, files });
-      state.messages.push({
+      const message = {
         role: "assistant", content: answer, thinking: thought || undefined, model, usage,
         thoughtSeconds: thought ? Math.round(thinkSeconds()) : undefined, thinkingCut: thinkingCut || undefined,
         tools: calls.length ? calls : undefined,
-      });
+      };
+      state.messages.push(message);
+      if (answer && outcome === "done") readWhenDone(addListenButton(reply.block, message), message);
+      else if (answer) addListenButton(reply.block, message);
       if (usage && state.lastContext) state.lastContext.used = usage.prompt_eval_count + usage.eval_count;
       saved = true;
     }

@@ -294,7 +294,24 @@
           <span class="setting-label">Let models run Python</span>
           <input class="switch" id="python-toggle" type="checkbox" role="switch">
         </label>
-        <p class="note">Chat models can write Python and run it instead of working out math by hand, the way ChatGPT runs code. It has numpy, sympy, pandas, scipy and matplotlib, and plots show as pictures. Each run shows in the answer as “Ran Python”, which opens to the code and what it printed. It runs in macOS’s sandbox: no internet, no other programs, and none of your files; it stops after 30 seconds or 1.25 GB of memory. Not every model calls it; one that does not just answers as before. Coding models never get it, so they stick to writing code, and neither do DeepSeek R1 and Falcon3, which did not use the tool well.</p>
+        <p class="note">Chat models can write Python and run it instead of working out math by hand, the way ChatGPT runs code. It has numpy, sympy, pandas, scipy and matplotlib, and plots show as pictures. Each run shows in the answer as “Ran Python”, which opens to the code and what it printed. It runs in macOS’s sandbox: no internet, no other programs, and none of your files; it stops after 30 seconds or 1.25 GB of memory. Not every model calls it; one that does not just answers as before. Coding models never get it, so they stick to writing code, and neither do DeepSeek R1 and BitNet models, which did not use the tool well.</p>
+      </div>
+      <div class="setting" id="voice-setting">
+        <span class="setting-label">Reading aloud</span>
+        <label class="field-row">
+          <span>Voice</span>
+          <select id="voice-choice"></select>
+        </label>
+        <label class="field-row">
+          <span>Speed <span id="voice-speed-value">1.0×</span></span>
+          <input id="voice-speed" type="range" min="0.5" max="2" step="0.1" value="1">
+        </label>
+        <label class="switch-row">
+          <span>Read answers aloud when they finish</span>
+          <input class="switch" id="read-toggle" type="checkbox" role="switch">
+        </label>
+        <p class="note"><button type="button" id="voice-sample" data-idle="Hear a sample">Hear a sample</button></p>
+        <p class="note" id="voice-note" role="status"></p>
       </div>
       <div class="setting">
         <label class="switch-row">

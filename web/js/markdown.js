@@ -112,6 +112,11 @@ export function renderMarkdown(element, text) {
   element.afterRender?.();
 }
 
+// The answer as marked's tokens, math included, for reading it aloud; null until marked loads.
+export function answerTokens(text) {
+  return markdown ? markdown.lexer(text) : null;
+}
+
 // Each code block gets a line above it: the file it is for (or its
 // language), and Copy. Apply is added by turns.js, in the code editor only.
 function codeBlock({ text, lang, codeBlockStyle }) {

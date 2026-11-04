@@ -1,13 +1,13 @@
 """The welcome page's list (/welcome): the models to start with, and which are on this Mac.
 
-The same list as Recommended models in PLAN.md. Voice models are left out until HikariLM uses them.
+The same list as Recommended models in PLAN.md. Whisper is left out until HikariLM uses it (5.5).
 """
 
 from __future__ import annotations
 
-from helper import engine, imagegen
+from helper import engine, imagegen, voice
 
-GROUPS = ("Chat", "Pictures", "Optional")
+GROUPS = ("Chat", "Pictures", "Reading aloud", "Optional")
 
 # No BitNet model is recommended over the others, so its entry names none.
 BITNET = "<bitnet model>"
@@ -35,6 +35,10 @@ RECOMMENDED = [
     {"group": "Pictures", "name": "FLUX.2 klein base 4B", "repo": "mflux-community/flux-2-klein-base-4b-mflux-q4",
      "download": "4.6 GB", "for": "Drawing with LoRAs",
      "note": "Slower (50 steps); the one LoRAs draw on."},
+    {"group": "Reading aloud", "name": "Kokoro 82M", "repo": voice.REPO, "download": "0.4 GB",
+     "for": "Reading answers aloud",
+     "note": "Press Listen under an answer to hear it, in one of Kokoro's English voices. Stays loaded beside "
+             "the chat model. After downloading it, run  hikarilm restart  once to set it up."},
     {"group": "Optional", "name": "Any BitNet model", "repo": BITNET, "download": "varies", "for": "BitNet",
      "note": "1.58-bit weights: small for their size class. Any one HikariLM runs will do (the Falcon3 and "
              "Falcon-E 1.58-bit family, Microsoft's bitnet-b1.58-2B-4T); put its repo in the command. "
@@ -49,5 +53,7 @@ def listing() -> list[dict]:
     have = chat | {item["id"] for item in imagegen.picture_models()[0]}
     if any(engine.bitnet_model(name) for name in chat):
         have.add(BITNET)
+    if voice.folder() is not None:
+        have.add(voice.REPO)
     return [{**model, "command": imagegen.DOWNLOAD + model["repo"], "have": model["repo"] in have}
             for model in RECOMMENDED]
