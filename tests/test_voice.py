@@ -225,6 +225,63 @@ class SpeakTest(VoiceBase):
         self.assertEqual(len(list(voice.speak(["back"], "af_heart", 1.0))), 1)
 
 
+class HearingTest(VoiceBase):
+    """How tests/check_voice.py scores what Whisper heard against what Kokoro was given."""
+
+    def setUp(self):
+        super().setUp()
+        from tests import check_voice
+        self.check = check_voice
+
+    def test_the_same_words_written_differently_count_as_heard(self):
+        right = self.check.heard_right
+        self.assertTrue(right("The graph of y equals x squared from x equals 0 to x equals 4 is a parabola that opens upward.",
+                              "The graph of y = x² from x = 0 to x = 4 is a parabola that opens upward."))
+        self.assertTrue(right("the integral from 0 to 4 of x squared d x equals 64 over 3.",
+                              "The integral from 0 to 4 of x squared dx equals 64/3."))
+        self.assertTrue(right("It costs $5 and $10, about 30 degrees C, 50 percent done.",
+                              "It costs five dollars and ten dollars, about 30°C, 50% done."))
+        self.assertTrue(right("Name, Ann; Age, 30.", "Name, Ann. Age, thirty."))
+        self.assertTrue(right("sine squared of x plus cosine squared of x equals 1.",
+                              "Sine squared of x plus cosine squared of x equals one."))
+
+    def test_one_slip_is_allowed_in_a_short_line_and_not_more(self):
+        self.assertTrue(self.check.heard_right("Run pip install numpy first.", "Run pip install numpie first."))
+        self.assertFalse(self.check.heard_right("Run pip install numpy first.", "Ron pep install numpy."))
+
+    def test_wrong_or_missing_speech_fails(self):
+        line = "There is a Python code block here, 3 lines long."
+        self.assertFalse(self.check.heard_right(line, "A table with 2 columns, name, age."))
+        self.assertFalse(self.check.heard_right(line, ""))
+        self.assertFalse(self.check.heard_right(line, "There is a"))
+        self.assertEqual(self.check.missing(["python", "code"], "There is a pie thon code block here"), ["python"])
+        self.assertEqual(self.check.missing(["sixty", "over"], "equals 64 over 3"), [])
+
+    def test_numbers_are_spelled_the_same_on_both_sides(self):
+        self.assertEqual(self.check.words("64 over 3, $5"), ["sixty", "4", "over", "three", "five", "dollars"])
+        self.assertEqual(self.check.words("sixty-four over three, five dollars"), self.check.words("64 over 3, $5"))
+        self.assertEqual(self.check.number_words(1250), "one thousand two hundred fifty")
+
+    def test_what_whisper_heard_comes_back_in_order(self):
+        fake = Path(self._tmp.name) / "fake-python"
+        fake.write_text("#!/bin/sh\nexec " + sys.executable + " -c 'import json, os, sys; "
+                        "clips = json.load(sys.stdin); "
+                        "print(json.dumps([str(os.path.getsize(c[\"pcm\"])) + \" bytes at \" + str(c[\"rate\"]) for c in clips]))'\n")
+        fake.chmod(0o755)
+        add_kokoro(self.hub)
+        whisper = Path(self._tmp.name) / "whisper"
+        with mock.patch.object(voice, "python", return_value=fake), \
+                mock.patch.object(self.check, "whisper_folder", return_value=whisper):
+            heard = self.check.hear([b"\x00\x00" * 3, b"\x00\x00" * 5], Path(self._tmp.name))
+        self.assertEqual(heard, ["6 bytes at 24000", "10 bytes at 24000"])
+
+    def test_the_lines_checked_are_what_the_page_says(self):
+        spoken = (HERE / "spoken.test.mjs").read_text()
+        for line, keys in self.check.LINES[1:4]:
+            self.assertIn(line.rstrip(".").split(",")[0], spoken)
+            self.assertTrue(set(sum((self.check.words(key) for key in keys), [])) <= set(self.check.words(line)), line)
+
+
 class ServerTest(VoiceBase):
     def setUp(self):
         super().setUp()

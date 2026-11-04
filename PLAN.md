@@ -20,8 +20,8 @@ Any MLX model works; these are the ones to start with. Get one with
 | Drawing pictures | FLUX.2 klein 4B | `mlx-community/FLUX.2-Klein-4B-4bit` | 4.6 GB |
 | Drawing, more detail | FLUX.2 klein 9B | `mlx-community/flux2-klein-9b-4bit` | 9.5 GB |
 | Drawing with LoRAs | FLUX.2 klein base 4B | `mflux-community/flux-2-klein-base-4b-mflux-q4` | 4.6 GB |
-| Speech to text (from 5.5) | Whisper large-v3 turbo | `mlx-community/whisper-large-v3-turbo` | 1.6 GB |
-| Speech to text, smaller (from 5.5) | Whisper small | `mlx-community/whisper-small-mlx` | 0.5 GB |
+| Speech to text (from 5.5) | Whisper large-v3 turbo | `mlx-community/whisper-large-v3-turbo-asr-fp16` | 1.6 GB |
+| Speech to text, smaller (from 5.5) | Whisper small | `mlx-community/whisper-small-asr-fp16` | 0.5 GB |
 | Reading aloud (from 5.0) | Kokoro 82M | `mlx-community/Kokoro-82M-bf16` | 0.4 GB |
 | Optional: BitNet | Any BitNet model | `<bitnet model>` | varies |
 
@@ -102,7 +102,7 @@ mlx-audio's Whisper falls short; it pulls in torch and numba.
 | For | Version | Suggested | Notes |
 |---|---|---|---|
 | Reading aloud | v5.0 | `mlx-community/Kokoro-82M-bf16` | Small, Apache 2.0; 28 English voices. |
-| Speech to text | v5.5 | `mlx-community/whisper-large-v3-turbo` | Many languages. Any MLX Whisper works (`whisper-small-mlx` for less memory). |
+| Speech to text | v5.5 | `mlx-community/whisper-large-v3-turbo-asr-fp16` | Many languages. mlx-audio reads Whisper's tokenizer from the model's folder, so only the `-asr-` repos work (they have it; `whisper-large-v3-turbo` and `whisper-small-mlx` are weights only). `whisper-small-asr-fp16` or a 4-bit one for less memory. |
 
 Only the models themselves, as with pictures: Whisper from mlx-community (OpenAI's weights
 converted), Kokoro from mlx-community or hexgrad, the way the start window already says what it
@@ -127,8 +127,14 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   British (b) English ones are offered (28 of them), since the others need misaki's Japanese
   or Chinese parts or espeak-ng's rules for their language.
 
-- [ ] On the Mac: download Kokoro, `hikarilm restart` (makes the voice venv), then
-  `python3 tests/check_voice.py`. Every line must be OK; listen to the WAV files it writes.
+- [ ] On the Mac: `python3 tests/check_voice.py`. It gets Kokoro and Whisper large-v3 turbo
+  (4-bit, 0.47 GB) if they are not there and deletes them after, sets up the voice venv, has the
+  real worker read the lines the page sends for answers with math, code, tables, links and
+  symbols, and has Whisper write down what it heard: each line must be heard as written (at most
+  a fifth of its words, or one word, wrong, and its key words all there), and so must a sentence
+  in every English voice and the reading after a stop. A faster speed must be shorter, and one
+  line's sound scored against another line's words must fail, so the check cannot pass by
+  hearing nothing. Every line must be OK.
 - [x] **Listen** button under every answer with words, and a setting to read each answer when it
   finishes. The page sends `/api/speak` the lines to say, a voice and a speed; the helper streams
   each line's sound as Kokoro makes it, so the first is heard while the rest are made. Stop (or
@@ -147,8 +153,6 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   start window says how to get it, and `hikarilm restart` sets it up once it is there.
 - [x] **Settings**: *Reading aloud*: the voice, a sample to hear it, the speed, and *Read answers
   aloud when they finish*.
-- [ ] Check on the Mac whether misaki reads lone letters in math ("a squared plus b squared") as
-  letters or as the word "a"; if as the word, spoken.js spells them.
 - [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`, once the check passes.
 
 ### v5.5.0: speech to text
