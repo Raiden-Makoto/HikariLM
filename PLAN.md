@@ -106,8 +106,7 @@ leaves out.
 
 ### v5.0.0: reading answers aloud
 
-In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/listen.js`; not
-released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
+In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/listen.js`. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
 
 - mlx-audio pins `mlx==0.32.4` and wants transformers 5.14 or newer, and does not install misaki,
   which its Kokoro needs for English. `misaki[en]` would bring torch (for a transformer parser
@@ -123,7 +122,7 @@ released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
   British (b) English ones are offered (28 of them), since the others need misaki's Japanese
   or Chinese parts or espeak-ng's rules for their language.
 
-- [x] Works on the Mac.
+- [x] Works on the Mac, and says variables right.
 - [x] **Listen** button under every answer with words, and a setting to read each answer when it
   finishes. The page sends `/api/speak` the lines to say, a voice and a speed; the helper streams
   each line's sound as Kokoro makes it, so the first is heard while the rest are made. Stop (or
@@ -142,7 +141,7 @@ released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
   start window says how to get it, and `hikarilm restart` sets it up once it is there.
 - [x] **Settings**: *Reading aloud*: the voice, a sample to hear it, the speed, and *Read answers
   aloud when they finish*.
-- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`.
+- [x] README, `__version__ = "5.0.0"`, tag `v5.0.0`.
 
 ### v5.5.0: speech to text
 
