@@ -156,10 +156,14 @@ export function showThought(view, text, { seconds = null, live = false, cut = fa
   view.label.textContent = (live ? "Thinking" + (shown || "…") : "Thought" + shown) +
     (cut ? " · stopped at the thinking limit" : "");
   view.box.classList.toggle("live", live);
-  if (view.box.open) {
-    const atEnd = view.text.scrollHeight - view.text.scrollTop - view.text.clientHeight < 24;
-    view.text.textContent = text;
-    if (live && atEnd) view.text.scrollTop = view.text.scrollHeight;
+  if (view.box.open && !view.drawTimer) {
+    // Like an answer, drawn at most every 80 ms while it streams.
+    view.drawTimer = setTimeout(() => {
+      view.drawTimer = null;
+      const atEnd = view.text.scrollHeight - view.text.scrollTop - view.text.clientHeight < 24;
+      renderMarkdown(view.text, view.full);
+      if (view.box.classList.contains("live") && atEnd) view.text.scrollTop = view.text.scrollHeight;
+    }, live ? 80 : 0);
   }
 }
 

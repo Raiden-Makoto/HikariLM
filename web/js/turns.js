@@ -28,7 +28,7 @@ export function addTurn(role, text, thought, files, message, question) {
   thoughtText.className = "thought-text";
   box.append(label, thoughtText);
   const view = { box, label, text: thoughtText, full: "" };
-  box.addEventListener("toggle", () => { if (box.open) thoughtText.textContent = view.full; });
+  box.addEventListener("toggle", () => { if (box.open) renderMarkdown(thoughtText, view.full); });
   showThought(view, thought || "", { seconds: message?.thoughtSeconds ?? null, cut: Boolean(message?.thinkingCut) });
   const calls = document.createElement("div");
   calls.className = "tool-calls";
