@@ -1,4 +1,5 @@
-"""Answers read aloud with Kokoro, run by helper/voice_worker.py in ~/.hikarilm/voice-venv.
+"""Voice: answers read aloud with Kokoro, and speech written down with Whisper, both run by
+helper/voice_worker.py in ~/.hikarilm/voice-venv.
 
 mlx-audio runs Kokoro, and pins its own MLX (and wants transformers 5.14 or newer), so it has
 a venv of its own, made by `hikarilm restart` once Kokoro is downloaded, the way mflux has
@@ -12,10 +13,17 @@ Kokoro (82M parameters, 0.4 GB) stays loaded beside the chat model, like the not
 never counts as the one large model and never makes it leave. The page sends the answer as
 the words to say, one sentence or line to a line; each comes back as 16-bit PCM as soon as it
 is made, so reading starts before the whole answer is spoken.
+
+Whisper writes down what the microphone heard. The page records, makes it 16 kHz mono 16-bit
+PCM and sends it; the worker writes it down 30 seconds at a time (cut where it is quiet), and
+each part comes back as soon as it is written. mlx-audio reads Whisper's tokenizer from the
+model's folder, so only repos that have one work: mlx-community's -asr- ones. Whisper stays
+loaded beside the chat model for a few minutes after it was last used, then leaves.
 """
 
 from __future__ import annotations
 
+import base64
 import os
 import shutil
 import subprocess
@@ -45,8 +53,17 @@ LINE_SECONDS = 120  # a long line, on the first read after loading
 SETUP = ("Reading aloud is not set up yet. Run  hikarilm restart  in Terminal; it installs it once "
          "Kokoro is downloaded.")
 # What the venv must import, outside any sandbox, before it counts as ready.
-LOADS = ("import mlx_audio.tts.models.kokoro, misaki.en, misaki.espeak, spacy; "
-         "spacy.load('en_core_web_sm', enable=['tok2vec', 'tagger'])")
+LOADS = ("import mlx_audio.tts.models.kokoro, mlx_audio.stt.models.whisper, transformers, misaki.en, misaki.espeak, "
+         "spacy; spacy.load('en_core_web_sm', enable=['tok2vec', 'tagger'])")
+WHISPER = "mlx-community/whisper-large-v3-turbo-asr-fp16"
+SMALL_WHISPER = "mlx-community/whisper-small-asr-fp16"
+WHISPER_GET = "~/.hikarilm/venv/bin/hf download " + WHISPER
+RATE = 16000
+MAX_SECONDS = 600
+MAX_AUDIO = MAX_SECONDS * RATE * 2       # bytes of 16-bit PCM
+IDLE_SECONDS = 300                       # Whisper leaves after this long unused
+PART_SECONDS = 120                       # writing down 30 seconds, the first time after loading
+WHISPER_FILES = ("config.json", "tokenizer.json", "preprocessor_config.json")
 
 
 def venv() -> Path:
@@ -82,6 +99,55 @@ def voices() -> list[str]:
     return voices_in(where) if where else []
 
 
+def _whisper_copy(repo: Path) -> tuple[Path | None, bool]:
+    """A complete Whisper in a cache folder, and whether it has weights without a tokenizer."""
+    weights_only = False
+    for copy in engine._snapshots(repo):
+        config = engine._config(copy) or {}
+        if str(config.get("model_type", "")).lower() != "whisper" or not any(copy.glob("*.safetensors")):
+            continue
+        if all((copy / name).is_file() for name in WHISPER_FILES) and not engine.missing_files(copy):
+            return copy, False
+        weights_only = True
+    return None, weights_only
+
+
+def whisper_label(repo: str) -> str:
+    """mlx-community/whisper-large-v3-turbo-asr-fp16 is "Whisper large-v3 turbo"."""
+    name = repo.split("/")[-1].lower().replace("whisper-", "", 1)
+    bits = next((part for part in name.split("-") if part.endswith("bit")), "")
+    words = [part for part in name.replace(".en", "-English").split("-")
+             if part and part not in ("asr", "fp16", "bf16", "mlx") and not part.endswith("bit")]
+    size = " ".join(words).replace("large v", "large-v")
+    return "Whisper " + size + (f" ({bits[:-3]}-bit)" if bits else "")
+
+
+def whisper_models() -> list[dict]:
+    """Every Whisper that mlx-audio can write with: {"id", "label", "folder"}, the turbo first."""
+    out = []
+    cache = engine.hub()
+    for repo in sorted(cache.glob("models--*whisper*")) if cache.is_dir() else []:
+        if engine.downloading(repo):
+            continue
+        copy, _ = _whisper_copy(repo)
+        if copy is not None:
+            name = engine._repo_name(repo)
+            out.append({"id": name, "label": whisper_label(name), "folder": copy})
+    return sorted(out, key=lambda item: ("turbo" not in item["id"], "large" not in item["id"], item["id"]))
+
+
+def whisper_notes() -> list[str]:
+    """Whispers in the cache that cannot be used, and why."""
+    notes = []
+    cache = engine.hub()
+    for repo in sorted(cache.glob("models--*whisper*")) if cache.is_dir() else []:
+        copy, weights_only = _whisper_copy(repo)
+        if copy is None and weights_only:
+            notes.append(f"{engine._repo_name(repo)} has Whisper's weights but not its tokenizer, which mlx-audio "
+                         f"needs; get an -asr- one instead:  {WHISPER_GET}")
+    return notes
+
+
 def ready() -> bool:
     if os.environ.get("HIKARILM_VOICE_PYTHON"):
         return python().exists()
@@ -92,22 +158,22 @@ def ready() -> bool:
 
 
 def prepare(say, base_python: str | None = None) -> bool:
-    """Make ~/.hikarilm/voice-venv once Kokoro is downloaded. True when it is ready."""
+    """Make ~/.hikarilm/voice-venv once Kokoro or a Whisper is downloaded. True when it is ready."""
     if os.environ.get("HIKARILM_VOICE_PYTHON"):
         return True
-    if folder() is None:
+    if folder() is None and not whisper_models():
         return False
     base_python = base_python or engine.find_python(OLDEST, NEWEST)
     if not base_python:
-        say(f"  Reading aloud needs Python 3.{OLDEST} or 3.{NEWEST} (Kokoro's misaki does not run on newer "
+        say(f"  Voice needs Python 3.{OLDEST} or 3.{NEWEST} (Kokoro's misaki does not run on newer "
             f"ones, and older ones get a scipy macOS cannot load). Install one with  brew install python@3.12  "
             "or from python.org, then run  hikarilm restart.")
         return False
     made = engine.venv_minor(venv())
     if made is not None and not OLDEST <= made <= NEWEST:
-        say(f"Reading aloud was set up with Python 3.{made}; setting it up again with 3.{OLDEST} or 3.{NEWEST}…")
+        say(f"Voice was set up with Python 3.{made}; setting it up again with 3.{OLDEST} or 3.{NEWEST}…")
         shutil.rmtree(venv(), ignore_errors=True)
-    if not engine._prepare_venv(venv(), python(), PACKAGES, "Kokoro (for reading aloud)", say, base_python):
+    if not engine._prepare_venv(venv(), python(), PACKAGES, "mlx-audio (for voice)", say, base_python):
         return False
     try:
         loads = subprocess.run([str(python()), "-c", LOADS], capture_output=True, text=True, timeout=300,
@@ -116,7 +182,7 @@ def prepare(say, base_python: str | None = None) -> bool:
         loads = subprocess.CompletedProcess([], 1, "", str(error))
     if loads.returncode:
         lines = (loads.stderr or loads.stdout).strip().splitlines()
-        say(f"  Kokoro is installed but does not load: {lines[-1] if lines else loads.returncode}")
+        say(f"  mlx-audio is installed but does not load: {lines[-1] if lines else loads.returncode}")
         (venv() / engine.READY_MARK).unlink(missing_ok=True)
         return False
     return True
@@ -244,6 +310,119 @@ def check_request(body: dict) -> tuple[list[str], str, float]:
     return lines, voice, speed
 
 
+# --- writing down speech -----------------------------------------------------------
+
+_listener: engine._Worker | None = None
+_listen_lock = threading.Lock()
+_listen_turn = threading.Event()
+_listen_turn.set()
+_idle: threading.Timer | None = None
+
+
+def _whisper(model: str) -> dict:
+    found = {item["id"]: item for item in whisper_models()}
+    if not found:
+        raise engine.ModelError(f"No Whisper is downloaded. Get one with:  {WHISPER_GET}  then run  hikarilm restart.")
+    return found.get(model) or next(iter(found.values()))
+
+
+def _listening(item: dict) -> engine._Worker:
+    global _listener
+    if _listener is not None and _listener.alive() and _listener.model == item["id"]:
+        return _listener
+    if _listener is not None:
+        _listener.end()
+        _listener = None
+    if not python().exists() or not ready():
+        raise engine.ModelError("Writing down speech is not set up yet. Run  hikarilm restart  in Terminal; it "
+                                "installs it once a Whisper is downloaded.")
+    started = engine._Worker(item["id"], item["folder"], ["--listen"], "listen-worker.log", python(), worker())
+    event = started.next(engine.LOAD_SECONDS)
+    if not event or not event.get("ready"):
+        started.end()
+        raise engine.ModelError((event or {}).get("error") or
+                                f"Whisper could not start. What it said is in {store.home() / 'listen-worker.log'}.")
+    _listener = started
+    return started
+
+
+def _leave_later() -> None:
+    """Whisper leaves memory after IDLE_SECONDS without being used."""
+    global _idle
+    if _idle is not None:
+        _idle.cancel()
+    _idle = threading.Timer(IDLE_SECONDS, unload_listener)
+    _idle.daemon = True
+    _idle.start()
+
+
+def transcribe(audio: bytes, model: str = "", language: str | None = None):
+    """Yields {"text": part} as Whisper writes each part down, then {"done", "language"}.
+    `audio` is 16 kHz mono 16-bit PCM. Closing the generator stops it; what was written stays."""
+    global _listen_turn
+    if not audio or len(audio) % 2:
+        raise ValueError("the recording is empty or not 16-bit sound")
+    if len(audio) > MAX_AUDIO:
+        raise ValueError(f"the recording is longer than {MAX_SECONDS // 60} minutes")
+    item = _whisper(model)
+    mine = threading.Event()
+    _listen_turn.set()
+    _listen_turn = mine
+    with _listen_lock:
+        if mine.is_set():
+            return
+        process = _listening(item)
+        process.send({"op": "transcribe", "audio": base64.b64encode(audio).decode("ascii"),
+                      "language": language or None})
+        done = stopped = False
+        try:
+            while True:
+                if mine.is_set() and not stopped:
+                    process.send({"op": "stop"})
+                    stopped = True
+                event = process.next(PART_SECONDS)
+                if event is None or "error" in event:
+                    done = True
+                    if event is None or not process.alive():
+                        _forget_listener(process)
+                    raise engine.ModelError((event or {}).get("error") or
+                                            f"Whisper stopped. What it said is in {store.home() / 'listen-worker.log'}.")
+                if event.get("done"):
+                    done = True
+                    yield {"done": True, "language": event.get("language"), "model": item["id"]}
+                    return
+                if "text" in event and not mine.is_set():
+                    yield {"text": event["text"]}
+        finally:
+            if not done:
+                _finish(process, stopped)
+            _leave_later()
+
+
+def _forget_listener(process: engine._Worker) -> None:
+    global _listener
+    process.end()
+    if _listener is process:
+        _listener = None
+
+
+def unload_listener() -> None:
+    _listen_turn.set()
+    with _listen_lock:
+        if _listener is not None:
+            _forget_listener(_listener)
+
+
+def listening() -> list[dict]:
+    current = _listener
+    if current is None or not current.alive():
+        return []
+    return [{"name": current.model, "size": current.size, "expires": None}]
+
+
 def status() -> dict:
     return {"downloaded": folder() is not None, "ready": ready(), "voices": voices(), "default": DEFAULT_VOICE,
-            "get": GET, "speeds": list(SPEEDS)}
+            "get": GET, "speeds": list(SPEEDS),
+            "whisper": [{"id": item["id"], "label": item["label"]} for item in whisper_models()],
+            "whisper_get": WHISPER_GET, "whisper_small_get": "~/.hikarilm/venv/bin/hf download " + SMALL_WHISPER,
+            "whisper_notes": whisper_notes(), "max_seconds": MAX_SECONDS}

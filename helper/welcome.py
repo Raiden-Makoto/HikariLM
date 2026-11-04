@@ -1,13 +1,13 @@
 """The welcome page's list (/welcome): the models to start with, and which are on this Mac.
 
-The same list as Recommended models in PLAN.md. Whisper is left out until HikariLM uses it (5.5).
+The same list as Recommended models in PLAN.md.
 """
 
 from __future__ import annotations
 
 from helper import engine, imagegen, voice
 
-GROUPS = ("Chat", "Pictures", "Reading aloud", "Optional")
+GROUPS = ("Chat", "Pictures", "Voice", "Optional")
 
 # No BitNet model is recommended over the others, so its entry names none.
 BITNET = "<bitnet model>"
@@ -35,7 +35,13 @@ RECOMMENDED = [
     {"group": "Pictures", "name": "FLUX.2 klein base 4B", "repo": "mflux-community/flux-2-klein-base-4b-mflux-q4",
      "download": "4.6 GB", "for": "Drawing with LoRAs",
      "note": "Slower (50 steps); the one LoRAs draw on."},
-    {"group": "Reading aloud", "name": "Kokoro 82M", "repo": voice.REPO, "download": "0.4 GB",
+    {"group": "Voice", "name": "Whisper large-v3 turbo", "repo": voice.WHISPER, "download": "1.6 GB",
+     "for": "Speech to text",
+     "note": "Press the microphone by Attach and speak; your words are written into the message box to read "
+             "and fix before you send. Many languages. After downloading it, run  hikarilm restart  once."},
+    {"group": "Voice", "name": "Whisper small", "repo": voice.SMALL_WHISPER, "download": "0.5 GB",
+     "for": "Speech to text, smaller", "note": "Less memory and quicker, and a little less accurate."},
+    {"group": "Voice", "name": "Kokoro 82M", "repo": voice.REPO, "download": "0.4 GB",
      "for": "Reading answers aloud",
      "note": "Press Listen under an answer to hear it, in one of Kokoro's English voices. Stays loaded beside "
              "the chat model. After downloading it, run  hikarilm restart  once to set it up."},
@@ -55,5 +61,6 @@ def listing() -> list[dict]:
         have.add(BITNET)
     if voice.folder() is not None:
         have.add(voice.REPO)
+    have |= {item["id"] for item in voice.whisper_models()}
     return [{**model, "command": imagegen.DOWNLOAD + model["repo"], "have": model["repo"] in have}
             for model in RECOMMENDED]

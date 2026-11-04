@@ -19,6 +19,7 @@ import { start as startShortcuts } from "./shortcuts.js";
 import { start as startLoras } from "./loras.js";
 import { start as startRules } from "./rules.js";
 import { start as startListen } from "./listen.js";
+import { start as startDictate } from "./dictate.js";
 
 startCore();
 startMarkdown();
@@ -36,6 +37,7 @@ startShortcuts();
 startLoras();
 startRules();
 startListen();
+startDictate();
 
 applyTheme(localStorage.getItem("hikarilm-theme") || "light");
 applyBackground(localStorage.getItem("hikarilm-bg") || "");

@@ -125,6 +125,10 @@
 
     <form class="composer" id="composer">
       <div class="notice" id="notice" role="status" hidden></div>
+      <div class="notice" id="mic-note" role="status" hidden>
+        <span id="mic-text"></span>
+        <button class="choice" id="mic-close" type="button">OK</button>
+      </div>
       <div class="notice" id="change-note" role="status" hidden>
         <span id="change-text"></span>
         <button class="choice" id="change-toggle" type="button"></button>
@@ -154,6 +158,14 @@
               </svg>
             </button>
             <input id="file-input" type="file" multiple hidden>
+            <button class="icon-button" id="mic" type="button" aria-label="Speak instead of typing" aria-pressed="false" title="Speak instead of typing">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3"/>
+                <path d="M5.5 11a6.5 6.5 0 0 0 13 0"/>
+                <path d="M12 17.5V21"/>
+              </svg>
+            </button>
+            <span id="mic-state" hidden><span class="mic-level" aria-hidden="true"><span id="mic-level-bar"></span></span><span id="mic-time" role="timer">0:00</span></span>
             <select id="model" aria-label="Model"></select>
             <button class="choice" id="picture-toggle" type="button" aria-expanded="false" aria-controls="picture-options" hidden>Options</button>
             <button class="choice" id="picture-rewrite" type="button" hidden title="Have a chat model rewrite the prompt into how things look, to read and edit before drawing">Rewrite</button>
@@ -295,6 +307,18 @@
           <input class="switch" id="python-toggle" type="checkbox" role="switch">
         </label>
         <p class="note">Chat models can write Python and run it instead of working out math by hand, the way ChatGPT runs code. It has numpy, sympy, pandas, scipy and matplotlib, and plots show as pictures. Each run shows in the answer as “Ran Python”, which opens to the code and what it printed. It runs in macOS’s sandbox: no internet, no other programs, and none of your files; it stops after 30 seconds or 1.25 GB of memory. Not every model calls it; one that does not just answers as before. Coding models never get it, so they stick to writing code, and neither do DeepSeek R1 and BitNet models, which did not use the tool well.</p>
+      </div>
+      <div class="setting" id="listen-setting">
+        <span class="setting-label">Speech to text</span>
+        <label class="field-row">
+          <span>Listen with</span>
+          <select id="whisper-choice"></select>
+        </label>
+        <label class="field-row">
+          <span>Language</span>
+          <select id="whisper-language"></select>
+        </label>
+        <p class="note" id="whisper-note" role="status"></p>
       </div>
       <div class="setting" id="voice-setting">
         <span class="setting-label">Reading aloud</span>

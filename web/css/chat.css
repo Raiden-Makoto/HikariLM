@@ -92,6 +92,15 @@ h1 {
 .answer-actions button[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
 #voice-sample:disabled { cursor: default; opacity: 0.5; }
 #voice-speed { accent-color: var(--you); }
+#mic[data-state="recording"] { color: var(--danger); background: var(--hover); }
+#mic[data-state="writing"] { color: var(--ink); animation: thinking-pulse 1.6s ease-in-out infinite; }
+#mic.unready:not([data-state="recording"]):not([data-state="writing"]) { opacity: 0.55; }
+#mic-state { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+#mic-state[hidden] { display: none; }
+.mic-level { display: inline-block; width: 2.6rem; height: 0.3rem; border-radius: 999px; background: var(--line); overflow: hidden; }
+#mic-level-bar { display: block; width: 0; height: 100%; background: var(--danger); transition: width 0.08s linear; }
+#mic[data-state="writing"] ~ #mic-state .mic-level { display: none; }
+#mic-note code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; user-select: all; }
 .prompt-edit textarea { display: block; width: min(36rem, 70vw); padding: 0.4rem 0.55rem; border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 8px; background: rgba(255, 255, 255, 0.12); color: #fff; font: inherit; line-height: 1.45; resize: none; }
 .turn.assistant {
   padding-left: 0.15rem;

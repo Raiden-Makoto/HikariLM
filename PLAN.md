@@ -39,8 +39,8 @@ Any MLX model works; these are the ones to start with. Get one with
   8B call the Python tool.
 - **FLUX.2 klein**: the 4B is the one to take with less than 18 GB of RAM, the 9B with more. The
   base 4B is slower (50 steps) and is the one LoRAs draw on.
-- **Kokoro** reads answers aloud from 5.0, beside the chat model. **Whisper** is listed for when
-  speech to text comes in (5.5); HikariLM does not use it yet.
+- **Kokoro** reads answers aloud from 5.0, beside the chat model. **Whisper** writes down what you
+  say from 5.5; only mlx-community's `-asr-` Whisper repos work (the others have no tokenizer).
 - **BitNet** models are optional: 1.58-bit weights, small for their size class. None is
   recommended over the others; any one HikariLM runs will do (the Falcon3 and Falcon-E
   1.58-bit family, Microsoft's `microsoft/bitnet-b1.58-2B-4T`). They get no tools.
@@ -137,7 +137,7 @@ In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/l
 - [x] **Memory.** Kokoro (82M parameters) stays loaded beside the chat model, like the notes model:
   it never counts as the one large model, and it is never unloaded for one. It loads the first
   time something is read aloud, in the voice worker, which keeps running for it.
-- [x] **Setup**: Kokoro on the welcome page under *Reading aloud*, with its command and Copy; the
+- [x] **Setup**: Kokoro on the welcome page under *Voice*, with its command and Copy; the
   start window says how to get it, and `hikarilm restart` sets it up once it is there.
 - [x] **Settings**: *Reading aloud*: the voice, a sample to hear it, the speed, and *Read answers
   aloud when they finish*.
@@ -145,27 +145,40 @@ In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/l
 
 ### v5.5.0: speech to text
 
-- [ ] Check on the Mac before building on it: the exact Whisper repos mlx-audio loads, its text
-  against mlx-whisper's on the same clip, and how long the turbo takes for a minute of speech.
-  It goes in the voice venv 5.0 made. Write down what was found here.
-- [ ] **Microphone button** by Attach, in Chat, the code editor and picture mode. Click to start,
-  click to stop (Esc cancels); a level meter and a timer while it listens. The words go into
-  the message box, added where the cursor is, to read and fix; Send stays yours. Microphone
-  access works on 127.0.0.1 without HTTPS. When it is refused, the page says how to allow it.
-- [ ] **No ffmpeg.** The page records with MediaRecorder, decodes with Web Audio and resamples to
-  16 kHz mono with an OfflineAudioContext, and sends 16-bit PCM. Whisper reads it as a number
-  array. Limit: 10 minutes a recording.
-- [ ] **`/api/transcribe`**: takes the PCM, the model and the language (or none, to detect it),
-  streams `{"text"}` as it is written, then `{"done"}`. Runs in a voice worker
-  (`helper/voice_worker.py`) in the voice venv, started like the picture worker. Stop ends it
-  and keeps what was written so far.
-- [ ] **Memory.** Find out on the Mac whether Whisper turbo can stay loaded beside the chat model,
-  like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
-  page says so each time, the way reading pictures says what was loaded and what left.
-- [ ] **Setup**: Whisper turbo and the smaller Whisper on the welcome page beside Kokoro, each
-  with its command and Copy. *Get a voice model…* in the microphone button's place until one is
-  there.
-- [ ] **Settings**: *Listen with* (the speech-to-text model) and the language (or detect).
+In `helper/voice.py`, `helper/voice_worker.py --listen` and `web/js/dictate.js`; not released.
+What was found, from mlx-audio 0.6.4: its Whisper loads the tokenizer with transformers'
+`WhisperProcessor` from the model's own folder, so only repos that have `tokenizer.json` and
+`preprocessor_config.json` work: mlx-community's `-asr-` ones (`whisper-large-v3-turbo-asr-fp16`,
+1.6 GB; `whisper-small-asr-fp16`, 0.5 GB; 4-, 5-, 6- and 8-bit ones too). The older
+`whisper-large-v3-turbo` and `whisper-small-mlx` are weights only; the start window names any it
+finds and says which to get instead. It takes 16 kHz sound as a number array, and goes in the
+voice venv 5.0 made.
+
+- [x] **Microphone button** by Attach, in Chat, the code editor and picture mode. Click to start,
+  click to stop; Esc cancels a recording, and stops the writing down (keeping what was written).
+  A level meter and a timer while it listens. The words go into the message box where the cursor
+  was, with spaces around them, to read and fix; Send stays yours.
+- [x] **Asking for the microphone.** The page asks only when the microphone button is pressed.
+  The first time, it says the browser will ask and that the sound stays on the Mac. Already
+  blocked: it says how to allow it in that browser (Safari, Chrome, Edge, Firefox), and in macOS
+  (System Settings > Privacy & Security > Microphone), without asking again. Refused by macOS,
+  no microphone, or one another app holds: each says what to do. Opened at an address other than
+  127.0.0.1 or localhost, where browsers refuse the microphone over http: it says so.
+- [x] **No ffmpeg.** The page records with MediaRecorder, decodes with Web Audio and resamples to
+  16 kHz mono with an OfflineAudioContext, and sends 16-bit PCM. Limit: 10 minutes a recording;
+  it stops itself there.
+- [x] **`/api/transcribe`**: the PCM as the body, `?model=` and `?language=` (none to detect).
+  The worker writes it down 30 seconds at a time, cut at the quietest tenth of a second near
+  each 30, skips parts that are silence (Whisper makes words up for them), and streams `{"text"}`
+  for each part, then `{"done", "language"}`. Stop ends it and keeps what was written so far.
+- [x] **Memory.** Whisper stays loaded beside the chat model, like Kokoro, and leaves after 5
+  minutes unused.
+- [x] **Setup**: Whisper turbo and the smaller Whisper on the welcome page under *Voice*, beside
+  Kokoro, each with its command and Copy. Until one is there, the microphone button is dimmed
+  and says *Get a voice model…*, with the command and a link to the welcome page.
+- [x] **Settings**: *Speech to text*: *Listen with* (the Whisper) and the language (or detect).
+- [ ] On the Mac: speak a sentence and a minute of speech into it in Safari and in Chrome, and
+  allow, refuse and allow the microphone again.
 - [ ] README, `__version__ = "5.5.0"`, tag `v5.5.0`.
 
 ## More LoRAs (v6)

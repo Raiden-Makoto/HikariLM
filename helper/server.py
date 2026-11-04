@@ -326,6 +326,9 @@ class Handler(BaseHTTPRequestHandler):
             # Beside the chat model, so it never waits on a chat or makes one wait.
             self._speak()
             return
+        if urlparse(self.path).path == "/api/transcribe":
+            self._transcribe()
+            return
         if self.path in (LORAS, LORAS + "/trigger", LORAS + "/remove"):
             self._loras()
             return
@@ -883,6 +886,48 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_line({"error": str(error)})
         finally:
             reading.close()
+
+    def _transcribe(self) -> None:
+        """Writes down a recording: 16 kHz mono 16-bit PCM as the body, ?model= and ?language=
+        (none to detect it). Streams {"text"} for each part as it is written, then {"done"}."""
+        query = parse_qs(urlparse(self.path).query)
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if length <= 0 or length > voice.MAX_AUDIO:
+            # Read what was sent, so the page gets this answer rather than a reset connection.
+            left = length if 0 < length <= 4 * voice.MAX_AUDIO else 0
+            while left > 0:
+                left -= len(self.rfile.read(min(left, 1 << 20)) or b"x" * left)
+            self._send_json({"error": f"the recording is missing or longer than {voice.MAX_SECONDS // 60} minutes"},
+                            status=400)
+            return
+        audio = self.rfile.read(length)
+        language = query.get("language", [""])[0].strip().lower()
+        if language and not re.fullmatch(r"[a-z]{2,3}", language):
+            self._send_json({"error": "language must be a code such as en"}, status=400)
+            return
+        try:
+            writing = voice.transcribe(audio, query.get("model", [""])[0], language or None)
+            event = next(writing, None)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        except ModelError as error:
+            self._send_json({"error": str(error)}, status=503)
+            return
+        try:
+            self._stream_start()
+            try:
+                while event is not None:
+                    if not self._stream_line(event):
+                        return
+                    event = next(writing, None)
+            except ModelError as error:
+                self._stream_line({"error": str(error)})
+        finally:
+            writing.close()
 
     def _loaded(self) -> dict:
         """What is really in memory, asked of the MLX worker rather than remembered, since

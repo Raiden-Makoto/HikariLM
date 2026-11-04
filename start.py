@@ -83,13 +83,21 @@ def report_pictures() -> None:
 
 
 def report_voice() -> None:
-    """Set up reading aloud once Kokoro is there, or say how to get it."""
+    """Set up voice once Kokoro or a Whisper is there, or say how to get them."""
     from helper import voice
 
-    if voice.folder() is None:
+    kokoro, whispers = voice.folder() is not None, voice.whisper_models()
+    ready = (kokoro or bool(whispers)) and voice.prepare(say)
+    if not kokoro:
         say("No voice for reading answers aloud yet. To get Kokoro:  " + voice.GET)
-    elif voice.prepare(say):
+    elif ready:
         say("Reading aloud: Kokoro, " + str(len(voice.voices())) + " English voices")
+    if not whispers:
+        say("Nothing to write down speech with yet. To get Whisper:  " + voice.WHISPER_GET)
+    elif ready:
+        say("Writing down speech: " + ", ".join(item["label"] for item in whispers))
+    for note in voice.whisper_notes():
+        say("  " + note)
 
 
 def prepare(url: str) -> None:
