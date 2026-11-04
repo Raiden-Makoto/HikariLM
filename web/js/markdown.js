@@ -78,6 +78,11 @@ const inlineMath = {
     // $5 and $10 is money, not math: no space just inside the dollars, no digit after.
     found = /^\\\(([\s\S]+?)\\\)/.exec(src) || /^\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\d)/.exec(src);
     if (found) return { type: "inlineMath", raw: found[0], text: found[1], display: false };
+    // Qwen3 pads its math, $ x = 0 $: a space just inside both dollars. "$ 5 to $ 10" is still money.
+    found = /^\$[ \t]+((?:\\.|[^\\$\n])+?)[ \t]+\$(?!\d)/.exec(src);
+    if (found && !/^\d[\d,.]*\s+(?<!\\)[a-z]{2,}/i.test(found[1])) {
+      return { type: "inlineMath", raw: found[0], text: found[1], display: false };
+    }
   },
   renderer: (token) => mathHtml(token.text, token.display),
 };
