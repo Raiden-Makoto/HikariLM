@@ -179,7 +179,7 @@ def pack_ternary(weight, xp, divided: bool):
     their mean size), packed the way TII and Microsoft ship them: value i of each byte, bits 2i
     and 2i+1, holds row i * rows/4 + r, stored as 0, 1, 2 for -1, 0, 1. Returns the packed
     weights and the matrix's scale, as a divisor when `divided` (TII's BitLinear) else a factor.
-    `xp` is mlx.core, or numpy in the tests."""
+    `xp` is mlx.core or numpy."""
     wide = weight.astype(xp.float32)
     if wide.shape[0] % 4:
         raise ValueError("a BitNet layer needs a number of outputs divisible by 4")

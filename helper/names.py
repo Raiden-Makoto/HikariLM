@@ -1,8 +1,8 @@
 """Short model names for people, the same as the page's modelLabel in web/js/models.js.
 
 "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit" is "DeepSeek R1". Earlier
-entries win, so a distill is named for its teacher. tests/test_web.py checks
-that this table and the page's are the same.
+entries win, so a distill is named for its teacher. Keep this table and the
+page's the same.
 """
 
 from __future__ import annotations

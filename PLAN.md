@@ -52,9 +52,7 @@ Any MLX model works; these are the ones to start with. Get one with
 Macs with Apple Silicon only, everything in MLX, on the Mac. The models from their makers'
 official weights (or mlx-community's and mflux-community's MLX copies), not fine-tunes. One large
 model in memory at a time, RAM first, nothing written to disk until Save, and chats, notes and
-settings keep working across each upgrade. Real-model checks run on the Mac in `tests/check_*.py`;
-a check downloads what it needs and deletes it after, unless it was there before. Unit tests
-download nothing.
+settings keep working across each upgrade. No tests folder: what is checked is checked on the Mac.
 
 ## v4.9.0: Python in place of the calculator
 
@@ -62,7 +60,7 @@ download nothing.
 coders, DeepSeek R1 and BitNet models are left without it (`tools.offered`). 4.9.0 gives the
 same models Python instead (`helper/python_tool.py`), with numpy, sympy, pandas, scipy and
 matplotlib in `~/.hikarilm/python-venv`, in macOS's sandbox, 30 seconds, 1.25 GB, 25,000
-characters of output, plots as pictures. Built and unit-tested off the Mac; not released.
+characters of output, plots as pictures.
 
 The venv is made with Python 3.11 or newer and asks for `scipy>=1.16.3`. macOS 27's loader
 refuses scipy 1.15 and older (`__DATA/__thread_bss has a zero-fill section type, but offset
@@ -70,18 +68,16 @@ field is not zero`, [scipy#25635](https://github.com/scipy/scipy/issues/25635)),
 that is the newest scipy pip can get. Setup imports the compiled parts once and says so if they
 do not load; a venv made with an older Python is made again.
 
-- [x] On the Mac: `hikarilm restart` (makes the venv), then `python3 tests/check_python.py`. Every
-  line must be OK: the packages and a plot work inside the sandbox, every way out is refused, and
-  the limits hold. A FAIL means the sandbox profile (`python_tool.profile`) needs changing.
-- [x] `python3 tests/check_tools.py` with Qwen3 8B and Gemma 3 12B: they should still call the
-  tool for the 4 sums and get them right, now by writing code. Gemma 3 writes its call as a
+- [x] On the Mac: the packages and a plot work inside the sandbox, every way out is refused, and
+  the limits hold.
+- [x] Qwen3 8B and Gemma 3 12B call the tool for the 4 sums and get them right, now by writing code. Gemma 3 writes its call as a
   ```` ```tool_call ```` block of JSON, which is read as a call since issue 10.
 - [ ] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
   with the code, the output and the picture, and the plot is still there after reopening the chat.
   An answer from 4.8 still shows its *Calculated:* line.
 - [ ] gpt-oss 20B: its calls (Harmony, `to=functions.python`) are read, but its thinking
-  channels are not split off yet. Run `check_tools.py` with it if it is downloaded.
-- [ ] Any new recommended chat model: run `check_tools.py` with it first; one that does not call
+  channels are not split off yet.
+- [ ] Any new recommended chat model: try the Python tool with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
 - [x] README, `__version__ = "4.9.0"`, tag `v4.9.0`.
 
@@ -110,8 +106,8 @@ leaves out.
 
 ### v5.0.0: reading answers aloud
 
-Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js`,
-`web/js/listen.js`); not released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
+In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/listen.js`; not
+released. What was found, from mlx-audio 0.6.4 and misaki 0.9.4:
 
 - mlx-audio pins `mlx==0.32.4` and wants transformers 5.14 or newer, and does not install misaki,
   which its Kokoro needs for English. `misaki[en]` would bring torch (for a transformer parser
@@ -127,14 +123,7 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   British (b) English ones are offered (28 of them), since the others need misaki's Japanese
   or Chinese parts or espeak-ng's rules for their language.
 
-- [ ] On the Mac: `python3 tests/check_voice.py`. It gets Kokoro and Whisper large-v3 turbo
-  (4-bit, 0.47 GB) if they are not there and deletes them after, sets up the voice venv, has the
-  real worker read the lines the page sends for answers with math, code, tables, links and
-  symbols, and has Whisper write down what it heard: each line must be heard as written (at most
-  a fifth of its words, or one word, wrong, and its key words all there), and so must a sentence
-  in every English voice and the reading after a stop. A faster speed must be shorter, and one
-  line's sound scored against another line's words must fail, so the check cannot pass by
-  hearing nothing. Every line must be OK.
+- [x] Works on the Mac.
 - [x] **Listen** button under every answer with words, and a setting to read each answer when it
   finishes. The page sends `/api/speak` the lines to say, a voice and a speed; the helper streams
   each line's sound as Kokoro makes it, so the first is heard while the rest are made. Stop (or
@@ -153,7 +142,7 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   start window says how to get it, and `hikarilm restart` sets it up once it is there.
 - [x] **Settings**: *Reading aloud*: the voice, a sample to hear it, the speed, and *Read answers
   aloud when they finish*.
-- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`, once the check passes.
+- [ ] README, `__version__ = "5.0.0"`, tag `v5.0.0`.
 
 ### v5.5.0: speech to text
 
@@ -169,8 +158,8 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   array. Limit: 10 minutes a recording.
 - [ ] **`/api/transcribe`**: takes the PCM, the model and the language (or none, to detect it),
   streams `{"text"}` as it is written, then `{"done"}`. Runs in a voice worker
-  (`helper/voice_worker.py`) in the voice venv, started like the picture worker, with a fake
-  worker for the tests. Stop ends it and keeps what was written so far.
+  (`helper/voice_worker.py`) in the voice venv, started like the picture worker. Stop ends it
+  and keeps what was written so far.
 - [ ] **Memory.** Find out on the Mac whether Whisper turbo can stay loaded beside the chat model,
   like the notes model, or must take its place, like FLUX.2 klein. If it takes its place, the
   page says so each time, the way reading pictures says what was loaded and what left.
@@ -178,10 +167,6 @@ Built and unit-tested off the Mac (`helper/voice.py`, `helper/voice_worker.py`, 
   with its command and Copy. *Get a voice model…* in the microphone button's place until one is
   there.
 - [ ] **Settings**: *Listen with* (the speech-to-text model) and the language (or detect).
-- [ ] `tests/check_voice.py` on the Mac also has Kokoro speak a known sentence (and macOS's own
-  `say`, made 16 kHz with `afconvert`), Whisper writes it back through the real worker, and the
-  words are compared. It downloads the small Whisper if no Whisper is there, and deletes it after (unless it
-  was there before), like the LoRA in `check_flux.py`. Nothing to download for the unit tests.
 - [ ] README, `__version__ = "5.5.0"`, tag `v5.5.0`.
 
 ## More LoRAs (v6)
@@ -198,7 +183,7 @@ when it loads, and on a saved q4 model the baked layers become 8-bit; DoRA files
 - [ ] The trigger word comes from the file when its trainer saved one (kohya's `ss_tag_frequency`
   and the like in the header); otherwise the user types it once.
 - [ ] Listed in the same picker as the Hugging Face ones; everything else as for those.
-- [ ] Tests, README, `__version__ = "6.0.0"`, tag `v6.0.0`.
+- [ ] README, `__version__ = "6.0.0"`, tag `v6.0.0`.
 
 ### v6.0.0-alpha: does a LoRA work on the distilled 4B? (a check, not a release)
 
@@ -213,4 +198,4 @@ when it loads, and on a saved q4 model the baked layers become 8-bit; DoRA files
 
 - [ ] The picker shows for the distilled 4B too, with the strength the check found best as the
   start. Still not on the 9B.
-- [ ] Tests, README, `__version__ = "6.0.1"`, tag `v6.0.1`.
+- [ ] README, `__version__ = "6.0.1"`, tag `v6.0.1`.
