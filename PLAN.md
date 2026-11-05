@@ -112,7 +112,7 @@ a saved q4 model the baked layers become 8-bit; DoRA files do not load.
   whose config has one with mlx-vlm.)
 - [x] **LoRA pictures through mflux's command**, `mflux-generate-flux2 --config-from-conf <json>`,
   as above. Stopping a picture ends the command too (the worker runs in a process group of its own).
-- [x] On the Mac: draw with a LoRA (with and without a reference picture), and with a tag LoRA.
+- [ ] On the Mac: draw with a LoRA (with and without a reference picture), and with a tag LoRA.
 
 ### v6.0.0: your own LoRA files, on the base 4B
 
