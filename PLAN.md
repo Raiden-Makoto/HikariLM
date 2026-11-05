@@ -1,6 +1,6 @@
 # HikariLM plan
 
-What is coming, in order. What is already in is in the README and the release notes (5.5.0 is
+What is coming, in order. What is already in is in the README and the release notes (5.9.9 is
 the latest).
 
 - **v6**: LoRA files from this Mac, and LoRAs on the distilled 4B if a check shows they work.
@@ -94,7 +94,7 @@ from a JSON config passed with `--config-from-conf`, the way LoRAs were tried wi
 the model with the LoRA for each picture. mflux bakes a LoRA into the model when it loads, and on
 a saved q4 model the baked layers become 8-bit; DoRA files do not load.
 
-### Already in, before 6.0 (not released)
+### Already in: 5.9.9
 
 - [x] **No trigger word needed.** A LoRA's trigger word is optional: empty puts nothing in front of
   the prompt, and the LoRA list and look-up say so.
@@ -112,7 +112,7 @@ a saved q4 model the baked layers become 8-bit; DoRA files do not load.
   whose config has one with mlx-vlm.)
 - [x] **LoRA pictures through mflux's command**, `mflux-generate-flux2 --config-from-conf <json>`,
   as above. Stopping a picture ends the command too (the worker runs in a process group of its own).
-- [ ] On the Mac: draw with a LoRA (with and without a reference picture), and with a tag LoRA.
+- [x] On the Mac: draw with a LoRA (with and without a reference picture), and with a tag LoRA.
 
 ### v6.0.0: your own LoRA files, on the base 4B
 
