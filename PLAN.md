@@ -145,7 +145,7 @@ In `helper/voice.py`, `helper/voice_worker.py`, `web/js/spoken.js` and `web/js/l
 
 ### v5.5.0: speech to text
 
-In `helper/voice.py`, `helper/voice_worker.py --listen` and `web/js/dictate.js`; not released.
+In `helper/voice.py`, `helper/voice_worker.py --listen` and `web/js/dictate.js`.
 What was found, from mlx-audio 0.6.4: its Whisper loads the tokenizer with transformers'
 `WhisperProcessor` from the model's own folder, so only repos that have `tokenizer.json` and
 `preprocessor_config.json` work: mlx-community's `-asr-` ones (`whisper-large-v3-turbo-asr-fp16`,
@@ -177,9 +177,8 @@ voice venv 5.0 made.
   Kokoro, each with its command and Copy. Until one is there, the microphone button is dimmed
   and says *Get a voice model…*, with the command and a link to the welcome page.
 - [x] **Settings**: *Speech to text*: *Listen with* (the Whisper) and the language (or detect).
-- [ ] On the Mac: speak a sentence and a minute of speech into it in Safari and in Chrome, and
-  allow, refuse and allow the microphone again.
-- [ ] README, `__version__ = "5.5.0"`, tag `v5.5.0`.
+- [x] Works on the Mac.
+- [x] README, `__version__ = "5.5.0"`, tag `v5.5.0`.
 
 ## More LoRAs (v6)
 
