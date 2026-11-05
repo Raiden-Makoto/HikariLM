@@ -56,10 +56,10 @@ settings keep working across each upgrade. No tests folder: what is checked is c
 
 ## Open checks
 
-- [ ] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
+- [x] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
   with the code, the output and the picture, and the plot is still there after reopening the chat.
   An answer from 4.8 still shows its *Calculated:* line.
-- [ ] Any new recommended chat model: try the Python tool with it first; one that does not call
+- [x] Any new recommended chat model: try the Python tool with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
 
 ## Notes from earlier releases
