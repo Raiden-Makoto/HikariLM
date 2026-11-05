@@ -39,6 +39,8 @@ Options: `--foreground` to run in the terminal until Ctrl+C, as before 4.3.0; `-
 
 Any MLX model works: whatever you download from Hugging Face is listed in the page, quantized or full precision. mlx-lm runs text models and mlx-vlm the ones that read pictures. Pick what fits your Mac's memory.
 
+**Note:** gpt-oss is not recommended due to outdated and not tested.
+
 If you are not sure where to start, these fit a Mac with less than 18 GB of RAM (one is loaded at a time). The welcome page, http://127.0.0.1:8787, lists them with their download commands and says which you have.
 
 | For | Suggested model | Size |
