@@ -16,54 +16,79 @@
   <main class="setup">
     <a class="setup-back" href="/chat">← Back to HikariLM</a>
     <h1>Make a LoRA</h1>
-    <p class="setup-lead">A LoRA is a small add-on file that teaches FLUX.2 klein one thing it does not know: a style, a character, an object. You make it from your own pictures, with <a href="https://github.com/filipstrand/mflux">mflux</a>'s trainer, on this Mac. HikariLM does not train; this page walks you through doing it in Terminal. HikariLM draws with LoRAs on FLUX.2 klein base 4B.</p>
+    <p class="setup-lead">A LoRA is a small add-on file that teaches FLUX.2 klein one thing it does not know: a style, a character, an object. You make it from your own pictures, with <a href="https://github.com/filipstrand/mflux">mflux</a>'s trainer, <code>mflux-train</code>, on this Mac. HikariLM does not train; this page walks you through doing it in Terminal, with every command to copy. HikariLM draws with LoRAs on FLUX.2 klein base 4B.</p>
 
     <section class="setup-standing">
-      <p><strong>Before you start.</strong> Set up making pictures first (<a href="/setup/pictures">the picture setup page</a>), so mflux is installed in <code>~/.hikarilm/pictures-venv</code>. Training takes hours and uses the whole Mac, so stop HikariLM while it runs (<code>hikarilm stop</code>) and start it again after (<code>hikarilm start</code>).</p>
+      <p><strong>Before you start.</strong> Set up making pictures first (<a href="/setup/pictures">the picture setup page</a>), so mflux is installed in <code>~/.hikarilm/pictures-venv</code>. Training takes hours and uses the whole Mac, so stop HikariLM while it runs (<code>hikarilm stop</code>) and start it again after (<code>hikarilm start</code>). The commands below use a folder for each LoRA, such as <code>~/lora/zq-usagi</code>; make it and go into it first:</p>
+      <div class="setup-command"><code>mkdir -p ~/lora/zq-usagi/dataset && cd ~/lora/zq-usagi</code></div>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">1</span> Download the base 4B</h2>
-      <p>LoRAs are trained on the base model, not the quick 4-step one. mflux-community's 4-bit copy (4.6 GB):</p>
+      <h2><span class="setup-number">1</span> LoRA or QLoRA: pick the base and download it</h2>
+      <p>LoRAs are trained on the base model, not the quick 4-step one. The LoRA itself is always the same small file; what differs is how the 4B it learns on is held in memory while it trains:</p>
+      <ul>
+        <li><strong>QLoRA</strong>: the base model is quantized (4-bit) and stays frozen; only the LoRA, kept in full precision, learns. It needs the least memory and the smallest download. Start here.</li>
+        <li><strong>LoRA</strong>: the base model in 8-bit or in full precision. It needs more memory and time, and keeps a little more of the base model's detail while it learns.</li>
+      </ul>
+      <table>
+        <tr><th>Kind</th><th>Base</th><th>Download</th><th>In <code>train.json</code> (step 5)</th></tr>
+        <tr><td>QLoRA, 4-bit</td><td><code>mflux-community/flux-2-klein-base-4b-mflux-q4</code></td><td>4.6 GB</td><td><code>"model_path": "mflux-community/flux-2-klein-base-4b-mflux-q4"</code>, <code>"quantize": null</code></td></tr>
+        <tr><td>LoRA, 8-bit</td><td><code>mflux-community/flux-2-klein-base-4b-mflux-q8</code></td><td>8.6 GB</td><td><code>"model_path": "mflux-community/flux-2-klein-base-4b-mflux-q8"</code>, <code>"quantize": null</code></td></tr>
+        <tr><td>LoRA, full precision</td><td><code>black-forest-labs/FLUX.2-klein-base-4B</code></td><td>about 24 GB</td><td>no <code>model_path</code> line, <code>"quantize": null</code> (or <code>8</code> or <code>4</code> to quantize it as it loads, which makes it a QLoRA again)</td></tr>
+      </table>
+      <p>The 4-bit copy:</p>
       <div class="setup-command"><code>~/.hikarilm/venv/bin/hf download mflux-community/flux-2-klein-base-4b-mflux-q4</code></div>
-      <p>The 8-bit copy, <code>mflux-community/flux-2-klein-base-4b-mflux-q8</code> (8.6 GB), keeps more detail. If you take it, change <code>model_path</code> in step 4 to match.</p>
+      <p>or the 8-bit one, or the full one:</p>
+      <div class="setup-command"><code>~/.hikarilm/venv/bin/hf download mflux-community/flux-2-klein-base-4b-mflux-q8</code></div>
+      <div class="setup-command"><code>~/.hikarilm/venv/bin/hf download black-forest-labs/FLUX.2-klein-base-4B</code></div>
+      <p>A LoRA made on any of them draws on all of them, so you can train on one and draw in HikariLM with the 4-bit one. If a run is killed at its first step for want of memory, go one row up, and see <code>gradient_checkpointing</code> and <code>low_ram</code> in step 5.</p>
     </section>
 
     <section class="setup-step">
       <h2><span class="setup-number">2</span> Gather the pictures</h2>
-      <p>Put them in one folder, each with a caption file of the same name:</p>
-      <pre class="setup-tree">dataset/
-  001.png
-  001.txt
-  002.png
-  002.txt
-  …
-  preview_1.txt</pre>
+      <p>Put them in <code>dataset/</code>, each with a caption file of the same name:</p>
+      <pre class="setup-tree">zq-usagi/
+  dataset/
+    001.png
+    001.txt
+    002.jpg
+    002.txt
+    …
+    preview_1.txt
+  train.json</pre>
       <ul>
-        <li>PNG, JPEG or WebP. Any size; the long side is brought down to 1024.</li>
-        <li>Every picture needs its <code>.txt</code>; the trainer stops and names the one that has none.</li>
-        <li>Variety teaches more than numbers: the thing you want, in different poses, places, lights and framings. Leave out blurry pictures and near-copies.</li>
-        <li><code>preview_1.txt</code>, <code>preview_2.txt</code>… (optional) are prompts it draws every so often while it trains, so you can see the LoRA take hold. Write them the way you will prompt later, with the trigger word (step 3), such as <code>zq_usagi, riding a bicycle by the sea</code>. Pick something that is in none of your pictures, so you can see whether it learned the character or just copies the pictures.</li>
+        <li>PNG, JPEG or WebP. Any size; the long side is brought down to <code>max_resolution</code> (1024). The names do not matter, only that a picture and its <code>.txt</code> share one.</li>
+        <li>How many: for a character or an object, 15 to 40; for a style, 30 to 80. Variety teaches more than numbers: the thing you want, in different poses, places, lights and framings. Leave out blurry pictures, near-copies, and pictures where the thing is tiny or cut off. Crop each so the thing fills a good part of it.</li>
+        <li>Nothing in them you do not want learned: watermarks, text, frames, the same background in every one. What is in every picture ends up in the LoRA.</li>
+        <li><code>preview_1.txt</code>, <code>preview_2.txt</code>… (optional) are prompts it draws every so often while it trains, so you can see the LoRA take hold. Write them the way you will prompt later (step 3), such as <code>zq_usagi, riding a bicycle by the sea</code>. Pick something that is in none of your pictures, so you can see whether it learned the character or just copies the pictures.</li>
       </ul>
+      <p>Every picture needs its <code>.txt</code>; the trainer stops and names one that has none. This lists any that are missing one:</p>
+      <div class="setup-command"><code>find dataset -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) | while read -r f; do [ -f "${f%.*}.txt" ] || echo "No caption: $f"; done</code></div>
     </section>
 
     <section class="setup-step">
       <h2><span class="setup-number">3</span> Write the captions</h2>
       <p>The captions decide what the LoRA learns, more than anything else on this page.</p>
 
-      <h3>The trigger word</h3>
-      <p>A trigger word is a name you make up for the thing the LoRA learns. It goes at the start of every caption, and later in every prompt where you want the LoRA to show. While training, the model sees the word next to your pictures again and again, and comes to read it as "this character" or "this style".</p>
-      <p>It must be a word the model has never seen, such as <code>zq_usagi</code> or <code>zq_style</code>. A real word already means something: train on <code>rabbit</code> and you blur your character with every rabbit the model knows, and every rabbit you draw afterwards turns into yours. Keep it short, with no spaces, and the same in every caption.</p>
+      <h3>A trigger word, or none</h3>
+      <p>A trigger word is a name you make up for the thing the LoRA learns, such as <code>zq_usagi</code>. It goes at the start of every caption, and later in a prompt where you want the LoRA to show. While training, the model sees the word next to your pictures again and again, and comes to read it as "this character" or "this style".</p>
+      <p><strong>Not every LoRA needs one.</strong> Without one, the LoRA shows in every picture drawn with it loaded, as much as its strength says, which is often what a style LoRA is for. With one, it shows when the prompt has the word, so you can call it up in some pictures and not others. Use one for a character or an object you want to name in a prompt, or when the thing has a name the model already knows something else by. In HikariLM, leave the LoRA's trigger word empty if it has none.</p>
+      <p>If you use one, it must be a word the model has never seen, such as <code>zq_usagi</code> or <code>zq_style</code>. A real word already means something: train on <code>rabbit</code> and you blur your character with every rabbit the model knows, and every rabbit you draw afterwards turns into yours. Keep it short, with no spaces, and the same in every caption.</p>
+
+      <h3>Sentences or tags</h3>
+      <p>FLUX.2 klein reads plain sentences, so caption in sentences, the way you will prompt: <code>sitting on a park bench, holding a red umbrella, rainy evening</code>. If you would rather prompt in booru tags (<code>1girl, solo, white_hair, rabbit_ears, park_bench, umbrella, rain</code>), caption every picture in tags instead, and keep to it: a LoRA learns the kind of words it was trained on. In HikariLM, turn on <em>Prompt with tags</em> for such a LoRA.</p>
+      <p>Optional: if you want to keep writing sentences and have them turned into tags, a model that does that, such as BooruNL, can do it, both for captions and in HikariLM (Settings, <em>Make tags with</em>). Nobody needs one; you can write the tags yourself. One converted to MLX goes in <code>~/.hikarilm/models</code>; BooruNL, for example, is converted with mlx-vlm:</p>
+      <div class="setup-command"><code>~/.hikarilm/venv/bin/mlx_vlm.convert --hf-path cooperdk/BooruNL-0.8B -q --q-bits 8 --mlx-path ~/.hikarilm/models/BooruNL-0.8B-8bit</code></div>
 
       <h3>Describe what changes, leave out what the LoRA should learn</h3>
-      <p>For every picture, the model tries to explain what it sees with the caption. What the caption names, it puts down to those words. What the caption never names, but is in every picture, it can only put down to the one word that is in every caption: the trigger word. So:</p>
+      <p>For every picture, the model tries to explain what it sees with the caption. What the caption names, it puts down to those words. What the caption never names, but is in every picture, it puts down to what is in every caption (the trigger word, if there is one) and to the LoRA itself. So:</p>
       <ul>
         <li><strong>Describe</strong> what is different in each picture: the pose, the place, the clothes that change, the light, the framing. Those stay yours to choose in a prompt.</li>
-        <li><strong>Leave out</strong> what is the same in every picture and is what you want: a character's face, fur and colors, or a style's brushwork and palette. That goes into the trigger word.</li>
+        <li><strong>Leave out</strong> what is the same in every picture and is what you want: a character's face, fur and colors, or a style's brushwork and palette. That is what the LoRA learns.</li>
       </ul>
 
       <div class="setup-example">
-        <p><strong>Example: a character.</strong> Thirty pictures of Usagi, a white rabbit girl with long ears tipped pink, red eyes and a blue scarf. Trigger word <code>zq_usagi</code>.</p>
+        <p><strong>Example: a character, with a trigger word.</strong> Thirty pictures of Usagi, a white rabbit girl with long ears tipped pink, red eyes and a blue scarf. Trigger word <code>zq_usagi</code>.</p>
         <table>
           <tr><th>The picture</th><th>Caption</th></tr>
           <tr><td>Usagi on a park bench in the rain, with an umbrella</td><td><code>zq_usagi, sitting on a park bench, holding a red umbrella, rainy evening, side view</code></td></tr>
@@ -76,21 +101,83 @@
       </div>
 
       <div class="setup-example">
-        <p><strong>Example: a style.</strong> Forty paintings with soft watercolor edges and a muted teal-and-orange palette. Trigger word <code>zq_style</code>.</p>
+        <p><strong>Example: a style, with no trigger word.</strong> Forty paintings with soft watercolor edges and a muted teal-and-orange palette.</p>
         <table>
           <tr><th>The picture</th><th>Caption</th></tr>
-          <tr><td>A lighthouse at sunset</td><td><code>zq_style, a lighthouse on a cliff at sunset, waves below</code></td></tr>
-          <tr><td>A cat on a windowsill</td><td><code>zq_style, a cat sleeping on a windowsill, potted plants</code></td></tr>
+          <tr><td>A lighthouse at sunset</td><td><code>a lighthouse on a cliff at sunset, waves below</code></td></tr>
+          <tr><td>A cat on a windowsill</td><td><code>a cat sleeping on a windowsill, potted plants</code></td></tr>
         </table>
-        <p>Say what is in the picture, never how it is painted: no "watercolor", "soft edges" or "teal". Then <code>zq_style, a busy train station</code> comes out in that style.</p>
+        <p>Say what is in the picture, never how it is painted: no "watercolor", "soft edges" or "teal". With the LoRA loaded, <code>a busy train station</code> comes out in that style, more or less as its strength says. Want to switch it on per prompt instead? Start every caption with <code>zq_style, </code> and prompt with it.</p>
       </div>
 
-      <p>One or two plain sentences each, the way you would prompt. HikariLM can write first drafts: attach a picture in Chat and ask what is in it, then cross out the words about what the LoRA should learn and put the trigger word first.</p>
+      <div class="setup-example">
+        <p><strong>Example: the same character, captioned in tags.</strong></p>
+        <table>
+          <tr><th>The picture</th><th>Caption</th></tr>
+          <tr><td>Usagi on a park bench in the rain</td><td><code>zq_usagi, solo, sitting, bench, park, holding_umbrella, red_umbrella, rain, evening, from_side</code></td></tr>
+          <tr><td>Usagi waving in a kitchen</td><td><code>zq_usagi, solo, standing, kitchen, waving, smile, morning, close-up</code></td></tr>
+        </table>
+        <p>The same rule: no <code>white_hair</code>, <code>rabbit_ears</code>, <code>red_eyes</code>. Prompt later in tags too.</p>
+      </div>
+
+      <h3>Drafts for every picture, with a model that can see</h3>
+      <p>Writing thirty captions by hand is slow; a vision model can draft them, and you fix each one after. Save this as <code>make_captions.py</code> in the LoRA's folder. It uses Gemma 3 12B (the model HikariLM reads pictures with) from <code>~/.hikarilm/venv</code>, writes a <code>.txt</code> beside every picture that has none, and never changes one that is there:</p>
+      <div class="setup-file"><pre><code>"""Draft a caption for every picture in a folder that has none yet.
+
+    ~/.hikarilm/venv/bin/python make_captions.py dataset --trigger zq_usagi \
+        --leave-out "white fur, long pink-tipped ears, red eyes, rabbit girl"
+"""
+import argparse
+from pathlib import Path
+
+from mlx_vlm import apply_chat_template, generate, load
+from mlx_vlm.utils import load_config
+
+parser = argparse.ArgumentParser()
+parser.add_argument("folder")
+parser.add_argument("--model", default="mlx-community/gemma-3-12b-it-4bit")
+parser.add_argument("--trigger", default="", help="put in front of every caption; none if empty")
+parser.add_argument("--leave-out", default="", help="what the LoRA should learn, never to be named")
+parser.add_argument("--tags", action="store_true", help="booru tags instead of sentences")
+args = parser.parse_args()
+
+ask = ("Describe this picture for a caption: the pose, what the subject is doing and holding, the place, "
+       "the light and the framing, in one short line of comma-separated phrases, no full sentences.")
+if args.tags:
+    ask = "List danbooru tags for this picture: pose, action, objects, place, light, framing. Comma-separated, nothing else."
+if args.leave_out:
+    ask += f" Never mention any of these, not even in other words: {args.leave_out}."
+ask += " Do not name the art style."
+
+model, processor = load(args.model)
+config = load_config(args.model)
+pictures = sorted(p for p in Path(args.folder).iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
+for picture in pictures:
+    caption_file = picture.with_suffix(".txt")
+    if caption_file.exists():
+        continue
+    prompt = apply_chat_template(processor, config, ask, num_images=1)
+    text = generate(model, processor, prompt, [str(picture)], max_tokens=120, temperature=0.0, verbose=False).text
+    text = " ".join(text.strip().strip('"').split())
+    caption = f"{args.trigger}, {text}" if args.trigger else text
+    caption_file.write_text(caption + "\n", encoding="utf-8")
+    print(f"{picture.name}: {caption}")</code></pre></div>
+      <p>Run it, with the look of what the LoRA should learn after <code>--leave-out</code> (and <code>--tags</code> for tag captions, or no <code>--trigger</code> for none):</p>
+      <div class="setup-command"><code>~/.hikarilm/venv/bin/python make_captions.py dataset --trigger zq_usagi --leave-out "white fur, long pink-tipped ears, red eyes, rabbit girl"</code></div>
+      <p>Then read every caption next to its picture and fix it: the model still names some of what it was told to leave out, and gets details wrong. HikariLM stays stopped while it runs; it loads the model itself.</p>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">4</span> Write train.json</h2>
-      <p>Save this as <code>train.json</code> in the folder that holds <code>dataset/</code>. <code>data</code> is read from where <code>train.json</code> is; an absolute path such as <code>/Users/you/dataset</code> works too.</p>
+      <h2><span class="setup-number">4</span> Write preview prompts</h2>
+      <p>One prompt per file, in <code>dataset/</code>, written like your captions, of things in none of your pictures:</p>
+      <div class="setup-command"><code>echo "zq_usagi, riding a bicycle along a seaside road, golden hour, wide shot" > dataset/preview_1.txt</code></div>
+      <div class="setup-command"><code>echo "zq_usagi, reading a book in a library, rainy day, close-up" > dataset/preview_2.txt</code></div>
+      <p>For a LoRA with no trigger word, leave the word out: <code>a busy train station at night</code>.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">5</span> Write train.json</h2>
+      <p>Save this as <code>train.json</code> in the LoRA's folder, beside <code>dataset/</code>. <code>data</code> is read from where <code>train.json</code> is; an absolute path such as <code>/Users/you/lora/zq-usagi/dataset</code> works too. As it stands it makes a QLoRA on the 4-bit base; for the others, change <code>model_path</code> and <code>quantize</code> as in step 1.</p>
       <div class="setup-file"><pre><code id="train-json">{
   "model": "flux2-klein-base-4b",
   "model_path": "mflux-community/flux-2-klein-base-4b-mflux-q4",
@@ -132,48 +219,59 @@
 }</code></pre></div>
       <p>What to change, if anything:</p>
       <ul>
-        <li><strong>num_epochs</strong>: how many times it goes through every picture. A step is one picture, so 100 pictures for 20 epochs are 2,000 steps. Fewer pictures, more epochs.</li>
-        <li><strong>save_frequency</strong> and <strong>generate_image_frequency</strong>: every how many steps it saves a checkpoint and draws the previews. Keep them the same, so every checkpoint has previews to judge it by.</li>
+        <li><strong>model_path</strong> and <strong>quantize</strong>: LoRA or QLoRA, as in step 1.</li>
+        <li><strong>num_epochs</strong>: how many times it goes through every picture. A step is one picture, so 30 pictures for 20 epochs are 600 steps, and 100 pictures for 20 epochs are 2,000. Fewer pictures, more epochs: aim for about 1,000 to 2,000 steps.</li>
+        <li><strong>save_frequency</strong> and <strong>generate_image_frequency</strong>: every how many steps it saves a checkpoint and draws the previews. Keep them the same, so every checkpoint has previews to judge it by; with few steps in all, make them smaller (100).</li>
         <li><strong>learning_rate</strong>: how big each step is. Lower it (5e-5) if the previews go wrong early.</li>
-        <li><strong>rank</strong>: how much the LoRA can hold. 16 is plenty for one style or character; 32 for more, at twice the file size.</li>
-        <li><strong>gradient_checkpointing</strong>: on, it needs far less memory and steps take about 30% longer. Turn it off only on a Mac with memory to spare.</li>
+        <li><strong>rank</strong>: how much the LoRA can hold. 16 is plenty for one style or character; 32 for more, at twice the file size. Each target can also take <code>"alpha"</code>, which scales the LoRA by alpha ÷ rank while it learns (as in published recipes); left out, it is 1.</li>
+        <li><strong>gradient_checkpointing</strong>: on, it needs far less memory and steps take about 30% longer. Turn it off only on a Mac with memory to spare. <strong>low_ram</strong>: on, for the tightest Macs, slower still.</li>
+        <li><strong>steps</strong> and <strong>guidance</strong>: how the previews are drawn (the base 4B's 50 steps, guidance 4), not how it learns.</li>
         <li>The <strong>lora_layers</strong> cover every block of the 4B (5 and 20). Leave them.</li>
       </ul>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">5</span> Check, then train</h2>
-      <p>In Terminal, in the folder with <code>train.json</code>. First a check that reads the config and the pictures without loading the model:</p>
+      <h2><span class="setup-number">6</span> Check, then train</h2>
+      <p>In Terminal, in the LoRA's folder. First a check that reads the config and the pictures without loading the model:</p>
       <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-train --config train.json --dry-run</code></div>
       <p>When it says <em>Training config validated</em>, train. <code>caffeinate -i</code> keeps the Mac from sleeping while it runs:</p>
       <div class="setup-command"><code>caffeinate -i ~/.hikarilm/pictures-venv/bin/mflux-train --config train.json</code></div>
-      <p>Keep the Terminal window open; it shows the steps as they go. If it stops (you closed it, the Mac restarted), go on from the last checkpoint instead of starting over:</p>
-      <div class="setup-command"><code>caffeinate -i ~/.hikarilm/pictures-venv/bin/mflux-train --resume training/checkpoints/0000600_checkpoint.zip</code></div>
+      <p>Keep the Terminal window open; it shows the steps as they go. If it stops (you closed it, the Mac restarted), go on from the last checkpoint instead of starting over; <code>dataset/</code> must still be where it was:</p>
+      <div class="setup-command"><code>caffeinate -i ~/.hikarilm/pictures-venv/bin/mflux-train --resume "$(ls training*/checkpoints/*_checkpoint.zip | tail -1)"</code></div>
       <p>If <code>mflux-train</code> is not found, or does not know <code>flux2-klein-base-4b</code>, update mflux: <code>~/.hikarilm/pictures-venv/bin/pip install -U mflux</code>.</p>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">6</span> Watch it</h2>
+      <h2><span class="setup-number">7</span> Watch it</h2>
       <p>Everything goes into <code>training/</code> (or <code>training_</code> and the date, if that folder is already there):</p>
       <ul>
-        <li><code>training/preview/</code>: the preview pictures, by step. This is what to judge by.</li>
-        <li><code>training/loss/loss.html</code>: the loss chart; open it in the browser. It falls, then flattens.</li>
-        <li><code>training/checkpoints/</code>: a checkpoint every <code>save_frequency</code> steps.</li>
+        <li><code>training/preview/</code>: the preview pictures, by step. This is what to judge by. <code>open training/preview</code> shows them in Finder.</li>
+        <li><code>training/loss/loss.html</code>: the loss chart; <code>open training/loss/loss.html</code>. It falls, then flattens.</li>
+        <li><code>training/checkpoints/</code>: a checkpoint every <code>save_frequency</code> steps, such as <code>0000600_checkpoint.zip</code>.</li>
       </ul>
-      <p>Early previews look like the plain model. Then the trigger word starts to show. Past the best point, the previews copy your training pictures, lose what the prompt asks for, or turn harsh and oversaturated: that is overtraining. The best checkpoint is often not the last one. Note the step of the previews you like best; you can stop training there with Ctrl+C.</p>
+      <p>Early previews look like the plain model. Then the LoRA starts to show. Past the best point, the previews copy your training pictures, lose what the prompt asks for, or turn harsh and oversaturated: that is overtraining. The best checkpoint is often not the last one. Note the step of the previews you like best; you can stop training there with Ctrl+C.</p>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">7</span> Take the LoRA out and try it</h2>
-      <p>A checkpoint zip holds the LoRA as <code>…_adapter.safetensors</code>, beside what the trainer needs to go on. Take it out of the one you picked:</p>
-      <div class="setup-command"><code>unzip -j training/checkpoints/0001400_checkpoint.zip '*_adapter.safetensors'</code></div>
-      <p>and give it a name you will know:</p>
-      <div class="setup-command"><code>mv 0001400_adapter.safetensors zq-usagi.safetensors</code></div>
-      <p>Draw with it to see it work, at full strength (the 1.0 after its name):</p>
+      <h2><span class="setup-number">8</span> Take the LoRA out of the training</h2>
+      <p>A checkpoint zip holds the LoRA as <code>…_adapter.safetensors</code>, beside the optimizer and what the trainer needs to go on. See what is in one:</p>
+      <div class="setup-command"><code>unzip -l training/checkpoints/0001400_checkpoint.zip</code></div>
+      <p>Take the LoRA out of the one you picked, and give it a name you will know:</p>
+      <div class="setup-command"><code>unzip -j training/checkpoints/0001400_checkpoint.zip '*_adapter.safetensors' && mv 0001400_adapter.safetensors zq-usagi.safetensors</code></div>
+      <p>Not sure which is best? Take every checkpoint's LoRA out into <code>loras/</code>:</p>
+      <div class="setup-command"><code>mkdir -p loras && for z in training*/checkpoints/*_checkpoint.zip; do unzip -o -j -q "$z" '*_adapter.safetensors' -d loras; done && ls loras</code></div>
+      <p>and draw the same prompt and seed with each, to compare side by side:</p>
+      <div class="setup-command"><code>for f in loras/*_adapter.safetensors; do ~/.hikarilm/pictures-venv/bin/mflux-generate-flux2 --model mflux-community/flux-2-klein-base-4b-mflux-q4 --steps 50 --guidance 4 --seed 1 --prompt "zq_usagi, reading a book in a library, rainy day, close-up" --lora "$f" 1.0 --output "try-$(basename "$f" _adapter.safetensors).png"; done && open try-*.png</code></div>
+      <p>The file is all you need from the training. Keep <code>dataset/</code> and <code>train.json</code> in case you want to train it again.</p>
+    </section>
+
+    <section class="setup-step">
+      <h2><span class="setup-number">9</span> Try it</h2>
+      <p>Draw with it at full strength (the 1.0 after its name):</p>
       <div class="setup-command"><code>~/.hikarilm/pictures-venv/bin/mflux-generate-flux2 --model mflux-community/flux-2-klein-base-4b-mflux-q4 --steps 50 --guidance 4 --seed 1 --prompt "zq_usagi, riding a bicycle along a seaside road, her scarf blowing in the wind, golden hour, wide shot" --lora zq-usagi.safetensors 1.0 --output try.png</code></div>
 
       <div class="setup-example">
-        <p><strong>Prompting with it.</strong> Write the prompt the way you wrote the captions: the trigger word first, then only what this picture should have.</p>
+        <p><strong>Prompting with it.</strong> Write the prompt the way you wrote the captions: the trigger word first (if it has one), then only what this picture should have.</p>
         <table>
           <tr><th>Prompt</th><th>What comes out</th></tr>
           <tr><td><code>zq_usagi, riding a bicycle along a seaside road, her scarf blowing in the wind, golden hour, wide shot</code></td><td>Usagi, with her white fur, pink-tipped ears and red eyes, though the prompt says none of it, on a bicycle by the sea in evening light.</td></tr>
@@ -182,16 +280,21 @@
           <tr><td><code>a white rabbit girl riding a bicycle by the sea</code></td><td>A rabbit girl who may look a little like Usagi, but not reliably: a loaded LoRA leans on every picture somewhat, but it is the trigger word that calls her up.</td></tr>
         </table>
         <ul>
-          <li>Do not describe her look in the prompt; the trigger word already does, and spelling it out can pull her toward the model's own idea of those words.</li>
-          <li>The trigger word only works with the LoRA loaded (<code>--lora</code>). Without it, <code>zq_usagi</code> is a word the model has never seen and means nothing to it.</li>
-          <li>Too strong (stiff poses, the same face and framing every time, colors burnt) or too weak (she looks off)? Change the 1.0 after the file name: 0.7 for less, 1.2 for more. Strength is chosen when you draw, so the file stays as it is.</li>
+          <li>Do not describe what the LoRA learned in the prompt; it already knows it, and spelling it out can pull it toward the model's own idea of those words.</li>
+          <li>A trigger word only works with the LoRA loaded (<code>--lora</code>). Without it, <code>zq_usagi</code> is a word the model has never seen and means nothing to it.</li>
+          <li>Too strong (stiff poses, the same face and framing every time, colors burnt) or too weak (it looks off)? Change the 1.0 after the file name: 0.7 for less, 1.2 for more. Strength is chosen when you draw, so the file stays as it is.</li>
         </ul>
       </div>
     </section>
 
     <section class="setup-step">
-      <h2><span class="setup-number">8</span> Draw with it in HikariLM</h2>
-      <p>Upload the <code>.safetensors</code> file to a Hugging Face repo of your own, then add it in Settings, under LoRAs, by its repo name, and pick it under Options when drawing with FLUX.2 klein base 4B. HikariLM puts the trigger word in front of your prompt, so <code>riding a bicycle along a seaside road</code> is enough. Adding the file straight from this Mac comes in HikariLM 6.0. Nothing else is needed from the training folder; keep <code>dataset/</code> in case you want to train it again.</p>
+      <h2><span class="setup-number">10</span> Draw with it in HikariLM</h2>
+      <p>Upload the <code>.safetensors</code> file to a Hugging Face repo of your own, then add it in Settings, under LoRAs, by its repo name, and pick it under Options when drawing with FLUX.2 klein base 4B. Adding the file straight from this Mac comes in HikariLM 6.0.</p>
+      <ul>
+        <li><strong>Trigger word</strong>: type it for the LoRA in Settings, and HikariLM puts it in front of your prompt, so <code>riding a bicycle along a seaside road</code> is enough. Leave it empty for a LoRA that has none.</li>
+        <li><strong>Prompt with tags</strong>: turn it on for a LoRA captioned in tags. Then <em>Make tags</em>, by Options, turns your sentence into tags with the model under Settings, <em>Make tags with</em>, if you have one; or write the tags yourself.</li>
+        <li>HikariLM draws a LoRA picture the way step 9 does, with <code>mflux-generate-flux2</code>, so what you saw there is what you get.</li>
+      </ul>
     </section>
   </main>
 </body>
