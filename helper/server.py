@@ -715,7 +715,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _rewrite(self) -> None:
         """Have a chat model turn a request for a picture into a description FLUX.2 can draw,
-        or, with "tags", a model that writes booru tags (BooruNL) turn it into tags for a LoRA
+        or, with "tags", the user's model that writes booru tags turn it into tags for a LoRA
         trained on them.
 
         Streams {"text"} pieces as they are written, then {"prompt": ...}. `reference` is

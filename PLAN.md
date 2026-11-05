@@ -75,8 +75,6 @@ do not load; a venv made with an older Python is made again.
 - [ ] In the page: a question that wants a plot ("plot y = x² from -3 to 3") shows *Ran Python*
   with the code, the output and the picture, and the plot is still there after reopening the chat.
   An answer from 4.8 still shows its *Calculated:* line.
-- [ ] gpt-oss 20B: its calls (Harmony, `to=functions.python`) are read, but its thinking
-  channels are not split off yet.
 - [ ] Any new recommended chat model: try the Python tool with it first; one that does not call
   it well goes in `tools.POOR_CALLERS`.
 - [x] README, `__version__ = "4.9.0"`, tag `v4.9.0`.
@@ -183,27 +181,31 @@ voice venv 5.0 made.
 ## More LoRAs (v6)
 
 The rest of the LoRA work, after voice: LoRA files from this Mac, and whether LoRAs work on the
-distilled 4B. Hugging Face LoRAs on the base 4B are already in. mflux bakes a LoRA into the model
-when it loads, and on a saved q4 model the baked layers become 8-bit; DoRA files do not load.
+distilled 4B. Hugging Face LoRAs on the base 4B are already in. A picture with a LoRA is drawn by
+mflux's own command, `mflux-generate-flux2` (`mflux-generate-flux2-edit` with reference pictures),
+from a JSON config passed with `--config-from-conf`, the way LoRAs were tried with mflux; it loads
+the model with the LoRA for each picture. mflux bakes a LoRA into the model when it loads, and on
+a saved q4 model the baked layers become 8-bit; DoRA files do not load.
 
 ### Already in, before 6.0 (not released)
 
 - [x] **No trigger word needed.** A LoRA's trigger word is optional: empty puts nothing in front of
   the prompt, and the LoRA list and look-up say so.
 - [x] **Prompt with tags**, for LoRAs trained on booru tags (`1girl, blue_hair, school_uniform`)
-  rather than sentences. Each LoRA has the switch in Settings; with it on, the button by Options
-  says *Make tags*, and the model under Settings, *Make tags with*, turns the box into tags to read
-  and edit before drawing, the way Rewrite works (undo puts the words back). It is asked the way
-  BooruNL was trained ("Convert this to danbooru tags: …"), with what the vision model saw in a
-  reference picture added, and its answer is cleaned to one comma-separated list. The trigger word,
-  if any, still goes in front. No model is picked for it until the user picks one.
-- [x] **BooruNL** (`cooperdk/BooruNL-0.8B`, a Qwen3.5 0.8B fine-tune, full precision only) is not
-  listed as downloaded from Hugging Face, since its repo is not MLX. Converted with mlx-vlm into
-  `~/.hikarilm/models` it is: `~/.hikarilm/venv/bin/mlx_vlm.convert --hf-path cooperdk/BooruNL-0.8B
-  -q --q-bits 8 --mlx-path ~/.hikarilm/models/BooruNL-0.8B-8bit`. mlx-vlm, not mlx-lm: Qwen3.5
-  has a vision part, mlx-lm's converter drops it, and HikariLM runs a model whose config has one
-  with mlx-vlm.
-- [ ] On the Mac: convert BooruNL as above, pick it under *Make tags with*, and draw with a tag LoRA.
+  rather than sentences, for whoever has a second model that turns sentences into tags. Each LoRA
+  has the switch in Settings; with it on, the button by Options says *Make tags*, and the model
+  the user picked under Settings, *Make tags with*, turns the box into tags to read and edit
+  before drawing, the way Rewrite works (undo puts the words back). It is asked "Convert this to
+  danbooru tags: …" (the form such taggers take), with what the vision model saw in a reference
+  picture added, and its answer is cleaned to one comma-separated list. The trigger word, if any,
+  still goes in front. Nothing is recommended or picked for it; it is the user's own model.
+- [x] A tagger has to be an MLX model HikariLM lists, like any chat model; one converted by the
+  user goes in `~/.hikarilm/models`. (BooruNL, for one, is a Qwen3.5 fine-tune: that is converted
+  with mlx-vlm, since mlx-lm's converter drops Qwen3.5's vision part and HikariLM runs a model
+  whose config has one with mlx-vlm.)
+- [x] **LoRA pictures through mflux's command**, `mflux-generate-flux2 --config-from-conf <json>`,
+  as above. Stopping a picture ends the command too (the worker runs in a process group of its own).
+- [ ] On the Mac: draw with a LoRA (with and without a reference picture), and with a tag LoRA.
 
 ### v6.0.0: your own LoRA files, on the base 4B
 

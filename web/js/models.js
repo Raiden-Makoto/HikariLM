@@ -147,7 +147,7 @@ export function updateChangeNote() {
 }
 
 // The chat model that rewrites picture prompts, or "" when Settings turned it off or
-// none fits. Models that think before every answer (R1, gpt-oss) never do: a short
+// none fits. Models that think before every answer (R1) never do: a short
 // prompt would wait on pages of reasoning. Settings offers the rest, general models
 // first; a coder only rewrites when chosen there, since it knows code, not how a
 // character or a place looks.
@@ -164,9 +164,8 @@ export function rewriteModel() {
   return choices.find(general) || "";
 }
 
-// The model that turns a prompt into booru tags, for LoRAs trained on tags: one the user
-// chose under Settings, Make tags with (BooruNL, say), or "" for none. No default: a
-// general chat model writes tags far worse than one made for it.
+// The model that turns a prompt into booru tags, for LoRAs trained on tags: the user's own
+// tagger, chosen under Settings, Make tags with, or "" for none. Never a default.
 export const TAGGER_KEY = "hikarilm-tagger";
 export function taggerModel() {
   const chosen = localStorage.getItem(TAGGER_KEY);

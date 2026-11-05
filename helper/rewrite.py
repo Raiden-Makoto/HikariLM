@@ -5,8 +5,8 @@ gets a generic rabbit. A chat model that knows the name writes down how it looks
 instead. With a reference picture, a vision model's description of it goes along.
 
 A LoRA trained on booru tags (1girl, blue_hair, school_uniform) draws best from tags. For
-those, a model that turns sentences into tags, such as BooruNL, is asked in the form it was
-trained on ("Convert this to danbooru tags: ..."), and its comma-separated list is kept.
+those, the user's own model that turns sentences into tags is asked in the form such taggers
+take ("Convert this to danbooru tags: ..."), and its comma-separated list is kept.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ TAGS = "Convert this to danbooru tags: "
 
 
 def tag_messages(request: str, reference: str = "") -> list[dict]:
-    """BooruNL takes a description and gives tags; a reference picture's description adds to it."""
+    """A tagger takes a description and gives tags; a reference picture's description adds to it."""
     text = request.strip()
     if reference.strip():
         text += ("" if text.endswith((".", "!", "?")) else ".") + " " + reference.strip()

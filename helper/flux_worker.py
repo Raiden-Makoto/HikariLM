@@ -5,7 +5,9 @@ imports it. One model per process, named the way mflux names it:
 
     python flux_worker.py --model FOLDER --variant flux2-klein-4b [--lora FILE --lora-strength 1.0]
 
-A LoRA is baked into the weights as the model loads, so it holds for every picture.
+With a LoRA, each picture is drawn by mflux's own command, the way LoRAs were tried with it:
+mflux-generate-flux2 (mflux-generate-flux2-edit with reference pictures), given the picture as
+a JSON config with --config-from-conf. It loads the model with the LoRA for every picture.
 
 The first line written is {"ready": true}, or {"error": ...} if the model did not load.
 Then one command per line on stdin, {"op": "picture", "prompt", "width", "height",
@@ -23,8 +25,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import subprocess
 import sys
+import tempfile
+import threading
 import traceback
+from pathlib import Path
 
 # mflux and its libraries print as they work; only these lines go to the helper.
 OUT = sys.stdout
@@ -81,6 +89,91 @@ class Drawer:
         say({"done": True})
 
 
+class LoraDrawer:
+    """A picture with a LoRA, drawn by mflux's command from a JSON config."""
+
+    STEP = re.compile(r"(\d+)/(\d+) \[")
+
+    def __init__(self, folder: str, variant: str, lora: str, strength: float = 1.0) -> None:
+        from mflux.models.common.config.model_config import AVAILABLE_MODELS
+
+        if not variant.startswith("flux2-") or variant not in AVAILABLE_MODELS:
+            raise ValueError(f"This mflux does not know {variant}. Update it: ~/.hikarilm/pictures-venv/bin/pip install -U mflux")
+        # The commands mflux installs beside this Python.
+        where = Path(sys.executable).parent
+        self.commands = {False: where / "mflux-generate-flux2", True: where / "mflux-generate-flux2-edit"}
+        missing = [str(path) for path in self.commands.values() if not path.exists()]
+        if missing:
+            raise FileNotFoundError("mflux's command is not there: " + ", ".join(missing))
+        if not Path(lora).is_file():
+            raise FileNotFoundError(f"the LoRA file is not there: {lora}")
+        self.folder, self.variant, self.lora, self.strength = folder, variant, lora, strength
+
+    def config(self, command: dict, references: list[str]) -> dict:
+        config = {"model_path": self.folder, "base_model": self.variant, "prompt": str(command["prompt"]),
+                  "width": int(command["width"]), "height": int(command["height"]), "seed": int(command["seed"]),
+                  "steps": int(command["steps"]), "guidance": float(command["guidance"]),
+                  "lora_paths": [self.lora], "lora_scales": [float(self.strength)]}
+        if references:
+            config["image_paths"] = references
+        return config
+
+    def draw(self, command: dict) -> None:
+        references = [str(path) for path in command.get("references") or []]
+        fd, conf = tempfile.mkstemp(prefix=".hikarilm-mflux.", suffix=".json", dir=os.path.dirname(command["out"]))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(self.config(command, references), handle)
+            # mflux writes image_1.png beside a file that is already there, never over it.
+            Path(command["out"]).unlink(missing_ok=True)
+            say({"loading": True})
+            run = subprocess.Popen([str(self.commands[bool(references)]), "--config-from-conf", conf,
+                                    "--output", str(command["out"])],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            said = []
+            reader = threading.Thread(target=self.watch, args=(run.stdout, said), daemon=True)
+            reader.start()
+            run.wait()
+            reader.join(10)
+            if run.returncode:
+                last = next((line for line in reversed(said) if line.strip()), f"it exited with {run.returncode}")
+                raise RuntimeError("mflux-generate-flux2 failed: " + last.strip()[-300:])
+            if not Path(command["out"]).stat().st_size:
+                raise RuntimeError("mflux-generate-flux2 wrote no picture")
+        finally:
+            try:
+                os.unlink(conf)
+            except OSError:
+                pass
+        say({"done": True})
+
+    def watch(self, stream, said: list[str]) -> None:
+        """Pass on mflux's steps (its progress bar, "3/4 [") as progress lines, and keep the rest
+        for the log and for saying why it failed."""
+        piece = b""
+        while True:
+            chunk = stream.read1(4096) if hasattr(stream, "read1") else stream.read(4096)
+            if not chunk:
+                break
+            sys.stderr.buffer.write(chunk)
+            sys.stderr.flush()
+            piece += chunk
+            parts = re.split(rb"[\r\n]", piece)
+            piece = parts.pop()
+            for part in parts:
+                self.line(part.decode("utf-8", "replace"), said)
+        self.line(piece.decode("utf-8", "replace"), said)
+
+    def line(self, text: str, said: list[str]) -> None:
+        steps = list(self.STEP.finditer(text))
+        if steps:
+            say({"progress": int(steps[-1].group(1)), "total": int(steps[-1].group(2))})
+            # What is printed right after the bar, on the same line: "...4/4 [00:04<00:00]ValueError: ..."
+            text = text[text.find("]", steps[-1].end()) + 1:] if "]" in text[steps[-1].end():] else ""
+        if text.strip():
+            said.append(text)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
@@ -89,7 +182,8 @@ def main() -> None:
     parser.add_argument("--lora-strength", type=float, default=1.0)
     args = parser.parse_args()
     try:
-        drawer = Drawer(args.model, args.variant, args.lora, args.lora_strength)
+        drawer = (LoraDrawer(args.model, args.variant, args.lora, args.lora_strength) if args.lora
+                  else Drawer(args.model, args.variant))
     except Exception as error:
         traceback.print_exc()
         what = "The picture model could not load" + (" with the LoRA" if args.lora else "")

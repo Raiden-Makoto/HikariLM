@@ -18,6 +18,7 @@ import os
 import queue
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -431,8 +432,9 @@ class _Worker:
         log = open(store.home() / log_name, "wb")
         command = [str(interpreter), str(script or worker()), "--model", str(folder)] + flags
         try:
+            # A group of its own, so ending it also ends what it started (mflux's command).
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
-                                            text=True, encoding="utf-8", bufsize=1)
+                                            text=True, encoding="utf-8", bufsize=1, start_new_session=True)
         except OSError as error:
             raise ModelError(f"The MLX worker could not start: {error}") from error
         finally:
@@ -468,8 +470,11 @@ class _Worker:
     def end(self) -> None:
         """Kill it: it has nothing to save, and macOS takes all of its memory back at once,
         sooner than a Python shutting down would hand it over."""
-        if self.process.poll() is None:
-            self.process.kill()
+        try:
+            os.killpg(self.process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            if self.process.poll() is None:
+                self.process.kill()
         self.process.wait()
         try:
             self.process.stdin.close()
