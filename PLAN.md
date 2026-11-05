@@ -85,7 +85,6 @@ Found while building them, and worth knowing before changing them:
   model's folder, so only mlx-community's `-asr-` repos work; `whisper-large-v3-turbo` and
   `whisper-small-mlx` are weights only. It hears 30 seconds at a time; parts that are silence are
   skipped, since Whisper makes words up for them.
-- **gpt-oss** is not recommended due to outdated and not tested.
 
 ## More LoRAs (v6)
 
