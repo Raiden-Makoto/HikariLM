@@ -55,6 +55,12 @@ function strength() {
   return value > 0 && value <= 2 ? Math.round(value * 100) / 100 : 1;
 }
 
+// The LoRA picked in Options when it was trained on booru tags, so Rewrite makes tags for it.
+export function tagsLora() {
+  const chosen = variant === BASE_4B ? findLora(picker().value) : null;
+  return chosen?.tags ? chosen : null;
+}
+
 // What a new picture asks for: the LoRA picked in Options, when the model is the base 4B.
 export function loraRequest() {
   const chosen = variant === BASE_4B ? findLora(picker().value) : null;
@@ -101,11 +107,24 @@ function loraItem(item) {
   const input = document.createElement("input");
   input.className = "lora-input";
   input.value = item.trigger;
-  input.placeholder = "None";
+  input.placeholder = "None needed";
   input.maxLength = 100;
-  input.title = "Put in front of every prompt drawn with this LoRA, unless the prompt has it already.";
+  input.title = "Put in front of every prompt drawn with this LoRA, unless the prompt has it already. Leave it empty " +
+    "for a LoRA that needs none: many style LoRAs work without one.";
   input.addEventListener("change", () => saveTrigger(item, input));
   trigger.append(triggerName, input);
+  const tags = document.createElement("label");
+  tags.className = "lora-tags";
+  const tagsBox = document.createElement("input");
+  tagsBox.type = "checkbox";
+  tagsBox.className = "lora-input";
+  tagsBox.checked = Boolean(item.tags);
+  tagsBox.addEventListener("change", () => saveTags(item, tagsBox));
+  const tagsName = document.createElement("span");
+  tagsName.textContent = "Prompt with tags";
+  tagsName.title = "For a LoRA trained on booru tags (1girl, blue_hair…): Make tags, by Options, turns your sentence " +
+    "into tags with the model under Make tags with.";
+  tags.append(tagsBox, tagsName);
   const actions = document.createElement("div");
   actions.className = "lora-actions";
   const remove = document.createElement("button");
@@ -115,7 +134,7 @@ function loraItem(item) {
   remove.title = "Take it off the list. The download stays in the Hugging Face cache.";
   remove.addEventListener("click", () => removeLora(item));
   actions.append(remove);
-  box.append(trigger, actions);
+  box.append(trigger, tags, actions);
   return box;
 }
 
@@ -145,6 +164,17 @@ async function saveTrigger(item, input) {
     input.value = item.trigger;
     document.querySelector("#lora-found").replaceChildren(paragraph(plainError(error.message), "lora-bad"));
   }
+}
+
+async function saveTags(item, box) {
+  try {
+    const answer = await post("/api/loras/tags", { id: item.id, tags: box.checked });
+    item.tags = answer.lora.tags;
+  } catch (error) {
+    document.querySelector("#lora-found").replaceChildren(paragraph(plainError(error.message), "lora-bad"));
+  }
+  box.checked = Boolean(item.tags);
+  picker().dispatchEvent(new Event("change"));
 }
 
 async function removeLora(item) {
@@ -189,7 +219,7 @@ async function lookUp(text) {
     parts.push(paragraph(lora.error, "lora-bad"));
   } else {
     parts.push(paragraph(lora.trigger ? "Trigger word: " + lora.trigger + ". It goes in front of your prompt." :
-      "Its page names no trigger word. If it has one, add it after."));
+      "Its page names no trigger word, and many LoRAs need none. If it does have one, add it after."));
     if (lora.note) parts.push(paragraph(lora.note, "note"));
     if (lora.gated) parts.push(paragraph("Its makers ask you to accept their terms on its Hugging Face page first, and to sign in with  ~/.hikarilm/venv/bin/hf auth login.", "note"));
     const actions = document.createElement("div");

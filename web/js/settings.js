@@ -1,7 +1,8 @@
 // The Settings window.
 import { bgNote, messageBox, modelSelect, plainError, settings } from "./core.js";
 import {
-  READER_KEY, REWRITE_KEY, isPictureModel, modelLabel, readers, rewriteModel, rewriters, updateChangeNote,
+  READER_KEY, REWRITE_KEY, TAGGER_KEY, isPictureModel, modelLabel, readers, rewriteModel, rewriters, taggerModel,
+  updateChangeNote,
 } from "./models.js";
 import { applyBackground } from "./page.js";
 
@@ -104,6 +105,9 @@ function showRewriteSetting() {
   select.replaceChildren(new Option("Don't rewrite", "off"),
     ...rewriters().map((name) => new Option(modelLabel(name), name)));
   select.value = writer || "off";
+  const tagger = document.querySelector("#tagger-model");
+  tagger.replaceChildren(new Option("None", ""), ...rewriters().map((name) => new Option(modelLabel(name), name)));
+  tagger.value = taggerModel();
 }
 
 // Steps of 1,024 up to 8K, then a quarter of each doubling, so there is
@@ -298,6 +302,10 @@ export function start() {
   document.querySelector("#update-button").addEventListener("click", runUpdate);
   document.querySelector("#rewrite-model").addEventListener("change", (event) => {
     localStorage.setItem(REWRITE_KEY, event.target.value);
+    updateChangeNote();
+  });
+  document.querySelector("#tagger-model").addEventListener("change", (event) => {
+    localStorage.setItem(TAGGER_KEY, event.target.value);
     updateChangeNote();
   });
   document.querySelector("#reader-model").addEventListener("change", (event) => {

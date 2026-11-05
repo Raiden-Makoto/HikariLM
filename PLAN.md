@@ -186,13 +186,33 @@ The rest of the LoRA work, after voice: LoRA files from this Mac, and whether Lo
 distilled 4B. Hugging Face LoRAs on the base 4B are already in. mflux bakes a LoRA into the model
 when it loads, and on a saved q4 model the baked layers become 8-bit; DoRA files do not load.
 
+### Already in, before 6.0 (not released)
+
+- [x] **No trigger word needed.** A LoRA's trigger word is optional: empty puts nothing in front of
+  the prompt, and the LoRA list and look-up say so.
+- [x] **Prompt with tags**, for LoRAs trained on booru tags (`1girl, blue_hair, school_uniform`)
+  rather than sentences. Each LoRA has the switch in Settings; with it on, the button by Options
+  says *Make tags*, and the model under Settings, *Make tags with*, turns the box into tags to read
+  and edit before drawing, the way Rewrite works (undo puts the words back). It is asked the way
+  BooruNL was trained ("Convert this to danbooru tags: …"), with what the vision model saw in a
+  reference picture added, and its answer is cleaned to one comma-separated list. The trigger word,
+  if any, still goes in front. No model is picked for it until the user picks one.
+- [x] **BooruNL** (`cooperdk/BooruNL-0.8B`, a Qwen3.5 0.8B fine-tune, full precision only) is not
+  listed as downloaded from Hugging Face, since its repo is not MLX. Converted with mlx-vlm into
+  `~/.hikarilm/models` it is: `~/.hikarilm/venv/bin/mlx_vlm.convert --hf-path cooperdk/BooruNL-0.8B
+  -q --q-bits 8 --mlx-path ~/.hikarilm/models/BooruNL-0.8B-8bit`. mlx-vlm, not mlx-lm: Qwen3.5
+  has a vision part, mlx-lm's converter drops it, and HikariLM runs a model whose config has one
+  with mlx-vlm.
+- [ ] On the Mac: convert BooruNL as above, pick it under *Make tags with*, and draw with a tag LoRA.
+
 ### v6.0.0: your own LoRA files, on the base 4B
 
 - [ ] *Add a LoRA…* in the LoRAs part of Settings: pick a `.safetensors` (from the `/setup/lora` page, or
   anywhere); it is copied to `~/.hikarilm/loras/`, and the same checks as for Hugging Face ones refuse what cannot
   work on the base 4B. Its name is the file name; Remove deletes the copy.
 - [ ] The trigger word comes from the file when its trainer saved one (kohya's `ss_tag_frequency`
-  and the like in the header); otherwise the user types it once.
+  and the like in the header). A LoRA does not always have one (many style LoRAs need none), so
+  with none found there is none, and the user can type one.
 - [ ] Listed in the same picker as the Hugging Face ones; everything else as for those.
 - [ ] README, `__version__ = "6.0.0"`, tag `v6.0.0`.
 

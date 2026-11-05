@@ -3,6 +3,10 @@
 FLUX.2 klein draws what a prompt describes, not what it names: "Usagi from Chiikawa"
 gets a generic rabbit. A chat model that knows the name writes down how it looks
 instead. With a reference picture, a vision model's description of it goes along.
+
+A LoRA trained on booru tags (1girl, blue_hair, school_uniform) draws best from tags. For
+those, a model that turns sentences into tags, such as BooruNL, is asked in the form it was
+trained on ("Convert this to danbooru tags: ..."), and its comma-separated list is kept.
 """
 
 from __future__ import annotations
@@ -55,6 +59,32 @@ def messages(request: str, reference: str = "", shown: bool = False) -> list[dic
         text += ("\n\nA reference picture is attached. Use it for how the subject looks, over what you "
                  "remember. This is what it shows:\n" + reference.strip())
     return [{"role": "user", "content": text}]
+
+
+TAGS = "Convert this to danbooru tags: "
+
+
+def tag_messages(request: str, reference: str = "") -> list[dict]:
+    """BooruNL takes a description and gives tags; a reference picture's description adds to it."""
+    text = request.strip()
+    if reference.strip():
+        text += ("" if text.endswith((".", "!", "?")) else ".") + " " + reference.strip()
+    return [{"role": "user", "content": TAGS + text}]
+
+
+def clean_tags(text: str) -> str:
+    """The tags alone, comma-separated, each once, in the order written: no thinking, lead,
+    code fence or list marks around them."""
+    text = thinking.without_thinking(text).strip()
+    text = re.sub(r"^```\w*\s*|\s*```$", "", text).strip()
+    text = re.sub(r"^\s*(?:here are (?:the )?|danbooru )?tags\s*:\s*", "", text, flags=re.IGNORECASE)
+    seen, out = set(), []
+    for tag in re.split(r",|\n", text):
+        tag = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "", tag).strip().strip("\"'`")
+        if tag and tag.lower() not in seen:
+            seen.add(tag.lower())
+            out.append(tag)
+    return ", ".join(out)
 
 
 LEAD = re.compile(r"^\s*(?:\*\*)?(?:here(?:'s| is) (?:the |a |your )?(?:rewritten )?prompt|rewritten prompt|prompt)"

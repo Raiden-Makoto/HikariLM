@@ -378,6 +378,11 @@
           <select id="rewrite-model"></select>
         </label>
         <p class="note">Press Rewrite, next to Options, and a chat model rewrites what you ask for into how it looks; you can edit that before it draws. Send on its own draws your words as they are. Models that think before every answer, such as DeepSeek R1, are not offered: they would reason at length over a one-line prompt. Pick the model you find writes the best prompts; a general model is used until you do. Coder models, such as Qwen2.5 Coder, are listed last and only rewrite if you pick one: they know code, not how things look. A picture you attach is read first by the model under Read pictures with.</p>
+        <label class="field-row">
+          <span>Make tags with</span>
+          <select id="tagger-model"></select>
+        </label>
+        <p class="note">For LoRAs trained on booru tags (<code>1girl, blue_hair, school_uniform</code>) rather than sentences. Turn on <em>Prompt with tags</em> for such a LoRA below, and Make tags, by Options, has this model turn your sentence into tags to read and edit before drawing. Pick a model made for it, such as BooruNL, converted to MLX into <code>~/.hikarilm/models</code> (it is a Qwen3.5, which mlx-vlm converts): <code>~/.hikarilm/venv/bin/mlx_vlm.convert --hf-path cooperdk/BooruNL-0.8B -q --q-bits 8 --mlx-path ~/.hikarilm/models/BooruNL-0.8B-8bit</code>, then reload. A general chat model writes tags too, less well.</p>
         <p class="note warning">Picture models may not recognize niche characters, people or places. Describe how they look or attach a reference image. A rewrite only helps if the chat model knows them, and it can be wrong too.</p>
       </div>
       <div class="setting" id="lora-setting">

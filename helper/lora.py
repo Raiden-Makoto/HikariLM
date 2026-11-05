@@ -238,7 +238,8 @@ def saved() -> list[dict]:
         except (KeyError, TypeError, LoraError):
             continue
         out.append({"repo": repo, "file": file, "id": f"{repo}:{file}",
-                    "trigger": clean_trigger(item.get("trigger")), "note": str(item.get("note") or "")[:400],
+                    "trigger": clean_trigger(item.get("trigger")), "tags": item.get("tags") is True,
+                    "note": str(item.get("note") or "")[:400],
                     "size": int(item.get("size") or 0) if str(item.get("size") or "0").isdigit() else 0})
     return out
 
@@ -249,7 +250,7 @@ def _write(items: list[dict]) -> None:
     fd, temp = tempfile.mkstemp(dir=folder, prefix=".loras.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({"loras": [{key: item[key] for key in ("repo", "file", "trigger", "note", "size")}
+            json.dump({"loras": [{key: item[key] for key in ("repo", "file", "trigger", "tags", "note", "size")}
                                  for item in items]}, handle, indent=2)
         os.replace(temp, _path())
     except BaseException:
@@ -271,22 +272,32 @@ def add(found: dict) -> dict:
     if found.get("error"):
         raise LoraError(found["error"])
     item = {"repo": found["repo"], "file": found["file"], "id": found["id"], "trigger": clean_trigger(found.get("trigger")),
-            "note": found.get("note") or "", "size": int(found.get("size") or 0)}
+            "tags": False, "note": found.get("note") or "", "size": int(found.get("size") or 0)}
     with _lock:
         items = [entry for entry in saved() if entry["id"] != item["id"]] + [item]
         _write(items)
     return item
 
 
-def set_trigger(lora_id: str, trigger) -> dict:
+def _change(lora_id: str, key: str, value) -> dict:
     with _lock:
         items = saved()
         for item in items:
             if item["id"] == lora_id:
-                item["trigger"] = clean_trigger(trigger)
+                item[key] = value
                 _write(items)
                 return item
     raise LoraError("That LoRA is not in the list.")
+
+
+def set_trigger(lora_id: str, trigger) -> dict:
+    """Many LoRAs need no trigger word: an empty one puts nothing in front of the prompt."""
+    return _change(lora_id, "trigger", clean_trigger(trigger))
+
+
+def set_tags(lora_id: str, tags) -> dict:
+    """Whether the LoRA was trained on booru tags, so Rewrite turns the prompt into tags for it."""
+    return _change(lora_id, "tags", tags is True)
 
 
 def remove(lora_id: str) -> bool:

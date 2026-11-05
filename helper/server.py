@@ -329,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path == "/api/transcribe":
             self._transcribe()
             return
-        if self.path in (LORAS, LORAS + "/trigger", LORAS + "/remove"):
+        if self.path in (LORAS, LORAS + "/trigger", LORAS + "/tags", LORAS + "/remove"):
             self._loras()
             return
         if self.path not in ("/api/chat", "/api/describe", "/api/rewrite"):
@@ -714,7 +714,9 @@ class Handler(BaseHTTPRequestHandler):
         return {"hikarilm": "loaded", "model": model, "unloaded": previous if previous not in (None, model) else None}
 
     def _rewrite(self) -> None:
-        """Have a chat model turn a request for a picture into a description FLUX.2 can draw.
+        """Have a chat model turn a request for a picture into a description FLUX.2 can draw,
+        or, with "tags", a model that writes booru tags (BooruNL) turn it into tags for a LoRA
+        trained on them.
 
         Streams {"text"} pieces as they are written, then {"prompt": ...}. `reference` is
         what a vision model wrote about an attached picture, if there was one.
@@ -731,14 +733,16 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(reference, str):
                 raise ValueError("reference must be text")
             model = model.strip()
+            tags = payload.get("tags") is True
         except ValueError as error:
             self._send_json({"error": str(error)}, status=400)
             return
         if self._refuse_picture_model(model):
             return
+        setting = "Make tags with" if tags else "Rewrite prompts with"
         if thinking.always_thinks(model):
             self._send_json({"error": f"{names.label(model)} thinks before every answer, which is slow and wordy for "
-                                      "a picture prompt. Choose another model under Settings, Rewrite prompts with."},
+                                      f"a picture prompt. Choose another model under Settings, {setting}."},
                             status=400)
             return
         self._models.enter_context(KEEPER.using(model))
@@ -747,8 +751,9 @@ class Handler(BaseHTTPRequestHandler):
             room = self._room(model, context.load_settings())
             think = thinking.think_value(model, show(model), {"enabled": False})
             router.begin(model)
-            response = open_chat(model, rewrite.messages(request, reference[:descriptions.MAX_TEXT],
-                                                         payload.get("shown") is True), KEEP_ALIVE,
+            asked = (rewrite.tag_messages(request, reference[:descriptions.MAX_TEXT]) if tags else
+                     rewrite.messages(request, reference[:descriptions.MAX_TEXT], payload.get("shown") is True))
+            response = open_chat(model, asked, KEEP_ALIVE,
                                  {"num_ctx": room["num_ctx"], "num_predict": rewrite.MAX_TOKENS}, think)
         except ModelError as error:
             self._send_json({"error": str(error)}, status=502)
@@ -775,9 +780,10 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if event.get("done"):
                     break
-            prompt = rewrite.clean(text)[:imagegen.MAX_PROMPT]
+            prompt = (rewrite.clean_tags(text) if tags else rewrite.clean(text))[:imagegen.MAX_PROMPT]
             if not prompt:
-                self._stream_line({"error": f"{names.label(model)} wrote no prompt. Send it again, or turn rewriting off."})
+                self._stream_line({"error": f"{names.label(model)} wrote no " + ("tags" if tags else "prompt") +
+                                   ". Press Rewrite again, or draw your words as they are."})
                 return
             self._stream_line({"prompt": prompt, "model": model})
         except (BrokenPipeError, ConnectionResetError):
@@ -851,6 +857,8 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body(10_000)
             if self.path.endswith("/trigger"):
                 self._send_json({"lora": lora.set_trigger(str(body.get("id") or ""), body.get("trigger"))})
+            elif self.path.endswith("/tags"):
+                self._send_json({"lora": lora.set_tags(str(body.get("id") or ""), body.get("tags"))})
             elif self.path.endswith("/remove"):
                 self._send_json({"removed": lora.remove(str(body.get("id") or ""))})
             else:

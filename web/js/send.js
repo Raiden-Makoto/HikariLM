@@ -8,14 +8,14 @@ import { addListenButton, readWhenDone } from "./listen.js";
 import { addTurn, pictureFigure, setBusy, showToolCall, updateApply } from "./turns.js";
 import {
   changeTarget, clearRewrite, inCodeView, isPictureModel, isVision, loadModels, modelLabel, pictureLabel, pictureSeed,
-  pictureSize, pictureSteps, refreshState, rewriteModel, updateChangeNote, visionModel,
+  pictureSize, pictureSteps, refreshState, rewriteModel, taggerModel, updateChangeNote, visionModel,
 } from "./models.js";
 import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
 import { announce, askNotifyPermission } from "./page.js";
 import { notesOn } from "./settings.js";
 import { editorPrompt } from "./edit-blocks.js";
-import { findLora, loraRequest } from "./loras.js";
+import { findLora, loraRequest, tagsLora } from "./loras.js";
 import { rulesRequest, rulesWarning } from "./rules.js";
 
 // Ask the helper to have a vision model write one picture down as text. It
@@ -446,7 +446,7 @@ async function readStream(response, onEvent) {
 // what an attached reference picture shows. The rewrite goes into the box to be read,
 // edited or undone; the next send draws it. `asked` is what the user first wrote, when
 // `request` is an earlier rewrite being redone for a picture attached since.
-async function rewritePrompt(request, writer, describer, references, asked = request) {
+async function rewritePrompt(request, writer, describer, references, asked = request, tags = null) {
   const note = document.querySelector("#rewrite-note");
   const noteText = document.querySelector("#rewrite-text");
   const undo = document.querySelector("#rewrite-undo");
@@ -487,17 +487,18 @@ async function rewritePrompt(request, writer, describer, references, asked = req
         references.map((item) => item.name).slice(0, seen.length).join(", ") +
         (result.cached ? " (read before, so not read again)" : ""), seen.join("\n\n"), false);
     }
-    say("Loading " + modelLabel(writer) + " to rewrite the prompt…");
+    const doing = tags ? "turn the prompt into tags" : "rewrite the prompt";
+    say("Loading " + modelLabel(writer) + " to " + doing + "…");
     const response = await fetch("/api/rewrite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: writer, request, reference: seen.join("\n\n"), shown: references.length > 0 }),
+      body: JSON.stringify({ model: writer, request, reference: seen.join("\n\n"), shown: references.length > 0, tags: Boolean(tags) }),
       signal,
     });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "The prompt could not be rewritten.");
     let live = "";
     prompt = await readStream(response, (event) => {
-      if (event.hikarilm === "loaded") say(loadedLine(event) + ". Rewriting the prompt…");
+      if (event.hikarilm === "loaded") say(loadedLine(event) + (tags ? ". Making tags…" : ". Rewriting the prompt…"));
       if (event.text) {
         live += event.text;
         messageBox.value = live;
@@ -518,7 +519,7 @@ async function rewritePrompt(request, writer, describer, references, asked = req
   fitBox();
   if (prompt) {
     state.rewrite = { request: asked, writer, pictures: references.map((file) => file.image), seen: seen.join("\n\n") };
-    noteText.textContent = "Rewritten by " + modelLabel(writer) + " from “" + asked + "”" +
+    noteText.textContent = (tags ? "Tags for " + tags.label + " by " : "Rewritten by ") + modelLabel(writer) + " from “" + asked + "”" +
       (references.length ? " and " + references.map((file) => file.name).join(", ") : "") +
       ". Edit it if you like, then send to draw.";
     undo.hidden = false;
@@ -547,13 +548,15 @@ function rewriteBox() {
   if (!text || state.activeRequest) return;
   const references = state.attached.filter((file) => file.image);
   const describer = references.length ? visionModel() : "";
-  const writer = rewriteModel() || describer;
+  const tags = tagsLora();
+  const writer = tags ? taggerModel() : rewriteModel() || describer;
   if (!writer) {
-    notify("No chat model to rewrite with. Pick one under Settings, Rewrite prompts with.");
+    notify(tags ? tags.label + " draws from tags. Pick the model that makes them under Settings, Make tags with."
+      : "No chat model to rewrite with. Pick one under Settings, Rewrite prompts with.");
     return;
   }
   const pending = state.rewrite;
-  rewritePrompt(text, writer, describer, references, pending && !pending.asIs ? pending.request : text);
+  rewritePrompt(text, writer, describer, references, pending && !pending.asIs ? pending.request : text, tags);
 }
 
 async function drawPicture(prompt, model, request) {

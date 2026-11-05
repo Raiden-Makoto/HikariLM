@@ -2,7 +2,7 @@
 import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, status } from "./core.js";
 import { attachButton } from "./attachments.js";
-import { updateLoraPicker } from "./loras.js";
+import { tagsLora, updateLoraPicker } from "./loras.js";
 
 // Short names for people: "mlx-community/DeepSeek-R1-0528-Qwen3-8B-4bit" is
 // "DeepSeek R1". Earlier entries win, so a distill is named for its teacher.
@@ -136,10 +136,14 @@ export function updateChangeNote() {
   }
   // A change is said in the user's own words; only a new picture is rewritten.
   const rewriteButton = document.querySelector("#picture-rewrite");
+  const tagged = tagsLora();
   rewriteButton.hidden = !isPictureModel(modelSelect.value) || changing ||
-    !(rewriteModel() || (state.attached.some((file) => file.image) && visionModel()));
-  const writer = rewriteModel() || visionModel();
-  if (writer) rewriteButton.title = "Have " + modelLabel(writer) + " rewrite the prompt into how things look, to read and edit before drawing. Settings, Rewrite prompts with, picks the model.";
+    !(tagged || rewriteModel() || (state.attached.some((file) => file.image) && visionModel()));
+  rewriteButton.textContent = tagged ? "Make tags" : "Rewrite";
+  const writer = tagged ? taggerModel() : rewriteModel() || visionModel();
+  if (tagged) rewriteButton.title = writer ? "Have " + modelLabel(writer) + " turn the prompt into tags for " + tagged.label +
+    ", to read and edit before drawing. Settings, Make tags with, picks the model." : tagged.label + " draws from tags: pick a model under Settings, Make tags with.";
+  else if (writer) rewriteButton.title = "Have " + modelLabel(writer) + " rewrite the prompt into how things look, to read and edit before drawing. Settings, Rewrite prompts with, picks the model.";
 }
 
 // The chat model that rewrites picture prompts, or "" when Settings turned it off or
@@ -158,6 +162,15 @@ export function rewriteModel() {
   const choices = rewriters();
   if (chosen && choices.includes(chosen)) return chosen;
   return choices.find(general) || "";
+}
+
+// The model that turns a prompt into booru tags, for LoRAs trained on tags: one the user
+// chose under Settings, Make tags with (BooruNL, say), or "" for none. No default: a
+// general chat model writes tags far worse than one made for it.
+export const TAGGER_KEY = "hikarilm-tagger";
+export function taggerModel() {
+  const chosen = localStorage.getItem(TAGGER_KEY);
+  return chosen && rewriters().includes(chosen) ? chosen : "";
 }
 
 // A rewrite waiting in the box: { request, writer }, or asIs when the user took their
@@ -255,4 +268,5 @@ export function start() {
     if (document.visibilityState === "visible" && !state.activeRequest) refreshState().catch(() => {});
   });
   pictureToggle.addEventListener("click", () => setPictureOptions(document.querySelector("#picture-options").hidden));
+  document.querySelector("#picture-lora").addEventListener("change", updateChangeNote);
 }
