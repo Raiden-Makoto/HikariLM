@@ -17,7 +17,7 @@ MAX_FILES = 200
 MAX_DEPTH = 4
 
 EXTENSIONS = {
-    ".txt", ".md", ".rst", ".log", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml",
+    ".txt", ".md", ".rst", ".log", ".csv", ".tsv", ".json", ".jsonl", ".jsonc", ".yaml", ".yml", ".toml",
     ".ini", ".xml", ".html", ".css",
     ".py", ".r", ".c", ".h", ".cpp", ".hpp", ".java", ".kt", ".go", ".rs", ".rb",
     ".php", ".swift", ".cs", ".scala", ".lua", ".pl", ".js", ".ts", ".jsx", ".tsx",
