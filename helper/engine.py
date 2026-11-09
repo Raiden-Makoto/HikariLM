@@ -49,7 +49,13 @@ class ModelError(Exception):
     """Worded for the user."""
 
 
-PACKAGES = ("mlx-lm", "mlx-vlm")
+# scipy is not ours but comes with mlx-vlm (through mlx-audio). macOS 27 cannot load scipy 1.15
+# and older, and pip install --upgrade leaves an old one that still meets mlx-audio's
+# scipy>=1.10, so the venv asks for one it can load. That needs Python 3.11 or newer.
+LOADABLE_SCIPY = "scipy>=1.16.3"
+PACKAGES = ("mlx-lm", "mlx-vlm", LOADABLE_SCIPY)
+OLDEST = 11
+SCIPY_LOADS = "import scipy.sparse.linalg, scipy.integrate, scipy.special"
 READY_MARK = ".hikarilm-ready"
 
 
@@ -109,17 +115,65 @@ def venv_minor(folder: Path) -> int | None:
     return None
 
 
+def _new_enough(folder: Path, what: str, say, base_python: str | None) -> str | None:
+    """A Python 3.11 or newer to make the venv with, after deleting one made with an older
+    Python; None, said, when there is none."""
+    base_python = base_python if base_python and _minor_of(base_python) >= OLDEST else find_python(OLDEST, 14)
+    if not base_python:
+        say(f"  {what} needs Python 3.{OLDEST} or newer (this is {sys.version.split()[0]}), because older ones get "
+            "a scipy macOS cannot load. Install one with  brew install python@3.12  or from python.org, then run  "
+            "hikarilm restart.")
+        return None
+    made = venv_minor(folder)
+    if made is not None and made < OLDEST:
+        say(f"{what} was set up with Python 3.{made}; setting it up again with a newer one…")
+        shutil.rmtree(folder, ignore_errors=True)
+    return base_python
+
+
+def _minor_of(executable: str) -> int:
+    if executable == sys.executable:
+        return sys.version_info[1]
+    found = re.search(r"python3\.(\d+)", os.path.basename(executable))
+    return int(found.group(1)) if found else 0
+
+
+def _scipy_loads(folder: Path, interpreter: Path, what: str, say) -> bool:
+    """macOS 27 refuses an old scipy only when it is imported, so import it once here."""
+    try:
+        done = subprocess.run([str(interpreter), "-c", SCIPY_LOADS], capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as error:
+        done = subprocess.CompletedProcess([], 1, "", str(error))
+    if done.returncode:
+        lines = (done.stderr or done.stdout).strip().splitlines()
+        say(f"  {what} is installed but its scipy does not load: {lines[-1] if lines else done.returncode}")
+        (folder / READY_MARK).unlink(missing_ok=True)
+        return False
+    return True
+
+
 def prepare(say, base_python: str = sys.executable) -> bool:
     """Make ~/.hikarilm/venv and install the MLX packages into it, once. True when it is ready.
     Nothing is checked when HIKARILM_MLX_PYTHON names another Python."""
     if os.environ.get("HIKARILM_MLX_PYTHON"):
         return True
-    return _prepare_venv(venv(), python(), PACKAGES, "MLX", say, base_python)
+    if not (base_python := _new_enough(venv(), "MLX", say, base_python)):
+        return False
+    fresh = not _ready_mark(venv(), PACKAGES)
+    return (_prepare_venv(venv(), python(), PACKAGES, "MLX", say, base_python)
+            and (not fresh or _scipy_loads(venv(), python(), "MLX", say)))
+
+
+def _ready_mark(folder: Path, packages: tuple[str, ...]) -> bool:
+    try:
+        return (folder / READY_MARK).read_text(encoding="utf-8").split() == list(packages)
+    except OSError:
+        return False
 
 
 # mflux pins its own MLX and wants torch and transformers 5, so it has a venv of its
 # own and never changes the one the chat models run in.
-PICTURE_PACKAGES = ("mflux",)
+PICTURE_PACKAGES = ("mflux", LOADABLE_SCIPY)
 PICTURE_WORKER = Path(__file__).with_name("flux_worker.py")
 
 
@@ -139,8 +193,12 @@ def prepare_pictures(say, base_python: str = sys.executable) -> bool:
     """Make ~/.hikarilm/pictures-venv with mflux, once. True when it is ready."""
     if os.environ.get("HIKARILM_PICTURE_PYTHON"):
         return True
-    return _prepare_venv(picture_venv(), picture_python(), PICTURE_PACKAGES, "mflux (for pictures)", say,
-                         base_python)
+    what = "mflux (for pictures)"
+    if not (base_python := _new_enough(picture_venv(), what, say, base_python)):
+        return False
+    fresh = not _ready_mark(picture_venv(), PICTURE_PACKAGES)
+    return (_prepare_venv(picture_venv(), picture_python(), PICTURE_PACKAGES, what, say, base_python)
+            and (not fresh or _scipy_loads(picture_venv(), picture_python(), what, say)))
 
 
 def pictures_ready() -> bool:
