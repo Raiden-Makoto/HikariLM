@@ -6,7 +6,7 @@ import { renderMarkdown, showThought, splitStrayThinking } from "./markdown.js";
 import { pictureLabel, pictureSeed, pictureSize, pictureSteps, pictureToggle, updateChangeNote } from "./models.js";
 import { closeMenu } from "./chat-list.js";
 import { varyPicture } from "./send.js";
-import { applyCode, syncApplyButtons } from "./apply.js";
+import { applyAll, applyOne, syncApplyButtons } from "./apply.js";
 import { deletePrompt, editPrompt } from "./prompt-actions.js";
 import { addListenButton } from "./listen.js";
 
@@ -141,10 +141,21 @@ export function updateApply(answer, question) {
       button.dataset.lang = box.dataset.lang || "";
       button.dataset.path = path;
       button.question = question;
-      button.addEventListener("click", () => applyCode(box.querySelector("code").textContent, path));
+      button.addEventListener("click", () => applyOne(box.querySelector("code").textContent, path));
       box.querySelector(".code-head").append(button);
     }
+    // A change across several files: their blocks one after another, file by file.
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = "choice apply-all";
+    all.hidden = true;
+    all.answer = answer;
+    all.title = "Put every block into its file, one file after another, each to accept or reject";
+    all.addEventListener("click", () => applyAll(answer));
+    answer.append(all);
     syncApplyButtons();
+    // A turn drawn from a saved chat is not in the page yet; check again once it is.
+    queueMicrotask(syncApplyButtons);
   };
   if (answer.classList.contains("md")) answer.afterRender();
 }

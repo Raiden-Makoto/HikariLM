@@ -15,7 +15,7 @@ import { saveChat } from "./chat-list.js";
 import { draftKey, dropDraft, flushDraft, saveDraft, scheduleDraft } from "./chats.js";
 import { announce, askNotifyPermission } from "./page.js";
 import { notesOn } from "./settings.js";
-import { editorPrompt } from "./edit-blocks.js";
+import { editorPrompt, namedFiles } from "./edit-blocks.js";
 import { findLora, loraRequest, tagsLora } from "./loras.js";
 import { rulesRequest, rulesWarning } from "./rules.js";
 
@@ -74,21 +74,37 @@ async function findNotes(text, signal) {
 }
 
 // In the code editor the open file goes with every message, as it is in the editor, the way
-// Cursor sends the current file: a model cannot say where a change goes in a file it never
-// saw. It is left out when the chat already has these same contents, or it is too big.
-function withOpenFile(files) {
-  if (!state.openPath) return;
-  const name = state.folderName + "/" + state.openPath;
-  const text = editorText();
-  if (!text.trim() || text.length > MAX_FILE || files.some((file) => file.name.startsWith(name))) return;
-  const sent = state.messages.some((message) => (message.files || []).some((file) => file.name === name && file.text === text));
-  const used = files.reduce((sum, file) => sum + (file.text || "").length, 0);
-  if (!sent && used + text.length <= MAX_FILES_TOTAL) files.push({ name, text });
+// Cursor sends the current file, and so does every project file the message names: a model
+// cannot say where a change goes in a file it never saw, nor change several at once. A file
+// is left out when the chat already has the same contents of it, or it is too big.
+const NAMED_FILES = 8;
+let gathering = false;
+
+async function withProjectFiles(files, content) {
+  if (!state.source) return;
+  const paths = [...new Set([state.openPath, ...namedFiles(content, state.allFiles || []).slice(0, NAMED_FILES)])].filter(Boolean);
+  for (const path of paths) {
+    const name = state.folderName + "/" + path;
+    if (files.some((file) => file.name === name || file.name.startsWith(name + " line"))) continue;
+    let text = "";
+    if (path === state.openPath) text = editorText();
+    else {
+      try {
+        text = (await state.source.read(path)).text;
+      } catch (error) {
+        continue;
+      }
+    }
+    if (!text.trim() || text.length > MAX_FILE) continue;
+    const sent = state.messages.some((message) => (message.files || []).some((file) => file.name === name && file.text === text));
+    const used = files.reduce((sum, file) => sum + (file.text || "").length, 0);
+    if (!sent && used + text.length <= MAX_FILES_TOTAL) files.push({ name, text });
+  }
 }
 
 async function send() {
   const content = messageBox.value.trim();
-  if (!content || state.activeRequest) return;
+  if (!content || state.activeRequest || gathering) return;
   const model = modelSelect.value;
   if (!model) {
     loadModels();
@@ -116,9 +132,17 @@ async function send() {
   let outcome = "";
   let failure = "";
   const files = state.attached;
-  if (inCodeView()) withOpenFile(files);
   state.attached = [];
   renderChips();
+  if (inCodeView()) {
+    // Reading the files takes a moment; a second Enter meanwhile must not send it again.
+    gathering = true;
+    try {
+      await withProjectFiles(files, content);
+    } finally {
+      gathering = false;
+    }
+  }
   const asked = { role: "user", content, files: files.length ? files : undefined };
   state.messages.push(asked);
   const sent = addTurn("user", content, "", files, asked);

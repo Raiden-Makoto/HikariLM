@@ -5,8 +5,8 @@
 // accept or reject one by one, and nothing reaches the disk until Save.
 import { state } from "./state.js";
 import { isMac, modKeys, modelSelect, plainError, status } from "./core.js";
-import { discardOk, editor, editorText, fileNote, loadEditor, previewShown, showPreview } from "./files.js";
-import { openFileAt, refreshList } from "./file-actions.js";
+import { discardOk, editor, editorText, fileNote, hasEdits, loadEditor, previewShown, showPreview } from "./files.js";
+import { openFileAt, refreshList, saveOpenFile } from "./file-actions.js";
 import { closeFile } from "./folder-view.js";
 import { modelLabel, refreshState } from "./models.js";
 import { setBusy } from "./turns.js";
@@ -32,6 +32,63 @@ export function syncApplyButtons() {
     button.hidden = !target;
     if (target) button.title = "Put this into " + target + ", to accept or reject change by change";
   }
+  for (const all of document.querySelectorAll(".apply-all")) {
+    const blocks = applicable(all.answer);
+    const files = new Set(blocks.map((block) => block.path || state.openPath)).size;
+    all.hidden = blocks.length < 2;
+    all.textContent = files > 1 ? "Apply all, " + files + " files" : "Apply all " + blocks.length + " changes";
+  }
+}
+
+// The blocks of a reply that Apply would put somewhere, in the order they come.
+function applicable(answer) {
+  return [...answer.querySelectorAll(".code-apply")].filter((button) => !button.hidden)
+    .map((button) => ({ code: button.closest(".code-block").querySelector("code").textContent, path: button.dataset.path || "" }));
+}
+
+// Apply all: a reply's blocks go in one after another, each reviewed as Apply does. When a
+// file's changes are decided, "Save and next" saves it (nothing is written before) and puts
+// the next block in, so a change across several files is gone through file by file.
+let queue = [];
+const nextButton = document.createElement("button");
+nextButton.type = "button";
+nextButton.className = "choice apply-next";
+nextButton.addEventListener("click", async () => {
+  const next = queue[0];
+  if (!next) return;
+  const target = next.path || state.openPath;
+  if (hasEdits() && target !== state.openPath) {
+    await saveOpenFile();
+    if (hasEdits()) return;
+  }
+  queue.shift();
+  await applyQueued(next);
+});
+
+// One block, from its own Apply: whatever Apply all was going through is dropped.
+export function applyOne(code, path) {
+  queue = [];
+  return applyCode(code, path);
+}
+
+export async function applyAll(answer) {
+  const blocks = applicable(answer);
+  if (!blocks.length) return;
+  queue = blocks.slice(1);
+  await applyQueued(blocks[0]);
+}
+
+async function applyQueued(block) {
+  const reviewing = await applyCode(block.code, block.path);
+  if (!reviewing) offerNext();
+}
+
+function offerNext() {
+  if (!queue.length) return;
+  const target = queue[0].path || state.openPath;
+  const saving = hasEdits() && target !== state.openPath;
+  nextButton.textContent = (saving ? "Save and next: " : "Next: ") + target + " (" + queue.length + " left)";
+  fileNote.append(" ", nextButton);
 }
 
 export async function applyCode(code, named) {
@@ -83,7 +140,9 @@ export async function applyCode(code, named) {
     fileNote.textContent = "The file changed while the code was being fitted in, so nothing was applied. Press Apply again.";
     return;
   }
-  if (!editor.review(merged)) fileNote.textContent = "That code is already in " + path + ".";
+  if (editor.review(merged)) return true;
+  fileNote.textContent = "That code is already in " + path + ".";
+  return false;
 }
 
 // Like Cursor's apply model: the chosen model gets the file and the block and
@@ -167,9 +226,11 @@ export function reviewChanged({ left, ended }) {
   const made = madeForApply;
   madeForApply = "";
   if (ended === "accepted") fileNote.textContent = "Accepted. Not saved yet: press Save to write it to disk.";
-  if (ended !== "rejected") return;
-  fileNote.textContent = "Rejected. The file is as it was.";
-  if (made && made === state.openPath && !editorText() && !state.savedText) removeMade(made);
+  if (ended === "rejected") {
+    fileNote.textContent = "Rejected. The file is as it was.";
+    if (made && made === state.openPath && !editorText() && !state.savedText) removeMade(made);
+  }
+  offerNext();
 }
 
 async function removeMade(path) {

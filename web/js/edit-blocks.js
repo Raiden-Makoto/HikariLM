@@ -7,9 +7,11 @@
 export function editorPrompt(folder, openPath) {
   return [
     "You are a coding assistant in the HikariLM code editor. The user's project folder is " +
-      JSON.stringify(folder || "not chosen yet") + "." + (openPath ? " The open file is " + openPath +
-      "; its current contents come with the user's message. Read them before you answer, and base every change " +
-      "on what is in them, not on what you expect the file to hold." : ""),
+      JSON.stringify(folder || "not chosen yet") + "." + (openPath ? " The open file is " + openPath + "." : ""),
+    "The open file and any project files the user names or adds come with the user's message, each with its path. " +
+      "Read them before you answer, and base every change on what is in them, not on what you expect a file to hold. " +
+      "A change may span several files: then give one block for each file it changes. If you need a file you were " +
+      "not shown, say which one and ask the user to add it (Ctrl+K on it, or name it); do not guess its contents.",
     "",
     "When you change a file, or write a new one, put the code in a fenced block whose first line is the language, " +
       "a colon, and the file's path inside the folder, like this:",
@@ -29,6 +31,18 @@ export function editorPrompt(folder, openPath) {
       "Anything else, such as an example to explain something, commands to run or output, goes in a plain " +
       "block with only the language (```python, ```bash) and no path.",
   ].join("\n");
+}
+
+// Project files a message names, by path or by file name ("utils.py", "src/api.js"), in the
+// order they are named: their contents are sent with it, so the model can change them too.
+export function namedFiles(text, files) {
+  const found = [];
+  for (const file of files) {
+    const base = file.split("/").pop();
+    const at = mentions(text, file) ? text.indexOf(file) : base.length > 2 && mentions(text, base) ? text.indexOf(base) : -1;
+    if (at >= 0) found.push({ file, at });
+  }
+  return found.sort((a, b) => a.at - b.at).map((item) => item.file);
 }
 
 // The fence's first line. ```python:src/app.py, ```src/app.py, ```python src/app.py

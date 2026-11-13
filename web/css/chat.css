@@ -342,5 +342,8 @@ body.has-bg .turn.assistant {
 .code-head .code-apply { background: var(--you); border-color: var(--you); color: #fff; }
 .code-head .code-apply:hover { background: var(--you); filter: brightness(1.1); }
 .code-head .code-apply[hidden], body:not(.view-files) .code-apply { display: none; }
+.apply-all { margin-top: 0.2rem; }
+.apply-all[hidden], body:not(.view-files) .apply-all { display: none; }
+.apply-next { margin-left: 0.3rem; }
 body.view-files #pane-head { display: flex; justify-content: flex-end; padding: 0.4rem 0.75rem 0; }
 #pane-head .choice { padding: 0.3rem 0.8rem; }
