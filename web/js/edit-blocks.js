@@ -7,7 +7,9 @@
 export function editorPrompt(folder, openPath) {
   return [
     "You are a coding assistant in the HikariLM code editor. The user's project folder is " +
-      JSON.stringify(folder || "not chosen yet") + "." + (openPath ? " The open file is " + openPath + "." : ""),
+      JSON.stringify(folder || "not chosen yet") + "." + (openPath ? " The open file is " + openPath +
+      "; its current contents come with the user's message. Read them before you answer, and base every change " +
+      "on what is in them, not on what you expect the file to hold." : ""),
     "",
     "When you change a file, or write a new one, put the code in a fenced block whose first line is the language, " +
       "a colon, and the file's path inside the folder, like this:",
@@ -17,7 +19,8 @@ export function editorPrompt(folder, openPath) {
     "    return sum(item.price for item in items)",
     "# ... existing code ...",
     "```",
-    "Show only the parts that change, with a few unchanged lines before and after each change so it can be found. " +
+    "Show only the parts that change, with two or three unchanged lines before and after each change, copied " +
+      "exactly as they are in the file (same names, spacing and indentation), so the change can be found. " +
       "Where you leave out unchanged code, write one comment line saying \"... existing code ...\" in the file's own " +
       "comment style (// ... existing code ... in JavaScript, # ... existing code ... in Python). " +
       "For a new file, or one you rewrite completely, write all of it with no such comments. One block per file.",

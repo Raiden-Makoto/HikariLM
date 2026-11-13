@@ -1,7 +1,8 @@
 // Sending a message and streaming the reply, and making, describing and varying pictures.
 import { state } from "./state.js";
 import { messageBox, modelSelect, plainError, scrollLog, showEmpty, status } from "./core.js";
-import { renderChips } from "./attachments.js";
+import { MAX_FILE, MAX_FILES_TOTAL, renderChips } from "./attachments.js";
+import { editorText } from "./files.js";
 import { notify } from "./text-files.js";
 import { finishMarkdown, showThought, streamMarkdown } from "./markdown.js";
 import { addListenButton, readWhenDone } from "./listen.js";
@@ -72,6 +73,19 @@ async function findNotes(text, signal) {
   }
 }
 
+// In the code editor the open file goes with every message, as it is in the editor, the way
+// Cursor sends the current file: a model cannot say where a change goes in a file it never
+// saw. It is left out when the chat already has these same contents, or it is too big.
+function withOpenFile(files) {
+  if (!state.openPath) return;
+  const name = state.folderName + "/" + state.openPath;
+  const text = editorText();
+  if (!text.trim() || text.length > MAX_FILE || files.some((file) => file.name.startsWith(name))) return;
+  const sent = state.messages.some((message) => (message.files || []).some((file) => file.name === name && file.text === text));
+  const used = files.reduce((sum, file) => sum + (file.text || "").length, 0);
+  if (!sent && used + text.length <= MAX_FILES_TOTAL) files.push({ name, text });
+}
+
 async function send() {
   const content = messageBox.value.trim();
   if (!content || state.activeRequest) return;
@@ -102,6 +116,7 @@ async function send() {
   let outcome = "";
   let failure = "";
   const files = state.attached;
+  if (inCodeView()) withOpenFile(files);
   state.attached = [];
   renderChips();
   const asked = { role: "user", content, files: files.length ? files : undefined };
