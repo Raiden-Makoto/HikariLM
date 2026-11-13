@@ -163,7 +163,7 @@ async function mergeWithModel(path, current, code) {
   say("Fitting the code into " + path + " with " + modelLabel(model) + "…");
   let reply = "";
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch("/api/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: applyPrompt(path, current, code) }),

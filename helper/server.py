@@ -332,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path in (LORAS, LORAS + "/trigger", LORAS + "/tags", LORAS + "/remove"):
             self._loras()
             return
-        if self.path not in ("/api/chat", "/api/describe", "/api/rewrite"):
+        if self.path not in ("/api/chat", "/api/describe", "/api/rewrite", "/api/apply"):
             self._send_json({"error": "not found"}, status=404)
             return
         busy = work.start_chat()
@@ -346,6 +346,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._describe()
                 elif self.path == "/api/rewrite":
                     self._rewrite()
+                elif self.path == "/api/apply":
+                    self._apply()
                 else:
                     self._chat()
         finally:
@@ -786,6 +788,65 @@ class Handler(BaseHTTPRequestHandler):
                                    ". Press Rewrite again, or draw your words as they are."})
                 return
             self._stream_line({"prompt": prompt, "model": model})
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        finally:
+            response.close()
+
+    def _apply(self) -> None:
+        """Have a model write a file back with an edit in it, for Apply when the edit's own lines do
+        not show where it goes. Only the file and the edit go: no rules, notes, tools, thinking or
+        compaction, which would change the file or cut it short. The context is made big enough
+        for the file and the edit twice (read, then written back), up to what the model was
+        trained for. Streams the model's lines as /api/chat does."""
+        try:
+            payload = self._body(MAX_BODY)
+            model, messages = payload.get("model"), payload.get("messages")
+            if not isinstance(model, str) or not model.strip():
+                raise ValueError("model is required")
+            if not isinstance(messages, list) or not messages or not all(
+                    isinstance(m, dict) and isinstance(m.get("content"), str) and m.get("role") in ("system", "user")
+                    for m in messages):
+                raise ValueError("messages must be the file and the edit")
+            model = model.strip()
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        if self._refuse_picture_model(model):
+            return
+        self._models.enter_context(KEEPER.using(model))
+        previous = router.large
+        try:
+            room = self._room(model, context.load_settings())
+            need = 2 * context.estimate_messages(messages) + 512
+            num_ctx = max(room["num_ctx"], need)
+            if room.get("trained"):
+                num_ctx = min(num_ctx, room["trained"])
+            if need > num_ctx:
+                self._send_json({"error": f"The file is too long for {names.label(model)} to write back whole "
+                                          f"(about {need:,} tokens, and it reads {num_ctx:,}). Apply a smaller part, "
+                                          "or use a model with a longer context."}, status=400)
+                return
+            think = thinking.think_value(model, show(model), {"enabled": False})
+            router.begin(model)
+            response = open_chat(model, messages, KEEP_ALIVE, {"num_ctx": num_ctx}, think)
+        except ModelError as error:
+            self._send_json({"error": str(error)}, status=502)
+            return
+        router.commit(model)
+        self._stream_start()
+        self._stream_line(self._loaded_line(model, previous))
+        try:
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if not self._stream_line(event) or event.get("done") or event.get("error"):
+                    break
         except (BrokenPipeError, ConnectionResetError):
             return
         finally:

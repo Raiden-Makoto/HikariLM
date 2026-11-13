@@ -257,6 +257,18 @@ const trimBlank = (piece) => {
   return piece.slice(a, b);
 };
 
+// How many of the file's lines the edit keeps, in order (the longest common subsequence).
+function kept(theirs, mine) {
+  if (theirs.length * mine.length > MAX_CELLS) return 0;
+  let row = new Uint32Array(mine.length + 1);
+  for (const line of theirs) {
+    const next = new Uint32Array(mine.length + 1);
+    for (let j = 1; j <= mine.length; j++) next[j] = line === mine[j - 1] ? row[j - 1] + 1 : Math.max(row[j], next[j - 1]);
+    row = next;
+  }
+  return row[mine.length];
+}
+
 // The file with the edit in it, or null when the edit cannot be placed for
 // certain. Then a model has to do it.
 export function mergeEdit(original, code) {
@@ -287,6 +299,12 @@ export function mergeEdit(original, code) {
     const first = mine[0] === theirs[0];
     const last = mine.at(-1) === theirs.at(-1);
     if ((first && last && mine.length >= 0.5 * theirs.length) || ((first || last) && mine.length >= 0.8 * theirs.length)) {
+      return finish(editLines, endsWithBreak);
+    }
+    // Or it holds nearly every line of the file, in order, with its changes among them (its first
+    // and last lines may be ones it changed): the whole file again, written out by the model.
+    // A piece of the file is shorter than the file, so it never passes as a rewrite of it.
+    if (theirs.length && mine.length >= theirs.length && kept(theirs, mine) >= 0.6 * theirs.length) {
       return finish(editLines, endsWithBreak);
     }
     return null;
